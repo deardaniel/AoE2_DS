@@ -1,0 +1,25 @@
+# Build outputs
+*.nds
+*.elf
+*.o
+*.d
+*.s
+*.h
+*.map
+*.lst
+
+# Build directory
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies (devkitPro)
+# Don't commit these - they're installed separately
