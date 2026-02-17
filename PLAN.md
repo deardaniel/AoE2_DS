@@ -59,7 +59,26 @@ aoe2_dsi/
 
 ## Progress
 - [x] Graphics rendering working (green terrain on top, console on bottom)
+- [x] Working sprite demo with animated sprites
 - [ ] Phase 1: Terrain system
+
+## Key Technical Findings
+
+### Grit sprite flags (CRITICAL)
+Must use `-ff sprites/sprite.grit` to enable metatile handling:
+```
+sprites/%.s sprites/%.h : sprites/%.png sprites/sprite.grit
+    grit $< -ff sprites/sprite.grit -o $(notdir $*)
+```
+
+The sprite.grit file must contain:
+```
+-m!
+-gB8
+#metatile
+-Mh4
+-Mw4
+```
 
 ## Assets
 
