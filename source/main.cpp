@@ -28,7 +28,7 @@ typedef struct
 
 enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
 enum {SCREEN_TOP = 0, SCREEN_BOTTOM = 192, SCREEN_LEFT = 0, SCREEN_RIGHT = 256};
-enum {MAP_W = 512, MAP_H = 512, SPRITE_SIZE = 32};
+enum {MAP_W = 256, MAP_H = 256, SPRITE_SIZE = 32};
 
 #define FRAMES_PER_ANIMATION 3
 #define DIR_COUNT 4
@@ -55,45 +55,31 @@ int main(void)
     int camY = 0;
     bool followCam = true;
     
-    // Use MODE_5_2D for bitmap BG + sprites
-    videoSetMode(MODE_5_2D);
-    videoSetModeSub(MODE_0_2D);
+    // Main: sprites, Sub: bitmap map
+    videoSetMode(MODE_0_2D);
+    videoSetModeSub(MODE_5_2D);
 
-    // VRAM: A for main BG bitmap, B for main sprites
-    vramSetBankA(VRAM_A_MAIN_BG);
+    // VRAM: B for main sprites, C for sub BG bitmap
+    vramSetBankA(VRAM_A_LCD);
     vramSetBankB(VRAM_B_MAIN_SPRITE);
-    vramSetBankD(VRAM_D_SUB_SPRITE);
+    vramSetBankC(VRAM_C_SUB_BG);
 
     oamInit(&oamMain, SpriteMapping_1D_128, false);
-    oamInit(&oamSub, SpriteMapping_1D_128, false);
     oamEnable(&oamMain);
-    oamEnable(&oamSub);
 
-    // BG2 bitmap (top screen)
-    int bg2 = bgInit(2, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
-    dmaCopy(grassPal, BG_PALETTE, grassPalLen);
-    bgShow(bg2);
-
-    // Initialize a simple larger map (2x2 screens) by tiling the 256x256 grass bitmap
+    // BG2 bitmap (bottom screen)
+    int bg2 = bgInitSub(2, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
     u8* vram = (u8*)bgGetGfxPtr(bg2);
-    for (int ty = 0; ty < 2; ty++) {
-        for (int tx = 0; tx < 2; tx++) {
-            int baseX = tx * 256;
-            int baseY = ty * 256;
-            for (int y = 0; y < 256; y++) {
-                u8* dst = vram + ((baseY + y) * 512) + baseX;
-                u8* src = (u8*)grassBitmap + (y * 256);
-                dmaCopy(src, dst, 256);
-            }
-        }
-    }
+    dmaCopy(grassBitmap, vram, grassBitmapLen);
+    dmaCopy(grassPal, BG_PALETTE_SUB, grassPalLen);
+    bgShow(bg2);
 
     // Stamp a few dirt patches to make the terrain readable
     for (int patch = 0; patch < 3; patch++) {
         int px = 40 + patch * 120;
         int py = 60 + patch * 100;
         for (int y = 0; y < 96; y++) {
-            u8* dst = vram + ((py + y) * 512) + px;
+            u8* dst = vram + ((py + y) * 256) + px;
             u8* src = (u8*)dirtBitmap + ((y % 256) * 256);
             dmaCopy(src, dst, 96);
         }
@@ -104,13 +90,6 @@ int main(void)
     villager.y = 80;
 
     dmaCopy(villagerPal, SPRITE_PALETTE, 512);
-
-    consoleDemoInit();
-    iprintf("AoE2 DSi - Grass\n");
-    iprintf("Villager: %d,%d\n", villager.x, villager.y);
-    iprintf("Touch: select/move/build\n");
-    iprintf("SELECT: toggle camera follow\n");
-    iprintf("START: exit\n");
 
     static bool villagerSelected = false;
 
@@ -128,7 +107,7 @@ int main(void)
         bool touchDown = (keys & KEY_TOUCH) != 0;
         bool touchPressed = (keysPressed & KEY_TOUCH) != 0;
 
-        // Selection/building/move logic via touch (top screen)
+        // Selection/building/move logic via touch (bottom screen map)
         if (touchPressed) {
             int tx = touch.px + camX;
             int ty = touch.py + camY;
@@ -236,7 +215,6 @@ int main(void)
 
         swiWaitForVBlank();
         oamUpdate(&oamMain);
-        oamUpdate(&oamSub);
     }
 
     return 0;

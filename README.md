@@ -23,7 +23,8 @@ The resulting `.nds` file can be run in:
 ## Controls
 
 - D-pad: Move units
-- Touch: Tap villager to select/deselect
+- Map is on the **bottom screen**; villager sprites render on the top screen.
+- Touch: Tap villager on the map to select/deselect
 - Touch: Tap ground to move (when not selected)
 - Touch: Tap ground to build (when selected)
 - SELECT: Toggle camera follow
