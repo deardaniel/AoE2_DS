@@ -17,6 +17,7 @@ typedef struct
 
 enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
 enum {SCREEN_TOP = 0, SCREEN_BOTTOM = 192, SCREEN_LEFT = 0, SCREEN_RIGHT = 256};
+enum {MAP_W = 256, MAP_H = 256, SPRITE_SIZE = 32};
 
 #define FRAMES_PER_ANIMATION 3
 #define DIR_COUNT 4
@@ -38,6 +39,7 @@ void initVillager(Villager *sprite, u8* gfx)
 int main(void)
 {
     Villager villager = {0,0};
+    int camX = 0;
     int camY = 0;
     
     // Use MODE_5_2D for bitmap BG + sprites
@@ -81,25 +83,30 @@ int main(void)
 
         if(keys)
         {
-            if(keys & KEY_UP) { if(villager.y >= SCREEN_TOP) villager.y--; villager.state = W_UP; }
-            if(keys & KEY_LEFT) { if(villager.x >= SCREEN_LEFT) villager.x--; villager.state = W_LEFT; }
-            if(keys & KEY_RIGHT) { if(villager.x <= SCREEN_RIGHT) villager.x++; villager.state = W_RIGHT; }
-            if(keys & KEY_DOWN) { if(villager.y <= SCREEN_BOTTOM) villager.y++; villager.state = W_DOWN; }
+            if(keys & KEY_UP) { if(villager.y > 0) villager.y--; villager.state = W_UP; }
+            if(keys & KEY_LEFT) { if(villager.x > 0) villager.x--; villager.state = W_LEFT; }
+            if(keys & KEY_RIGHT) { if(villager.x < (MAP_W - SPRITE_SIZE)) villager.x++; villager.state = W_RIGHT; }
+            if(keys & KEY_DOWN) { if(villager.y < (MAP_H - SPRITE_SIZE)) villager.y++; villager.state = W_DOWN; }
 
             villager.anim_frame++;
             if(villager.anim_frame >= FRAMES_PER_ANIMATION) villager.anim_frame = 0;
         }
 
-        // Camera scroll (Y only) with L/R (clamped to 256x256 map)
+        // Camera scroll (manual) with L/R, X/Y clamped to map bounds
         if(keys & KEY_L) { if(camY > 0) camY--; }
-        if(keys & KEY_R) { if(camY < (256 - 192)) camY++; }
+        if(keys & KEY_R) { if(camY < (MAP_H - 192)) camY++; }
+        if(keys & KEY_A) { if(camX > 0) camX--; }
+        if(keys & KEY_Y) { if(camX < (MAP_W - 256)) camX++; }
 
-        bgSetScroll(bg2, 0, camY);
+        bgSetScroll(bg2, camX, camY);
         bgUpdate();
 
         animateVillager(&villager);
 
-        oamSet(&oamMain, 0, villager.x, villager.y, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
+        int screenX = villager.x - camX;
+        int screenY = villager.y - camY;
+
+        oamSet(&oamMain, 0, screenX, screenY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
             villager.sprite_gfx_mem, -1, false, false, false, false, false);
 
         swiWaitForVBlank();
