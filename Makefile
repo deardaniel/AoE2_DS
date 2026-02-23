@@ -153,6 +153,9 @@ grass.s grass.h : grass.png ../sprites/grass.grit
 dirt.s dirt.h : dirt.png ../sprites/dirt.grit
 	grit $< -ff../sprites/dirt.grit -odirt
 
+water.s water.h : water.png ../sprites/water.grit
+	grit $< -ff../sprites/water.grit -owater
+
 %.s %.h : %.png
 	grit $< -ff../sprites/sprite.grit -o$*
 #---------------------------------------------------------------------------------

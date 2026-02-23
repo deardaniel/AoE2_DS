@@ -4,6 +4,7 @@
 
 #include <grass.h>
 #include <dirt.h>
+#include <water.h>
 #include <villager.h>
 
 typedef struct
@@ -42,6 +43,7 @@ enum InputState {Input_Default = 0, Input_PlacingBuilding = 1};
 enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
 enum {SCREEN_TOP = 0, SCREEN_BOTTOM = 192, SCREEN_LEFT = 0, SCREEN_RIGHT = 256};
 enum {MAP_W = 256, MAP_H = 256, SPRITE_SIZE = 32};
+enum {TILE_SIZE = 16, MAP_TW = MAP_W / TILE_SIZE, MAP_TH = MAP_H / TILE_SIZE};
 
 #define FRAMES_PER_ANIMATION 3
 #define DIR_COUNT 4
@@ -55,7 +57,12 @@ typedef struct
     ActionType action = Action_None;
 } UnitManager;
 
-static bool onTapPrimary(UnitManager &um, Villager &villager, Building &building, int tx, int ty)
+static bool canBuildOnTile(u8 tile)
+{
+    return tile != 2;
+}
+
+static bool onTapPrimary(UnitManager &um, Villager &villager, Building &building, int tx, int ty, u8 tiles[MAP_TH][MAP_TW])
 {
     bool onVillager = (tx >= villager.x && tx < villager.x + SPRITE_SIZE &&
                        ty >= villager.y && ty < villager.y + SPRITE_SIZE);
@@ -70,6 +77,10 @@ static bool onTapPrimary(UnitManager &um, Villager &villager, Building &building
     }
 
     if (um.selected && um.inputState == Input_PlacingBuilding) {
+        int tileX = tx / TILE_SIZE;
+        int tileY = ty / TILE_SIZE;
+        if (tileX < 0 || tileX >= MAP_TW || tileY < 0 || tileY >= MAP_TH) return true;
+        if (!canBuildOnTile(tiles[tileY][tileX])) return true;
         building.active = true;
         building.x = tx - (SPRITE_SIZE / 2);
         building.y = ty - (SPRITE_SIZE / 2);
@@ -87,9 +98,14 @@ static bool onTapPrimary(UnitManager &um, Villager &villager, Building &building
     return false;
 }
 
-static void onTapCommand(UnitManager &um, Villager &villager, int tx, int ty)
+static void onTapCommand(UnitManager &um, Villager &villager, int tx, int ty, u8 tiles[MAP_TH][MAP_TW])
 {
     if (!um.selected) return;
+
+    int tileX = tx / TILE_SIZE;
+    int tileY = ty / TILE_SIZE;
+    if (tileX < 0 || tileX >= MAP_TW || tileY < 0 || tileY >= MAP_TH) return;
+    if (tiles[tileY][tileX] == 2) return;
 
     villager.target_x = tx - (SPRITE_SIZE / 2);
     villager.target_y = ty - (SPRITE_SIZE / 2);
@@ -141,18 +157,45 @@ int main(void)
     // BG2 bitmap (bottom screen)
     int bg2 = bgInitSub(2, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
     u8* vram = (u8*)bgGetGfxPtr(bg2);
-    dmaCopy(grassBitmap, vram, grassBitmapLen);
     dmaCopy(grassPal, BG_PALETTE_SUB, grassPalLen);
     bgShow(bg2);
 
-    // Stamp a few dirt patches to make the terrain readable
-    for (int patch = 0; patch < 3; patch++) {
-        int px = 40 + patch * 120;
-        int py = 60 + patch * 100;
-        for (int y = 0; y < 96; y++) {
-            u8* dst = vram + ((py + y) * 256) + px;
-            u8* src = (u8*)dirtBitmap + ((y % 256) * 256);
-            dmaCopy(src, dst, 96);
+    // Build a simple tilemap (0 = grass, 1 = dirt, 2 = water)
+    static u8 tiles[MAP_TH][MAP_TW];
+    for (int y = 0; y < MAP_TH; y++) {
+        for (int x = 0; x < MAP_TW; x++) {
+            tiles[y][x] = 0;
+        }
+    }
+    // Dirt band
+    for (int y = 6; y < 10; y++) {
+        for (int x = 2; x < MAP_TW - 2; x++) tiles[y][x] = 1;
+    }
+    // Water patch
+    for (int y = 12; y < 15; y++) {
+        for (int x = 4; x < 7; x++) tiles[y][x] = 2;
+    }
+
+    // Render tiles to bitmap using 16x16 stamps from textures
+    auto stamp = [&](int dstX, int dstY, const u8* src) {
+        for (int y = 0; y < TILE_SIZE; y++) {
+            u8* dst = vram + ((dstY + y) * 256) + dstX;
+            const u8* row = src + (y * 256);
+            dmaCopy(row, dst, TILE_SIZE);
+        }
+    };
+
+    for (int ty = 0; ty < MAP_TH; ty++) {
+        for (int tx = 0; tx < MAP_TW; tx++) {
+            int dstX = tx * TILE_SIZE;
+            int dstY = ty * TILE_SIZE;
+            if (tiles[ty][tx] == 2) {
+                stamp(dstX, dstY, (u8*)waterBitmap);
+            } else if (tiles[ty][tx] == 1) {
+                stamp(dstX, dstY, (u8*)dirtBitmap);
+            } else {
+                stamp(dstX, dstY, (u8*)grassBitmap);
+            }
         }
     }
     
@@ -210,8 +253,8 @@ int main(void)
             if (onBuildBtn) {
                 unitManager.inputState = (unitManager.inputState == Input_Default) ? Input_PlacingBuilding : Input_Default;
                 unitManager.action = (unitManager.inputState == Input_PlacingBuilding) ? Action_Build : Action_None;
-            } else if (!onTapPrimary(unitManager, villager, building, tx, ty)) {
-                onTapCommand(unitManager, villager, tx, ty);
+            } else if (!onTapPrimary(unitManager, villager, building, tx, ty, tiles)) {
+                onTapCommand(unitManager, villager, tx, ty, tiles);
             }
         }
 
@@ -270,9 +313,13 @@ int main(void)
             int tx = touch.px + camX;
             int ty = touch.py + camY;
             if (tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H) {
+                int tileX = tx / TILE_SIZE;
+                int tileY = ty / TILE_SIZE;
+                bool valid = (tileX >= 0 && tileX < MAP_TW && tileY >= 0 && tileY < MAP_TH) &&
+                             canBuildOnTile(tiles[tileY][tileX]);
                 int idx = ty * 256 + tx;
                 pMark.prev = map[idx];
-                map[idx] = 3;
+                map[idx] = valid ? 3 : 1;
                 pMark.x = tx;
                 pMark.y = ty;
                 pMark.active = true;
