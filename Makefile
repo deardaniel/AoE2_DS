@@ -94,7 +94,8 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
-.PHONY: $(BUILD) clean
+.PHONY: $(BUILD) clean assets assets-batch
+.PHONY: assets-batch-hd
 
 #---------------------------------------------------------------------------------
 $(BUILD):
@@ -107,6 +108,36 @@ clean:
 	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds
 
 #---------------------------------------------------------------------------------
+# Asset pipeline helper
+# Usage:
+# make assets SLP="/mnt/c/.../2.slp" OUT="sprites/villager.png" PALETTE="/mnt/c/.../pal_5.pal" CELL=32x32 COLS=4 FIT=1
+#---------------------------------------------------------------------------------
+assets:
+	@if [ -z "$(SLP)" ]; then \
+		echo "Usage: make assets SLP=<path.slp> OUT=<out.png> [PALETTE=<path.pal>] [CELL=32x32] [COLS=4] [FIT=1]"; \
+		exit 1; \
+	fi
+	@python3 scripts/build_sprite_sheet.py \
+		"$(SLP)" \
+		"$(OUT)" \
+		$(if $(PALETTE),--palette "$(PALETTE)",) \
+		$(if $(CELL),--cell "$(CELL)",) \
+		$(if $(COLS),--cols "$(COLS)",) \
+		$(if $(FIT),--fit,)
+
+#---------------------------------------------------------------------------------
+# Batch build from assets/manifest.json
+#---------------------------------------------------------------------------------
+assets-batch:
+	@python3 scripts/build_assets_from_manifest.py assets/manifest.json
+
+#---------------------------------------------------------------------------------
+# Batch build from generated HD manifest
+#---------------------------------------------------------------------------------
+assets-batch-hd:
+	@python3 scripts/build_assets_from_manifest.py assets/manifest_hd.json
+
+#---------------------------------------------------------------------------------
 else
 
 #---------------------------------------------------------------------------------
@@ -116,6 +147,9 @@ $(OUTPUT).nds	: 	$(OUTPUT).elf
 $(OUTPUT).elf	:	$(OFILES)
 
 #---------------------------------------------------------------------------------
+grass.s grass.h : grass.png ../sprites/grass.grit
+	grit $< -ff../sprites/grass.grit -ograss
+
 %.s %.h : %.png
 	grit $< -ff../sprites/sprite.grit -o$*
 #---------------------------------------------------------------------------------

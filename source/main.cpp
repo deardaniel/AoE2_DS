@@ -1,7 +1,8 @@
-// AoE2 DSi - Villager on Grass (Fixed)
+// AoE2 DSi - Villager on Grass (Tilemap + Sprite)
 #include <nds.h>
 #include <stdio.h>
 
+#include <grass.h>
 #include <villager.h>
 
 typedef struct
@@ -36,11 +37,13 @@ int main(void)
 {
     Villager villager = {0,0};
     
-    // Use MODE_0_2D for sprites (works!)
-    videoSetMode(MODE_0_2D);
+    // Use MODE_5_2D for bitmap BG + sprites
+    videoSetMode(MODE_5_2D);
     videoSetModeSub(MODE_0_2D);
 
-    vramSetBankA(VRAM_A_MAIN_SPRITE);
+    // VRAM: A for main BG bitmap, B for main sprites
+    vramSetBankA(VRAM_A_MAIN_BG);
+    vramSetBankB(VRAM_B_MAIN_SPRITE);
     vramSetBankD(VRAM_D_SUB_SPRITE);
 
     oamInit(&oamMain, SpriteMapping_1D_128, false);
@@ -48,9 +51,11 @@ int main(void)
     oamEnable(&oamMain);
     oamEnable(&oamSub);
 
-    // Simple green background (just set BG0 to solid color)
-    // This works in MODE_0_2D
-    BG_PALETTE[0] = RGB15(0, 20, 0);  // Dark green grass
+    // BG2 bitmap (top screen)
+    int bg2 = bgInit(2, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
+    dmaCopy(grassBitmap, bgGetGfxPtr(bg2), grassBitmapLen);
+    dmaCopy(grassPal, BG_PALETTE, grassPalLen);
+    bgShow(bg2);
     
     initVillager(&villager, (u8*)villagerTiles);
     villager.x = 112;

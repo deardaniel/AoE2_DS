@@ -1,0 +1,185 @@
+{
+  "entries": [
+    {
+      "name": "vil_5300",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/5300.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_5300.png",
+      "cell": "32x32",
+      "cols": 4,
+      "fit": true,
+      "limit": 12
+    },
+    {
+      "name": "vil_4729",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/4729.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_4729.png",
+      "cell": "32x32",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_3631",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3631.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_3631.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1402",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1402.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1402.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1467",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1467.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1467.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_5166",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/5166.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_5166.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1454",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1454.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1454.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_588",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/588.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_588.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1768",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1768.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1768.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1389",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1389.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1389.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1742",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1742.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1742.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1058",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1058.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1058.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1182",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1182.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1182.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1559",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1559.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1559.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_4710",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/4710.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_4710.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_1767",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1767.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_1767.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_993",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/993.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_993.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_3549",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3549.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_3549.png",
+      "cell": "64x64",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_50",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/50.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_50.png",
+      "cell": "32x32",
+      "cols": 4,
+      "fit": true
+    },
+    {
+      "name": "vil_3800",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3800.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "out": "sprites/vil_3800.png",
+      "cell": "32x32",
+      "cols": 4,
+      "fit": true
+    }
+  ]
+}
