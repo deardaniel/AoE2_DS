@@ -7,3 +7,6 @@ villager_*.png
 sprites/hd_*.png
 sprites/vil_*.png
 sprites/index.html
+assets/*.png
+assets/game_b*/
+assets/trees/
