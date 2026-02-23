@@ -29,6 +29,16 @@ typedef struct
     int state; // 0 = foundation, 1 = built
 } Building;
 
+typedef struct
+{
+    int x;
+    int y;
+    u8 prev;
+    bool active;
+} Marker;
+
+enum InputState {Input_Default = 0, Input_PlacingBuilding = 1};
+
 enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
 enum {SCREEN_TOP = 0, SCREEN_BOTTOM = 192, SCREEN_LEFT = 0, SCREEN_RIGHT = 256};
 enum {MAP_W = 256, MAP_H = 256, SPRITE_SIZE = 32};
@@ -54,6 +64,7 @@ int main(void)
 {
     Villager villager = {0,0,0,0,0,0,0,0,false};
     Building building = {0,0,false,0,0,0};
+    InputState inputState = Input_Default;
     int camX = 0;
     int camY = 0;
     bool followCam = true;
@@ -98,6 +109,18 @@ int main(void)
 
     // Simple map marker (1px) for villager and building positions
     u8* map = (u8*)bgGetGfxPtr(bg2);
+    const int buildBtnX = 4;
+    const int buildBtnY = 4;
+    const int buildBtnW = 16;
+    const int buildBtnH = 16;
+
+    // Draw build button (simple square in top-left of map)
+    for (int y = 0; y < buildBtnH; y++) {
+        for (int x = 0; x < buildBtnW; x++) {
+            int idx = (buildBtnY + y) * 256 + (buildBtnX + x);
+            map[idx] = 4;
+        }
+    }
 
     static bool villagerSelected = false;
 
@@ -115,13 +138,13 @@ int main(void)
         bool touchDown = (keys & KEY_TOUCH) != 0;
         bool touchPressed = (keysPressed & KEY_TOUCH) != 0;
 
-        // Clear previous markers (very cheap: just overwrite last positions)
-        static int lastVX = -1, lastVY = -1;
-        static int lastBX = -1, lastBY = -1;
-        static int lastPX = -1, lastPY = -1;
-        if (lastVX >= 0 && lastVY >= 0) map[lastVY * 256 + lastVX] = 0;
-        if (lastBX >= 0 && lastBY >= 0) map[lastBY * 256 + lastBX] = 0;
-        if (lastPX >= 0 && lastPY >= 0) map[lastPY * 256 + lastPX] = 0;
+        // Clear previous markers (restore previous pixel value)
+        static Marker vMark = {-1,-1,0,false};
+        static Marker bMark = {-1,-1,0,false};
+        static Marker pMark = {-1,-1,0,false};
+        if (vMark.active) { map[vMark.y * 256 + vMark.x] = vMark.prev; vMark.active = false; }
+        if (bMark.active) { map[bMark.y * 256 + bMark.x] = bMark.prev; bMark.active = false; }
+        if (pMark.active) { map[pMark.y * 256 + pMark.x] = pMark.prev; pMark.active = false; }
 
         // Selection/building/move logic via touch (bottom screen map)
         if (touchPressed) {
@@ -130,10 +153,14 @@ int main(void)
 
             bool onVillager = (tx >= villager.x && tx < villager.x + SPRITE_SIZE &&
                                ty >= villager.y && ty < villager.y + SPRITE_SIZE);
+            bool onBuildBtn = (touch.px >= buildBtnX && touch.px < buildBtnX + buildBtnW &&
+                               touch.py >= buildBtnY && touch.py < buildBtnY + buildBtnH);
 
-            if (onVillager) {
+            if (onBuildBtn) {
+                inputState = (inputState == Input_Default) ? Input_PlacingBuilding : Input_Default;
+            } else if (onVillager) {
                 villagerSelected = !villagerSelected;
-            } else if (villagerSelected) {
+            } else if (villagerSelected && inputState == Input_PlacingBuilding) {
                 // Build at touch position
                 building.active = true;
                 building.x = tx - (SPRITE_SIZE / 2);
@@ -144,6 +171,7 @@ int main(void)
                 if (building.y > (MAP_H - SPRITE_SIZE)) building.y = MAP_H - SPRITE_SIZE;
                 building.build_timer = 90;
                 building.state = 0;
+                inputState = Input_Default;
             } else {
                 // Set move target
                 villager.target_x = tx - (SPRITE_SIZE / 2);
@@ -185,29 +213,38 @@ int main(void)
         int mvx = villager.x;
         int mvy = villager.y;
         if (mvx >= 0 && mvx < MAP_W && mvy >= 0 && mvy < MAP_H) {
-            map[mvy * 256 + mvx] = villagerSelected ? 3 : 2;
-            lastVX = mvx;
-            lastVY = mvy;
+            int idx = mvy * 256 + mvx;
+            vMark.prev = map[idx];
+            map[idx] = villagerSelected ? 3 : 2;
+            vMark.x = mvx;
+            vMark.y = mvy;
+            vMark.active = true;
         }
 
         if (building.active) {
             int mbx = building.x;
             int mby = building.y;
             if (mbx >= 0 && mbx < MAP_W && mby >= 0 && mby < MAP_H) {
-                map[mby * 256 + mbx] = 1;
-                lastBX = mbx;
-                lastBY = mby;
+                int idx = mby * 256 + mbx;
+                bMark.prev = map[idx];
+                map[idx] = 1;
+                bMark.x = mbx;
+                bMark.y = mby;
+                bMark.active = true;
             }
         }
 
         // Build preview marker under stylus when selected
-        if (villagerSelected && touchDown) {
+        if (villagerSelected && inputState == Input_PlacingBuilding && touchDown) {
             int tx = touch.px + camX;
             int ty = touch.py + camY;
             if (tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H) {
-                map[ty * 256 + tx] = 3;
-                lastPX = tx;
-                lastPY = ty;
+                int idx = ty * 256 + tx;
+                pMark.prev = map[idx];
+                map[idx] = 3;
+                pMark.x = tx;
+                pMark.y = ty;
+                pMark.active = true;
             }
         }
 
