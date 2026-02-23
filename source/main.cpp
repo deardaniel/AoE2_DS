@@ -55,6 +55,52 @@ typedef struct
     ActionType action = Action_None;
 } UnitManager;
 
+static bool onLeftClick(UnitManager &um, Villager &villager, Building &building, int tx, int ty)
+{
+    bool onVillager = (tx >= villager.x && tx < villager.x + SPRITE_SIZE &&
+                       ty >= villager.y && ty < villager.y + SPRITE_SIZE);
+
+    if (onVillager) {
+        um.selected = !um.selected;
+        if (!um.selected) {
+            um.action = Action_None;
+            um.inputState = Input_Default;
+        }
+        return true;
+    }
+
+    if (um.selected && um.inputState == Input_PlacingBuilding) {
+        building.active = true;
+        building.x = tx - (SPRITE_SIZE / 2);
+        building.y = ty - (SPRITE_SIZE / 2);
+        if (building.x < 0) building.x = 0;
+        if (building.y < 0) building.y = 0;
+        if (building.x > (MAP_W - SPRITE_SIZE)) building.x = MAP_W - SPRITE_SIZE;
+        if (building.y > (MAP_H - SPRITE_SIZE)) building.y = MAP_H - SPRITE_SIZE;
+        building.build_timer = 90;
+        building.state = 0;
+        um.inputState = Input_Default;
+        um.action = Action_None;
+        return true;
+    }
+
+    return false;
+}
+
+static void onRightClick(UnitManager &um, Villager &villager, int tx, int ty)
+{
+    if (!um.selected) return;
+
+    villager.target_x = tx - (SPRITE_SIZE / 2);
+    villager.target_y = ty - (SPRITE_SIZE / 2);
+    if (villager.target_x < 0) villager.target_x = 0;
+    if (villager.target_y < 0) villager.target_y = 0;
+    if (villager.target_x > (MAP_W - SPRITE_SIZE)) villager.target_x = MAP_W - SPRITE_SIZE;
+    if (villager.target_y > (MAP_H - SPRITE_SIZE)) villager.target_y = MAP_H - SPRITE_SIZE;
+    villager.moving = true;
+    um.action = Action_Move;
+}
+
 void animateVillager(Villager *sprite)
 {
     // Frames are packed in a 4x3 grid (columns = directions, rows = frames)
@@ -158,43 +204,14 @@ int main(void)
             int tx = touch.px + camX;
             int ty = touch.py + camY;
 
-            bool onVillager = (tx >= villager.x && tx < villager.x + SPRITE_SIZE &&
-                               ty >= villager.y && ty < villager.y + SPRITE_SIZE);
             bool onBuildBtn = (touch.px >= buildBtnX && touch.px < buildBtnX + buildBtnW &&
                                touch.py >= buildBtnY && touch.py < buildBtnY + buildBtnH);
 
             if (onBuildBtn) {
                 unitManager.inputState = (unitManager.inputState == Input_Default) ? Input_PlacingBuilding : Input_Default;
                 unitManager.action = (unitManager.inputState == Input_PlacingBuilding) ? Action_Build : Action_None;
-            } else if (onVillager) {
-                unitManager.selected = !unitManager.selected;
-                if (!unitManager.selected) {
-                    unitManager.action = Action_None;
-                    unitManager.inputState = Input_Default;
-                }
-            } else if (unitManager.selected && unitManager.inputState == Input_PlacingBuilding) {
-                // Build at touch position
-                building.active = true;
-                building.x = tx - (SPRITE_SIZE / 2);
-                building.y = ty - (SPRITE_SIZE / 2);
-                if (building.x < 0) building.x = 0;
-                if (building.y < 0) building.y = 0;
-                if (building.x > (MAP_W - SPRITE_SIZE)) building.x = MAP_W - SPRITE_SIZE;
-                if (building.y > (MAP_H - SPRITE_SIZE)) building.y = MAP_H - SPRITE_SIZE;
-                building.build_timer = 90;
-                building.state = 0;
-                unitManager.inputState = Input_Default;
-                unitManager.action = Action_None;
-            } else {
-                // Set move target
-                villager.target_x = tx - (SPRITE_SIZE / 2);
-                villager.target_y = ty - (SPRITE_SIZE / 2);
-                if (villager.target_x < 0) villager.target_x = 0;
-                if (villager.target_y < 0) villager.target_y = 0;
-                if (villager.target_x > (MAP_W - SPRITE_SIZE)) villager.target_x = MAP_W - SPRITE_SIZE;
-                if (villager.target_y > (MAP_H - SPRITE_SIZE)) villager.target_y = MAP_H - SPRITE_SIZE;
-                villager.moving = true;
-                unitManager.action = Action_Move;
+            } else if (!onLeftClick(unitManager, villager, building, tx, ty)) {
+                onRightClick(unitManager, villager, tx, ty);
             }
         }
 
