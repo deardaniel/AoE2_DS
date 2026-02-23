@@ -43,7 +43,7 @@ void animateVillager(Villager *sprite)
 
 void initVillager(Villager *sprite, u8* gfx)
 {
-    sprite->sprite_gfx_mem = oamAllocateGfx(&oamMain, SpriteSize_32x32, SpriteColorFormat_256Color);
+    sprite->sprite_gfx_mem = oamAllocateGfx(&oamSub, SpriteSize_32x32, SpriteColorFormat_256Color);
     sprite->frame_gfx = (u8*)gfx;
 }
 
@@ -59,13 +59,15 @@ int main(void)
     videoSetMode(MODE_0_2D);
     videoSetModeSub(MODE_5_2D);
 
-    // VRAM: B for main sprites, C for sub BG bitmap
+    // VRAM: B for main sprites (unused for now), C for sub BG bitmap, D for sub sprites
     vramSetBankA(VRAM_A_LCD);
     vramSetBankB(VRAM_B_MAIN_SPRITE);
     vramSetBankC(VRAM_C_SUB_BG);
+    vramSetBankD(VRAM_D_SUB_SPRITE);
 
     oamInit(&oamMain, SpriteMapping_1D_128, false);
-    oamEnable(&oamMain);
+    oamInit(&oamSub, SpriteMapping_1D_128, false);
+    oamEnable(&oamSub);
 
     // BG2 bitmap (bottom screen)
     int bg2 = bgInitSub(2, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
@@ -89,7 +91,7 @@ int main(void)
     villager.x = 112;
     villager.y = 80;
 
-    dmaCopy(villagerPal, SPRITE_PALETTE, 512);
+    dmaCopy(villagerPal, SPRITE_PALETTE_SUB, 512);
 
     // Simple map marker (1px) for villager and building positions
     u8* map = (u8*)bgGetGfxPtr(bg2);
@@ -215,7 +217,7 @@ int main(void)
         int screenX = villager.x - camX;
         int screenY = villager.y - camY;
 
-        oamSet(&oamMain, 0, screenX, screenY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
+        oamSet(&oamSub, 0, screenX, screenY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
             villager.sprite_gfx_mem, -1, false, false, false, villagerSelected, false);
 
 
@@ -226,7 +228,7 @@ int main(void)
             }
             // Render building as a simple 32x32 solid tile from sprite memory (reuse villager gfx palette)
             if (!building.sprite_gfx_mem) {
-                building.sprite_gfx_mem = oamAllocateGfx(&oamMain, SpriteSize_32x32, SpriteColorFormat_256Color);
+                building.sprite_gfx_mem = oamAllocateGfx(&oamSub, SpriteSize_32x32, SpriteColorFormat_256Color);
             }
 
             // Update sprite gfx if state changes
@@ -253,12 +255,12 @@ int main(void)
             }
             int bX = building.x - camX;
             int bY = building.y - camY;
-            oamSet(&oamMain, 1, bX, bY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
+            oamSet(&oamSub, 1, bX, bY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
                 building.sprite_gfx_mem, -1, false, false, false, false, false);
         }
 
         swiWaitForVBlank();
-        oamUpdate(&oamMain);
+        oamUpdate(&oamSub);
     }
 
     return 0;
