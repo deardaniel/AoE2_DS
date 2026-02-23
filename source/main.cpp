@@ -41,6 +41,7 @@ int main(void)
     Villager villager = {0,0};
     int camX = 0;
     int camY = 0;
+    bool followCam = true;
     
     // Use MODE_5_2D for bitmap BG + sprites
     videoSetMode(MODE_5_2D);
@@ -85,6 +86,7 @@ int main(void)
     iprintf("AoE2 DSi - Grass\n");
     iprintf("Villager: %d,%d\n", villager.x, villager.y);
     iprintf("D-pad: move\n");
+    iprintf("SELECT: toggle camera follow\n");
     iprintf("START: exit\n");
 
     while(pmMainLoop())
@@ -93,6 +95,7 @@ int main(void)
         int keys = keysHeld();
 
         if(keys & KEY_START) break;
+        if(keys & KEY_SELECT) followCam = !followCam;
 
         if(keys)
         {
@@ -106,10 +109,22 @@ int main(void)
         }
 
         // Camera scroll (manual) with L/R, X/Y clamped to map bounds
-        if(keys & KEY_L) { if(camY > 0) camY--; }
-        if(keys & KEY_R) { if(camY < (MAP_H - 192)) camY++; }
-        if(keys & KEY_A) { if(camX > 0) camX--; }
-        if(keys & KEY_Y) { if(camX < (MAP_W - 256)) camX++; }
+        if(!followCam) {
+            if(keys & KEY_L) { if(camY > 0) camY--; }
+            if(keys & KEY_R) { if(camY < (MAP_H - 192)) camY++; }
+            if(keys & KEY_A) { if(camX > 0) camX--; }
+            if(keys & KEY_Y) { if(camX < (MAP_W - 256)) camX++; }
+        }
+
+        // Follow camera (center on villager)
+        if(followCam) {
+            camX = villager.x - (256 / 2);
+            camY = villager.y - (192 / 2);
+            if(camX < 0) camX = 0;
+            if(camY < 0) camY = 0;
+            if(camX > (MAP_W - 256)) camX = MAP_W - 256;
+            if(camY > (MAP_H - 192)) camY = MAP_H - 192;
+        }
 
         bgSetScroll(bg2, camX, camY);
         bgUpdate();

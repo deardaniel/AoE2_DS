@@ -25,6 +25,7 @@ The resulting `.nds` file can be run in:
 - D-pad: Move units
 - L/R: Scroll background (Y axis)
 - A/Y: Scroll background (X axis)
+- SELECT: Toggle camera follow
 - START: Exit
 
 ## Assets
