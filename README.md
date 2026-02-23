@@ -23,6 +23,7 @@ The resulting `.nds` file can be run in:
 ## Controls
 
 - D-pad: Move units
+- L/R: Scroll background (Y axis)
 - START: Exit
 
 ## Assets
@@ -113,3 +114,4 @@ See [PLAN.md](./PLAN.md) for the development roadmap.
 
 - **Grass background**: Use a bitmap BG (BG2) with `BgType_Bmp8` and put it in VRAM bank A (`VRAM_A_MAIN_BG`). Sprites must be moved to a different bank (e.g. `VRAM_B_MAIN_SPRITE`) or the BG will be black.
 - **Grass pipeline**: `sprites/grass.png` is generated from HD terrain textures in `Age2HD/resources/_common/terrain/textures/`. See `scripts/make_grass_from_texture.py`.
+- **Villager frame order**: Packed sheets are treated as a 4x3 grid (columns = directions, rows = frames). Animation index = `dir + frame * 4`.

@@ -19,10 +19,12 @@ enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
 enum {SCREEN_TOP = 0, SCREEN_BOTTOM = 192, SCREEN_LEFT = 0, SCREEN_RIGHT = 256};
 
 #define FRAMES_PER_ANIMATION 3
+#define DIR_COUNT 4
 
 void animateVillager(Villager *sprite)
 {
-    int frame = sprite->anim_frame + sprite->state * FRAMES_PER_ANIMATION;
+    // Frames are packed in a 4x3 grid (columns = directions, rows = frames)
+    int frame = sprite->state + sprite->anim_frame * DIR_COUNT;
     u8* offset = sprite->frame_gfx + frame * 32*32;
     dmaCopy(offset, sprite->sprite_gfx_mem, 32*32);
 }
@@ -36,6 +38,7 @@ void initVillager(Villager *sprite, u8* gfx)
 int main(void)
 {
     Villager villager = {0,0};
+    int camY = 0;
     
     // Use MODE_5_2D for bitmap BG + sprites
     videoSetMode(MODE_5_2D);
@@ -86,6 +89,13 @@ int main(void)
             villager.anim_frame++;
             if(villager.anim_frame >= FRAMES_PER_ANIMATION) villager.anim_frame = 0;
         }
+
+        // Camera scroll (Y only) with L/R (clamped to 256x256 map)
+        if(keys & KEY_L) { if(camY > 0) camY--; }
+        if(keys & KEY_R) { if(camY < (256 - 192)) camY++; }
+
+        bgSetScroll(bg2, 0, camY);
+        bgUpdate();
 
         animateVillager(&villager);
 
