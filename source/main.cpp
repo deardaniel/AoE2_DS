@@ -258,14 +258,36 @@ int main(void)
             }
         }
 
-        // Step toward target if moving
+        // Step toward target if moving (respect water tiles)
         if (villager.moving) {
-            if (villager.x < villager.target_x) { villager.x++; villager.state = W_RIGHT; }
-            if (villager.x > villager.target_x) { villager.x--; villager.state = W_LEFT; }
-            if (villager.y < villager.target_y) { villager.y++; villager.state = W_DOWN; }
-            if (villager.y > villager.target_y) { villager.y--; villager.state = W_UP; }
+            auto passable = [&](int px, int py) -> bool {
+                int cx = px + (SPRITE_SIZE / 2);
+                int cy = py + (SPRITE_SIZE / 2);
+                int tx = cx / TILE_SIZE;
+                int ty = cy / TILE_SIZE;
+                if (tx < 0 || tx >= MAP_TW || ty < 0 || ty >= MAP_TH) return false;
+                return tiles[ty][tx] != 2;
+            };
 
-            if (villager.x == villager.target_x && villager.y == villager.target_y) {
+            int nextX = villager.x;
+            int nextY = villager.y;
+            if (villager.x < villager.target_x) { nextX = villager.x + 1; }
+            if (villager.x > villager.target_x) { nextX = villager.x - 1; }
+            if (villager.y < villager.target_y) { nextY = villager.y + 1; }
+            if (villager.y > villager.target_y) { nextY = villager.y - 1; }
+
+            bool moved = false;
+            if (nextX != villager.x && passable(nextX, villager.y)) {
+                villager.state = (nextX > villager.x) ? W_RIGHT : W_LEFT;
+                villager.x = nextX;
+                moved = true;
+            } else if (nextY != villager.y && passable(villager.x, nextY)) {
+                villager.state = (nextY > villager.y) ? W_DOWN : W_UP;
+                villager.y = nextY;
+                moved = true;
+            }
+
+            if (!moved || (villager.x == villager.target_x && villager.y == villager.target_y)) {
                 villager.moving = false;
             }
         }
