@@ -108,3 +108,8 @@ Open `sprites/index.html` in a browser to review the sheets.
 ## Development
 
 See [PLAN.md](./PLAN.md) for the development roadmap.
+
+## Notes / Learnings
+
+- **Grass background**: Use a bitmap BG (BG2) with `BgType_Bmp8` and put it in VRAM bank A (`VRAM_A_MAIN_BG`). Sprites must be moved to a different bank (e.g. `VRAM_B_MAIN_SPRITE`) or the BG will be black.
+- **Grass pipeline**: `sprites/grass.png` is generated from HD terrain textures in `Age2HD/resources/_common/terrain/textures/`. See `scripts/make_grass_from_texture.py`.

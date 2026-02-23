@@ -62,6 +62,10 @@ aoe2_dsi/
 - [x] Working sprite demo with animated sprites
 - [ ] Phase 1: Terrain system
 
+### Recent Learnings
+- **Bitmap BG + VRAM**: For a 256×256 textured grass background, use BG2 in `BgType_Bmp8` and map VRAM bank A to main BG (`VRAM_A_MAIN_BG`). Move sprite VRAM to a separate bank (e.g. `VRAM_B_MAIN_SPRITE`) or the BG will render black/flat.
+- **HD terrain source**: Use `Age2HD/resources/_common/terrain/textures/*_color.png` as the source textures; downscale and quantize to 256 colors before `grit`.
+
 ## Key Technical Findings
 
 ### Grit sprite flags (CRITICAL)
