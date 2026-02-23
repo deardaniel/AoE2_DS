@@ -14,6 +14,9 @@ typedef struct
     u8*  frame_gfx;
     int state;
     int anim_frame;
+    int target_x;
+    int target_y;
+    bool moving;
 } Villager;
 
 typedef struct
@@ -49,7 +52,7 @@ void initVillager(Villager *sprite, u8* gfx)
 
 int main(void)
 {
-    Villager villager = {0,0};
+    Villager villager = {0,0,0,0,0,0,0,0,false};
     Building building = {0,0,false,0,0,0};
     int camX = 0;
     int camY = 0;
@@ -142,22 +145,39 @@ int main(void)
                 building.build_timer = 90;
                 building.state = 0;
             } else {
-                // Move villager toward touch position
-                villager.x = tx - (SPRITE_SIZE / 2);
-                villager.y = ty - (SPRITE_SIZE / 2);
-                if (villager.x < 0) villager.x = 0;
-                if (villager.y < 0) villager.y = 0;
-                if (villager.x > (MAP_W - SPRITE_SIZE)) villager.x = MAP_W - SPRITE_SIZE;
-                if (villager.y > (MAP_H - SPRITE_SIZE)) villager.y = MAP_H - SPRITE_SIZE;
+                // Set move target
+                villager.target_x = tx - (SPRITE_SIZE / 2);
+                villager.target_y = ty - (SPRITE_SIZE / 2);
+                if (villager.target_x < 0) villager.target_x = 0;
+                if (villager.target_y < 0) villager.target_y = 0;
+                if (villager.target_x > (MAP_W - SPRITE_SIZE)) villager.target_x = MAP_W - SPRITE_SIZE;
+                if (villager.target_y > (MAP_H - SPRITE_SIZE)) villager.target_y = MAP_H - SPRITE_SIZE;
+                villager.moving = true;
             }
         }
 
-        // Simple idle animation tick
+        // Step toward target if moving
+        if (villager.moving) {
+            if (villager.x < villager.target_x) { villager.x++; villager.state = W_RIGHT; }
+            if (villager.x > villager.target_x) { villager.x--; villager.state = W_LEFT; }
+            if (villager.y < villager.target_y) { villager.y++; villager.state = W_DOWN; }
+            if (villager.y > villager.target_y) { villager.y--; villager.state = W_UP; }
+
+            if (villager.x == villager.target_x && villager.y == villager.target_y) {
+                villager.moving = false;
+            }
+        }
+
+        // Simple animation tick
         static int animTick = 0;
         animTick++;
         if (animTick >= 10) {
-            villager.anim_frame++;
-            if(villager.anim_frame >= FRAMES_PER_ANIMATION) villager.anim_frame = 0;
+            if (villager.moving) {
+                villager.anim_frame++;
+                if(villager.anim_frame >= FRAMES_PER_ANIMATION) villager.anim_frame = 0;
+            } else {
+                villager.anim_frame = 0;
+            }
             animTick = 0;
         }
 
