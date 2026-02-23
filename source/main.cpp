@@ -91,6 +91,9 @@ int main(void)
 
     dmaCopy(villagerPal, SPRITE_PALETTE, 512);
 
+    // Simple map marker (1px) for villager and building positions
+    u8* map = (u8*)bgGetGfxPtr(bg2);
+
     static bool villagerSelected = false;
 
     while(pmMainLoop())
@@ -106,6 +109,12 @@ int main(void)
         touchRead(&touch);
         bool touchDown = (keys & KEY_TOUCH) != 0;
         bool touchPressed = (keysPressed & KEY_TOUCH) != 0;
+
+        // Clear previous markers (very cheap: just overwrite last positions)
+        static int lastVX = -1, lastVY = -1;
+        static int lastBX = -1, lastBY = -1;
+        if (lastVX >= 0 && lastVY >= 0) map[lastVY * 256 + lastVX] = 0;
+        if (lastBX >= 0 && lastBY >= 0) map[lastBY * 256 + lastBX] = 0;
 
         // Selection/building/move logic via touch (bottom screen map)
         if (touchPressed) {
@@ -143,6 +152,25 @@ int main(void)
         if (touchDown) {
             villager.anim_frame++;
             if(villager.anim_frame >= FRAMES_PER_ANIMATION) villager.anim_frame = 0;
+        }
+
+        // Draw markers on the map
+        int mvx = villager.x;
+        int mvy = villager.y;
+        if (mvx >= 0 && mvx < MAP_W && mvy >= 0 && mvy < MAP_H) {
+            map[mvy * 256 + mvx] = villagerSelected ? 3 : 2;
+            lastVX = mvx;
+            lastVY = mvy;
+        }
+
+        if (building.active) {
+            int mbx = building.x;
+            int mby = building.y;
+            if (mbx >= 0 && mbx < MAP_W && mby >= 0 && mby < MAP_H) {
+                map[mby * 256 + mbx] = 1;
+                lastBX = mbx;
+                lastBY = mby;
+            }
         }
 
         // Camera scroll (manual) with buttons, X/Y clamped to map bounds

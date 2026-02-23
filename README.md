@@ -27,6 +27,7 @@ The resulting `.nds` file can be run in:
 - Touch: Tap villager on the map to select/deselect
 - Touch: Tap ground to move (when not selected)
 - Touch: Tap ground to build (when selected)
+- A 1px marker shows the villager/building position on the map.
 - SELECT: Toggle camera follow
 - L/R: Scroll background (Y axis) when camera follow is off
 - A/Y: Scroll background (X axis) when camera follow is off
