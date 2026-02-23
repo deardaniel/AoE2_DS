@@ -17,7 +17,7 @@ typedef struct
 
 enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
 enum {SCREEN_TOP = 0, SCREEN_BOTTOM = 192, SCREEN_LEFT = 0, SCREEN_RIGHT = 256};
-enum {MAP_W = 256, MAP_H = 256, SPRITE_SIZE = 32};
+enum {MAP_W = 512, MAP_H = 512, SPRITE_SIZE = 32};
 
 #define FRAMES_PER_ANIMATION 3
 #define DIR_COUNT 4
@@ -58,9 +58,22 @@ int main(void)
 
     // BG2 bitmap (top screen)
     int bg2 = bgInit(2, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
-    dmaCopy(grassBitmap, bgGetGfxPtr(bg2), grassBitmapLen);
     dmaCopy(grassPal, BG_PALETTE, grassPalLen);
     bgShow(bg2);
+
+    // Initialize a simple larger map (2x2 screens) by tiling the 256x256 grass bitmap
+    u8* vram = (u8*)bgGetGfxPtr(bg2);
+    for (int ty = 0; ty < 2; ty++) {
+        for (int tx = 0; tx < 2; tx++) {
+            int baseX = tx * 256;
+            int baseY = ty * 256;
+            for (int y = 0; y < 256; y++) {
+                u8* dst = vram + ((baseY + y) * 512) + baseX;
+                u8* src = (u8*)grassBitmap + (y * 256);
+                dmaCopy(src, dst, 256);
+            }
+        }
+    }
     
     initVillager(&villager, (u8*)villagerTiles);
     villager.x = 112;

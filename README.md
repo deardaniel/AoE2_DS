@@ -24,7 +24,7 @@ The resulting `.nds` file can be run in:
 
 - D-pad: Move units
 - L/R: Scroll background (Y axis)
-- A/Y: Scroll background (X axis; no effect until larger maps)
+- A/Y: Scroll background (X axis)
 - START: Exit
 
 ## Assets
