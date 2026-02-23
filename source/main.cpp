@@ -22,6 +22,8 @@ typedef struct
     int y;
     bool active;
     u16* sprite_gfx_mem;
+    int build_timer;
+    int state; // 0 = foundation, 1 = built
 } Building;
 
 enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
@@ -48,7 +50,7 @@ void initVillager(Villager *sprite, u8* gfx)
 int main(void)
 {
     Villager villager = {0,0};
-    Building building = {0,0,false,0};
+    Building building = {0,0,false,0,0,0};
     int camX = 0;
     int camY = 0;
     bool followCam = true;
@@ -171,23 +173,41 @@ int main(void)
             building.active = true;
             building.x = villager.x;
             building.y = villager.y;
+            building.build_timer = 90;
+            building.state = 0;
         }
 
         if (building.active) {
+            if (building.build_timer > 0) {
+                building.build_timer--;
+                if (building.build_timer == 0) building.state = 1;
+            }
             // Render building as a simple 32x32 solid tile from sprite memory (reuse villager gfx palette)
             if (!building.sprite_gfx_mem) {
                 building.sprite_gfx_mem = oamAllocateGfx(&oamMain, SpriteSize_32x32, SpriteColorFormat_256Color);
-                // Simple hut block: border + fill using existing palette indices
+            }
+
+            // Update sprite gfx if state changes
+            static int last_state = -1;
+            if (building.state != last_state) {
                 u8* dst = (u8*)building.sprite_gfx_mem;
                 for (int y = 0; y < 32; y++) {
                     for (int x = 0; x < 32; x++) {
                         bool border = (x == 0 || y == 0 || x == 31 || y == 31);
-                        bool door = (y > 20 && y < 31 && x > 13 && x < 19);
-                        if (border) dst[y * 32 + x] = 1;
-                        else if (door) dst[y * 32 + x] = 3;
-                        else dst[y * 32 + x] = 2;
+                        if (building.state == 0) {
+                            // Foundation: outline + sparse fill
+                            if (border || ((x + y) % 6 == 0)) dst[y * 32 + x] = 1;
+                            else dst[y * 32 + x] = 0;
+                        } else {
+                            // Built hut: border + fill + door
+                            bool door = (y > 20 && y < 31 && x > 13 && x < 19);
+                            if (border) dst[y * 32 + x] = 1;
+                            else if (door) dst[y * 32 + x] = 3;
+                            else dst[y * 32 + x] = 2;
+                        }
                     }
                 }
+                last_state = building.state;
             }
             int bX = building.x - camX;
             int bY = building.y - camY;
