@@ -108,10 +108,8 @@ int main(void)
     consoleDemoInit();
     iprintf("AoE2 DSi - Grass\n");
     iprintf("Villager: %d,%d\n", villager.x, villager.y);
-    iprintf("D-pad: move\n");
+    iprintf("Touch: select/move/build\n");
     iprintf("SELECT: toggle camera follow\n");
-    iprintf("A: select villager\n");
-    iprintf("B: build here\n");
     iprintf("START: exit\n");
 
     static bool villagerSelected = false;
@@ -120,27 +118,55 @@ int main(void)
     {
         scanKeys();
         int keys = keysHeld();
+        int keysPressed = keysDown();
 
         if(keys & KEY_START) break;
-        if(keys & KEY_SELECT) followCam = !followCam;
-        bool selectVillager = (keysDown() & KEY_A) != 0;
-        bool buildHere = (keysDown() & KEY_B) != 0;
+        if(keysPressed & KEY_SELECT) followCam = !followCam;
 
-        // Selection/building logic
-        if (selectVillager) villagerSelected = !villagerSelected;
+        touchPosition touch;
+        touchRead(&touch);
+        bool touchDown = (keys & KEY_TOUCH) != 0;
+        bool touchPressed = (keysPressed & KEY_TOUCH) != 0;
 
-        if(keys && !villagerSelected)
-        {
-            if(keys & KEY_UP) { if(villager.y > 0) villager.y--; villager.state = W_UP; }
-            if(keys & KEY_LEFT) { if(villager.x > 0) villager.x--; villager.state = W_LEFT; }
-            if(keys & KEY_RIGHT) { if(villager.x < (MAP_W - SPRITE_SIZE)) villager.x++; villager.state = W_RIGHT; }
-            if(keys & KEY_DOWN) { if(villager.y < (MAP_H - SPRITE_SIZE)) villager.y++; villager.state = W_DOWN; }
+        // Selection/building/move logic via touch (top screen)
+        if (touchPressed) {
+            int tx = touch.px + camX;
+            int ty = touch.py + camY;
 
+            bool onVillager = (tx >= villager.x && tx < villager.x + SPRITE_SIZE &&
+                               ty >= villager.y && ty < villager.y + SPRITE_SIZE);
+
+            if (onVillager) {
+                villagerSelected = !villagerSelected;
+            } else if (villagerSelected) {
+                // Build at touch position
+                building.active = true;
+                building.x = tx - (SPRITE_SIZE / 2);
+                building.y = ty - (SPRITE_SIZE / 2);
+                if (building.x < 0) building.x = 0;
+                if (building.y < 0) building.y = 0;
+                if (building.x > (MAP_W - SPRITE_SIZE)) building.x = MAP_W - SPRITE_SIZE;
+                if (building.y > (MAP_H - SPRITE_SIZE)) building.y = MAP_H - SPRITE_SIZE;
+                building.build_timer = 90;
+                building.state = 0;
+            } else {
+                // Move villager toward touch position
+                villager.x = tx - (SPRITE_SIZE / 2);
+                villager.y = ty - (SPRITE_SIZE / 2);
+                if (villager.x < 0) villager.x = 0;
+                if (villager.y < 0) villager.y = 0;
+                if (villager.x > (MAP_W - SPRITE_SIZE)) villager.x = MAP_W - SPRITE_SIZE;
+                if (villager.y > (MAP_H - SPRITE_SIZE)) villager.y = MAP_H - SPRITE_SIZE;
+            }
+        }
+
+        // Simple idle animation tick
+        if (touchDown) {
             villager.anim_frame++;
             if(villager.anim_frame >= FRAMES_PER_ANIMATION) villager.anim_frame = 0;
         }
 
-        // Camera scroll (manual) with L/R, X/Y clamped to map bounds
+        // Camera scroll (manual) with buttons, X/Y clamped to map bounds
         if(!followCam) {
             if(keys & KEY_L) { if(camY > 0) camY--; }
             if(keys & KEY_R) { if(camY < (MAP_H - 192)) camY++; }
@@ -169,13 +195,6 @@ int main(void)
         oamSet(&oamMain, 0, screenX, screenY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
             villager.sprite_gfx_mem, -1, false, false, false, villagerSelected, false);
 
-        if (buildHere && villagerSelected) {
-            building.active = true;
-            building.x = villager.x;
-            building.y = villager.y;
-            building.build_timer = 90;
-            building.state = 0;
-        }
 
         if (building.active) {
             if (building.build_timer > 0) {

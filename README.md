@@ -23,11 +23,12 @@ The resulting `.nds` file can be run in:
 ## Controls
 
 - D-pad: Move units
-- L/R: Scroll background (Y axis)
-- A/Y: Scroll background (X axis)
+- Touch: Tap villager to select/deselect
+- Touch: Tap ground to move (when not selected)
+- Touch: Tap ground to build (when selected)
 - SELECT: Toggle camera follow
-- A: Select villager (toggles selection)
-- B: Build at villager position (requires selection; short build time)
+- L/R: Scroll background (Y axis) when camera follow is off
+- A/Y: Scroll background (X axis) when camera follow is off
 - START: Exit
 
 ## Assets
