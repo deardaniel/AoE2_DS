@@ -87,14 +87,6 @@ int main(void)
             dmaCopy(src, dst, 96);
         }
     }
-
-    // Add a horizontal dirt road across the map
-    int roadY = 220;
-    for (int y = 0; y < 24; y++) {
-        u8* dst = vram + ((roadY + y) * 512) + 0;
-        u8* src = (u8*)dirtBitmap + ((y % 256) * 256);
-        dmaCopy(src, dst, 512);
-    }
     
     initVillager(&villager, (u8*)villagerTiles);
     villager.x = 112;
