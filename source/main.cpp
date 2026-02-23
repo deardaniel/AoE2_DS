@@ -113,8 +113,10 @@ int main(void)
         // Clear previous markers (very cheap: just overwrite last positions)
         static int lastVX = -1, lastVY = -1;
         static int lastBX = -1, lastBY = -1;
+        static int lastPX = -1, lastPY = -1;
         if (lastVX >= 0 && lastVY >= 0) map[lastVY * 256 + lastVX] = 0;
         if (lastBX >= 0 && lastBY >= 0) map[lastBY * 256 + lastBX] = 0;
+        if (lastPX >= 0 && lastPY >= 0) map[lastPY * 256 + lastPX] = 0;
 
         // Selection/building/move logic via touch (bottom screen map)
         if (touchPressed) {
@@ -149,9 +151,12 @@ int main(void)
         }
 
         // Simple idle animation tick
-        if (touchDown) {
+        static int animTick = 0;
+        animTick++;
+        if (animTick >= 10) {
             villager.anim_frame++;
             if(villager.anim_frame >= FRAMES_PER_ANIMATION) villager.anim_frame = 0;
+            animTick = 0;
         }
 
         // Draw markers on the map
@@ -170,6 +175,17 @@ int main(void)
                 map[mby * 256 + mbx] = 1;
                 lastBX = mbx;
                 lastBY = mby;
+            }
+        }
+
+        // Build preview marker under stylus when selected
+        if (villagerSelected && touchDown) {
+            int tx = touch.px + camX;
+            int ty = touch.py + camY;
+            if (tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H) {
+                map[ty * 256 + tx] = 3;
+                lastPX = tx;
+                lastPY = ty;
             }
         }
 
