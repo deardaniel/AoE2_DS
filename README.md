@@ -117,3 +117,4 @@ See [PLAN.md](./PLAN.md) for the development roadmap.
 - **Grass background**: Use a bitmap BG (BG2) with `BgType_Bmp8` and put it in VRAM bank A (`VRAM_A_MAIN_BG`). Sprites must be moved to a different bank (e.g. `VRAM_B_MAIN_SPRITE`) or the BG will be black.
 - **Grass pipeline**: `sprites/grass.png` is generated from HD terrain textures in `Age2HD/resources/_common/terrain/textures/`. See `scripts/make_grass_from_texture.py`.
 - **Villager frame order**: Packed sheets are treated as a 4x3 grid (columns = directions, rows = frames). Animation index = `dir + frame * 4`.
+- **Terrain variety**: `sprites/dirt.png` is generated from `g_des_00_color.png` via `scripts/make_texture_from_hd.py` and stamped onto the bitmap.

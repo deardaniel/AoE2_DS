@@ -150,6 +150,9 @@ $(OUTPUT).elf	:	$(OFILES)
 grass.s grass.h : grass.png ../sprites/grass.grit
 	grit $< -ff../sprites/grass.grit -ograss
 
+dirt.s dirt.h : dirt.png ../sprites/dirt.grit
+	grit $< -ff../sprites/dirt.grit -odirt
+
 %.s %.h : %.png
 	grit $< -ff../sprites/sprite.grit -o$*
 #---------------------------------------------------------------------------------

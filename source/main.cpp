@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include <grass.h>
+#include <dirt.h>
 #include <villager.h>
 
 typedef struct
@@ -73,6 +74,17 @@ int main(void)
                 u8* src = (u8*)grassBitmap + (y * 256);
                 dmaCopy(src, dst, 256);
             }
+        }
+    }
+
+    // Stamp a few dirt patches to make the terrain readable
+    for (int patch = 0; patch < 3; patch++) {
+        int px = 40 + patch * 120;
+        int py = 60 + patch * 100;
+        for (int y = 0; y < 96; y++) {
+            u8* dst = vram + ((py + y) * 512) + px;
+            u8* src = (u8*)dirtBitmap + ((y % 256) * 256);
+            dmaCopy(src, dst, 96);
         }
     }
     
