@@ -27,7 +27,7 @@ The resulting `.nds` file can be run in:
 - A/Y: Scroll background (X axis)
 - SELECT: Toggle camera follow
 - A: Select villager (toggles selection)
-- B: Build at villager position
+- B: Build at villager position (requires selection)
 - START: Exit
 
 ## Assets

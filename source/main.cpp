@@ -167,7 +167,7 @@ int main(void)
         oamSet(&oamMain, 0, screenX, screenY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
             villager.sprite_gfx_mem, -1, false, false, false, villagerSelected, false);
 
-        if (buildHere) {
+        if (buildHere && villagerSelected) {
             building.active = true;
             building.x = villager.x;
             building.y = villager.y;
@@ -177,9 +177,17 @@ int main(void)
             // Render building as a simple 32x32 solid tile from sprite memory (reuse villager gfx palette)
             if (!building.sprite_gfx_mem) {
                 building.sprite_gfx_mem = oamAllocateGfx(&oamMain, SpriteSize_32x32, SpriteColorFormat_256Color);
-                // Fill with a visible color index
+                // Simple hut block: border + fill using existing palette indices
                 u8* dst = (u8*)building.sprite_gfx_mem;
-                for (int i = 0; i < 32*32; i++) dst[i] = 2;
+                for (int y = 0; y < 32; y++) {
+                    for (int x = 0; x < 32; x++) {
+                        bool border = (x == 0 || y == 0 || x == 31 || y == 31);
+                        bool door = (y > 20 && y < 31 && x > 13 && x < 19);
+                        if (border) dst[y * 32 + x] = 1;
+                        else if (door) dst[y * 32 + x] = 3;
+                        else dst[y * 32 + x] = 2;
+                    }
+                }
             }
             int bX = building.x - camX;
             int bY = building.y - camY;
