@@ -55,7 +55,7 @@ typedef struct
     ActionType action = Action_None;
 } UnitManager;
 
-static bool onLeftClick(UnitManager &um, Villager &villager, Building &building, int tx, int ty)
+static bool onTapPrimary(UnitManager &um, Villager &villager, Building &building, int tx, int ty)
 {
     bool onVillager = (tx >= villager.x && tx < villager.x + SPRITE_SIZE &&
                        ty >= villager.y && ty < villager.y + SPRITE_SIZE);
@@ -87,7 +87,7 @@ static bool onLeftClick(UnitManager &um, Villager &villager, Building &building,
     return false;
 }
 
-static void onRightClick(UnitManager &um, Villager &villager, int tx, int ty)
+static void onTapCommand(UnitManager &um, Villager &villager, int tx, int ty)
 {
     if (!um.selected) return;
 
@@ -210,8 +210,8 @@ int main(void)
             if (onBuildBtn) {
                 unitManager.inputState = (unitManager.inputState == Input_Default) ? Input_PlacingBuilding : Input_Default;
                 unitManager.action = (unitManager.inputState == Input_PlacingBuilding) ? Action_Build : Action_None;
-            } else if (!onLeftClick(unitManager, villager, building, tx, ty)) {
-                onRightClick(unitManager, villager, tx, ty);
+            } else if (!onTapPrimary(unitManager, villager, building, tx, ty)) {
+                onTapCommand(unitManager, villager, tx, ty);
             }
         }
 
