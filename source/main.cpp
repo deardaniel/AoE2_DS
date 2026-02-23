@@ -16,6 +16,14 @@ typedef struct
     int anim_frame;
 } Villager;
 
+typedef struct
+{
+    int x;
+    int y;
+    bool active;
+    u16* sprite_gfx_mem;
+} Building;
+
 enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
 enum {SCREEN_TOP = 0, SCREEN_BOTTOM = 192, SCREEN_LEFT = 0, SCREEN_RIGHT = 256};
 enum {MAP_W = 512, MAP_H = 512, SPRITE_SIZE = 32};
@@ -40,6 +48,7 @@ void initVillager(Villager *sprite, u8* gfx)
 int main(void)
 {
     Villager villager = {0,0};
+    Building building = {0,0,false,0};
     int camX = 0;
     int camY = 0;
     bool followCam = true;
@@ -99,7 +108,11 @@ int main(void)
     iprintf("Villager: %d,%d\n", villager.x, villager.y);
     iprintf("D-pad: move\n");
     iprintf("SELECT: toggle camera follow\n");
+    iprintf("A: select villager\n");
+    iprintf("B: build here\n");
     iprintf("START: exit\n");
+
+    static bool villagerSelected = false;
 
     while(pmMainLoop())
     {
@@ -108,8 +121,13 @@ int main(void)
 
         if(keys & KEY_START) break;
         if(keys & KEY_SELECT) followCam = !followCam;
+        bool selectVillager = (keysDown() & KEY_A) != 0;
+        bool buildHere = (keysDown() & KEY_B) != 0;
 
-        if(keys)
+        // Selection/building logic
+        if (selectVillager) villagerSelected = !villagerSelected;
+
+        if(keys && !villagerSelected)
         {
             if(keys & KEY_UP) { if(villager.y > 0) villager.y--; villager.state = W_UP; }
             if(keys & KEY_LEFT) { if(villager.x > 0) villager.x--; villager.state = W_LEFT; }
@@ -147,7 +165,27 @@ int main(void)
         int screenY = villager.y - camY;
 
         oamSet(&oamMain, 0, screenX, screenY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
-            villager.sprite_gfx_mem, -1, false, false, false, false, false);
+            villager.sprite_gfx_mem, -1, false, false, false, villagerSelected, false);
+
+        if (buildHere) {
+            building.active = true;
+            building.x = villager.x;
+            building.y = villager.y;
+        }
+
+        if (building.active) {
+            // Render building as a simple 32x32 solid tile from sprite memory (reuse villager gfx palette)
+            if (!building.sprite_gfx_mem) {
+                building.sprite_gfx_mem = oamAllocateGfx(&oamMain, SpriteSize_32x32, SpriteColorFormat_256Color);
+                // Fill with a visible color index
+                u8* dst = (u8*)building.sprite_gfx_mem;
+                for (int i = 0; i < 32*32; i++) dst[i] = 2;
+            }
+            int bX = building.x - camX;
+            int bY = building.y - camY;
+            oamSet(&oamMain, 1, bX, bY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
+                building.sprite_gfx_mem, -1, false, false, false, false, false);
+        }
 
         swiWaitForVBlank();
         oamUpdate(&oamMain);
