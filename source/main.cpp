@@ -46,6 +46,15 @@ enum {MAP_W = 256, MAP_H = 256, SPRITE_SIZE = 32};
 #define FRAMES_PER_ANIMATION 3
 #define DIR_COUNT 4
 
+enum ActionType {Action_None = 0, Action_Move = 1, Action_Build = 2};
+
+typedef struct
+{
+    bool selected = false;
+    InputState inputState = Input_Default;
+    ActionType action = Action_None;
+} UnitManager;
+
 void animateVillager(Villager *sprite)
 {
     // Frames are packed in a 4x3 grid (columns = directions, rows = frames)
@@ -64,7 +73,7 @@ int main(void)
 {
     Villager villager = {0,0,0,0,0,0,0,0,false};
     Building building = {0,0,false,0,0,0};
-    InputState inputState = Input_Default;
+    UnitManager unitManager;
     int camX = 0;
     int camY = 0;
     bool followCam = true;
@@ -122,8 +131,6 @@ int main(void)
         }
     }
 
-    static bool villagerSelected = false;
-
     while(pmMainLoop())
     {
         scanKeys();
@@ -157,10 +164,15 @@ int main(void)
                                touch.py >= buildBtnY && touch.py < buildBtnY + buildBtnH);
 
             if (onBuildBtn) {
-                inputState = (inputState == Input_Default) ? Input_PlacingBuilding : Input_Default;
+                unitManager.inputState = (unitManager.inputState == Input_Default) ? Input_PlacingBuilding : Input_Default;
+                unitManager.action = (unitManager.inputState == Input_PlacingBuilding) ? Action_Build : Action_None;
             } else if (onVillager) {
-                villagerSelected = !villagerSelected;
-            } else if (villagerSelected && inputState == Input_PlacingBuilding) {
+                unitManager.selected = !unitManager.selected;
+                if (!unitManager.selected) {
+                    unitManager.action = Action_None;
+                    unitManager.inputState = Input_Default;
+                }
+            } else if (unitManager.selected && unitManager.inputState == Input_PlacingBuilding) {
                 // Build at touch position
                 building.active = true;
                 building.x = tx - (SPRITE_SIZE / 2);
@@ -171,7 +183,8 @@ int main(void)
                 if (building.y > (MAP_H - SPRITE_SIZE)) building.y = MAP_H - SPRITE_SIZE;
                 building.build_timer = 90;
                 building.state = 0;
-                inputState = Input_Default;
+                unitManager.inputState = Input_Default;
+                unitManager.action = Action_None;
             } else {
                 // Set move target
                 villager.target_x = tx - (SPRITE_SIZE / 2);
@@ -181,6 +194,7 @@ int main(void)
                 if (villager.target_x > (MAP_W - SPRITE_SIZE)) villager.target_x = MAP_W - SPRITE_SIZE;
                 if (villager.target_y > (MAP_H - SPRITE_SIZE)) villager.target_y = MAP_H - SPRITE_SIZE;
                 villager.moving = true;
+                unitManager.action = Action_Move;
             }
         }
 
@@ -215,7 +229,7 @@ int main(void)
         if (mvx >= 0 && mvx < MAP_W && mvy >= 0 && mvy < MAP_H) {
             int idx = mvy * 256 + mvx;
             vMark.prev = map[idx];
-            map[idx] = villagerSelected ? 3 : 2;
+            map[idx] = unitManager.selected ? 3 : 2;
             vMark.x = mvx;
             vMark.y = mvy;
             vMark.active = true;
@@ -235,7 +249,7 @@ int main(void)
         }
 
         // Build preview marker under stylus when selected
-        if (villagerSelected && inputState == Input_PlacingBuilding && touchDown) {
+        if (unitManager.selected && unitManager.inputState == Input_PlacingBuilding && touchDown) {
             int tx = touch.px + camX;
             int ty = touch.py + camY;
             if (tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H) {
@@ -275,7 +289,7 @@ int main(void)
         int screenY = villager.y - camY;
 
         oamSet(&oamSub, 0, screenX, screenY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
-            villager.sprite_gfx_mem, -1, false, false, false, villagerSelected, false);
+            villager.sprite_gfx_mem, -1, false, false, false, unitManager.selected, false);
 
 
         if (building.active) {
