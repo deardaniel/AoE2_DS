@@ -21,6 +21,9 @@ GameState gameState;
 
 static TerrainMap terrain;
 
+// Main RAM framebuffer for bottom screen (NDS VRAM doesn't support byte writes)
+static u8 terrainBuf[256 * 192] __attribute__((aligned(4)));
+
 // ---------------------------------------------------------------------------
 // Start a new game
 // ---------------------------------------------------------------------------
@@ -49,6 +52,12 @@ static void game_start() {
     // Generate map with a semi-random seed
     terrain.generate(12345);
 
+    // Temporarily give enough resources to place starting TCs (free in AoE2)
+    for (int p = 0; p < NUM_PLAYERS; p++) {
+        gameState.players[p].resources[RES_WOOD]  = 9999;
+        gameState.players[p].resources[RES_STONE] = 9999;
+    }
+
     // --- Player 0 (human) — top-left corner ---
     // Place Town Center at tile (2,2)
     int tc0 = building_place(BLDG_TOWN_CENTER, 0, 2, 2, gameState, terrain);
@@ -70,6 +79,14 @@ static void game_start() {
     unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 3) * TILE_PX, (MAP_TILES - 3) * TILE_PX);
     unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 3) * TILE_PX);
     unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 3) * TILE_PX, (MAP_TILES - 2) * TILE_PX);
+
+    // Reset resources to actual starting values (TC placement was free)
+    for (int p = 0; p < NUM_PLAYERS; p++) {
+        gameState.players[p].resources[RES_FOOD]  = 200;
+        gameState.players[p].resources[RES_WOOD]  = 200;
+        gameState.players[p].resources[RES_GOLD]  = 100;
+        gameState.players[p].resources[RES_STONE] = 200;
+    }
 
     // Update initial fog and pop caps
     fogMap.update();
@@ -201,10 +218,11 @@ int main(void) {
 
         // --- Rendering ---
 
-        // Sub screen: terrain bitmap
-        terrain.renderViewport(subVram, gameState.camX, gameState.camY);
+        // Sub screen: render terrain to main RAM buffer
+        // (NDS VRAM doesn't support byte writes — STRB is silently dropped)
+        terrain.renderViewport(terrainBuf, gameState.camX, gameState.camY);
 
-        // Sub screen: fog overlay on bitmap
+        // Sub screen: fog overlay on buffer
         {
             int startTX = gameState.camX / TILE_PX;
             int startTY = gameState.camY / TILE_PX;
@@ -233,14 +251,11 @@ int main(void) {
                             if (screenX < 0 || screenX >= SCREEN_W) continue;
                             int idx = screenY * 256 + screenX;
                             if (fogState == FOG_UNEXPLORED) {
-                                subVram[idx] = PAL_BLACK;
+                                terrainBuf[idx] = PAL_BLACK;
                             } else {
-                                // Explored but not visible: darken with checkerboard
-                                // Every other pixel becomes dark, showing dimmed terrain
                                 if ((px + py) & 1) {
-                                    subVram[idx] = PAL_BLACK;
+                                    terrainBuf[idx] = PAL_BLACK;
                                 }
-                                // Leave odd pixels as-is (terrain shows through)
                             }
                         }
                     }
@@ -248,8 +263,11 @@ int main(void) {
             }
         }
 
-        // Sub screen: build menu overlay on bitmap
-        render_build_menu(subVram, gameState);
+        // Sub screen: build menu overlay on buffer
+        render_build_menu(terrainBuf, gameState);
+
+        // DMA copy completed buffer to VRAM
+        dmaCopy(terrainBuf, subVram, 256 * 192);
 
         // Sub screen: OAM sprites for units and buildings
         render_sprites(gameState, terrain);
