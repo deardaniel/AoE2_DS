@@ -117,8 +117,9 @@ int main(void) {
     u8* subVram = (u8*)bgGetGfxPtr(bg2);
 
     // --- Top screen (main): handled by ui_init ---
-    vramSetBankB(VRAM_B_MAIN_SPRITE);
-    oamInit(&oamMain, SpriteMapping_1D_128, false);
+    // VRAM_B mapped to main BG at 0x06020000 for minimap bitmap
+    // (VRAM_A at 0x06000000 is used for console tiles/map)
+    vramSetBankB(VRAM_B_MAIN_BG);
 
     ui_init();  // sets up main engine video mode, VRAM_A, console
 

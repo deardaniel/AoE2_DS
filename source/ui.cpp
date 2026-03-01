@@ -38,8 +38,9 @@ void ui_init() {
     videoSetMode(MODE_5_2D);
     vramSetBankA(VRAM_A_MAIN_BG);
 
-    // BG2: 256-color bitmap for minimap
-    minimapBg = bgInit(2, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
+    // BG2: 16-bit bitmap for minimap — in VRAM_B (mapBase 8 = offset 0x20000)
+    // VRAM_A (offset 0) is reserved for console tiles/map
+    minimapBg = bgInit(2, BgType_Bmp16, BgSize_B16_256x256, 8, 0);
     minimapVram = (u16*)bgGetGfxPtr(minimapBg);
     bgSetPriority(minimapBg, 1);
 
