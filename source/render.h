@@ -10,5 +10,8 @@ void render_init();
 // Render all visible units and buildings as OAM sprites on the sub screen
 void render_sprites(const GameState& gs, const TerrainMap& terrain);
 
+// Software-render all visible units and buildings into bitmap buffer
+void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain);
+
 // Draw the build menu bar on the bottom of the screen
 void render_build_menu(u8* vram, const GameState& gs);

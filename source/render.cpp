@@ -403,6 +403,128 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
 }
 
 // ---------------------------------------------------------------------------
+// Software blit: draw a sprite frame into the bitmap buffer
+// Skips transparent pixels (index 0). Uses sprite palette indices directly.
+// ---------------------------------------------------------------------------
+static void blit_frame(u8* buf, const u8* frame, int fw, int fh,
+                       int sx, int sy, bool hflip) {
+    for (int py = 0; py < fh; py++) {
+        int screenY = sy + py;
+        if (screenY < 0 || screenY >= SCREEN_H) continue;
+        for (int px = 0; px < fw; px++) {
+            int screenX = sx + px;
+            if (screenX < 0 || screenX >= SCREEN_W) continue;
+            int srcX = hflip ? (fw - 1 - px) : px;
+            u8 val = frame[py * fw + srcX];
+            if (val == 0) continue; // transparent
+            buf[screenY * 256 + screenX] = val;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Software-render all visible units and buildings into bitmap buffer
+// Uses sprite palette indices — caller must ensure sprite palette is also
+// loaded into BG_PALETTE_SUB (shared palette) for correct colors.
+// ---------------------------------------------------------------------------
+void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) {
+    // --- Render buildings first (behind units) ---
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        Building& b = buildings[i];
+        if (!b.alive) continue;
+
+        int pw = buildingSprW[b.type];
+        int ph = buildingSprH[b.type];
+
+        int sx = b.x - gs.camX;
+        int sy = b.y - gs.camY;
+        if (sx < -pw || sx >= SCREEN_W || sy < -ph || sy >= SCREEN_H) continue;
+
+        // Fog check
+        if (b.owner != 0) {
+            int tx = b.x / TILE_PX;
+            int ty = b.y / TILE_PX;
+            if (!fogMap.isExplored(0, tx, ty)) continue;
+        }
+
+        bool complete = (b.buildProgress >= BLDG_STATS[b.type].buildTime);
+        u8 frame[32 * 32];
+        memset(frame, 0, sizeof(frame));
+
+        if (!complete || buildingSheet[b.type] == NULL) {
+            // Under construction: simple pattern
+            for (int y = 0; y < ph; y++)
+                for (int x = 0; x < pw; x++) {
+                    bool border = (x == 0 || y == 0 || x == pw-1 || y == ph-1);
+                    if (border || ((x + y) % 6 == 0))
+                        frame[y * pw + x] = PAL_BROWN;
+                }
+        } else {
+            memcpy(frame, buildingSheet[b.type], pw * ph);
+            if (b.owner == 1) apply_color_remap(frame, pw * ph);
+        }
+
+        // Selection highlight: draw border
+        if (gs.selectedBldg == i) {
+            for (int x = 0; x < pw; x++) { frame[x] = PAL_WHITE; frame[(ph-1)*pw+x] = PAL_WHITE; }
+            for (int y = 0; y < ph; y++) { frame[y*pw] = PAL_WHITE; frame[y*pw+pw-1] = PAL_WHITE; }
+        }
+
+        blit_frame(buf, frame, pw, ph, sx, sy, false);
+    }
+
+    // --- Render units (on top of buildings) ---
+    for (int i = 0; i < MAX_UNITS; i++) {
+        Unit& u = units[i];
+        if (!u.alive) continue;
+
+        int sx = u.x - gs.camX - 8;
+        int sy = u.y - gs.camY - 8;
+        if (sx < -CELL_W || sx >= SCREEN_W || sy < -CELL_H || sy >= SCREEN_H) continue;
+
+        // Fog check — only show enemy units in visible tiles
+        if (u.owner != 0) {
+            int tx = (u.x + TILE_PX/2) / TILE_PX;
+            int ty = (u.y + TILE_PX/2) / TILE_PX;
+            if (!fogMap.isVisible(0, tx, ty)) continue;
+        }
+
+        const u8* sheet = get_unit_sheet(u.type, u.state);
+        int frameIdx;
+        bool hflip;
+        if (is_animated_sheet(sheet, u.type)) {
+            int base = DIR_TO_ANIM_BASE[u.direction];
+            int anim = u.animFrame % 3;
+            frameIdx = base + anim;
+            hflip = DIR_HFLIP[u.direction];
+        } else {
+            frameIdx = DIR_TO_FRAME[u.direction];
+            hflip = DIR_HFLIP[u.direction];
+        }
+        if (frameIdx >= SHEET_COLS * SHEET_ROWS) frameIdx = 0;
+
+        u8 frame[CELL_W * CELL_H];
+        extract_frame(sheet, frameIdx, frame);
+        if (u.owner == 1) apply_color_remap(frame, CELL_W * CELL_H);
+        if (u.state == USTATE_DEAD) {
+            for (int j = 0; j < CELL_W * CELL_H; j++)
+                if (frame[j] != 0) frame[j] = PAL_DARKGRAY;
+        }
+
+        // Selection highlight: draw 1px border around non-transparent area
+        if (gs.selectedUnit == i) {
+            for (int y = 0; y < CELL_H; y++)
+                for (int x = 0; x < CELL_W; x++)
+                    if (frame[y*CELL_W+x] != 0 &&
+                        (x == 0 || y == 0 || x == CELL_W-1 || y == CELL_H-1))
+                        frame[y*CELL_W+x] = PAL_WHITE;
+        }
+
+        blit_frame(buf, frame, CELL_W, CELL_H, sx, sy, hflip);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Build menu bar (drawn into bitmap VRAM, uses palette indices)
 // ---------------------------------------------------------------------------
 void render_build_menu(u8* vram, const GameState& gs) {

@@ -263,14 +263,14 @@ int main(void) {
             }
         }
 
+        // Sub screen: software-render units and buildings into buffer
+        render_sprites_sw(terrainBuf, gameState, terrain);
+
         // Sub screen: build menu overlay on buffer
         render_build_menu(terrainBuf, gameState);
 
         // DMA copy completed buffer to VRAM
         dmaCopy(terrainBuf, subVram, 256 * 192);
-
-        // Sub screen: OAM sprites for units and buildings
-        render_sprites(gameState, terrain);
 
         // Top screen: minimap + info panel
         ui_update(gameState, terrain);
