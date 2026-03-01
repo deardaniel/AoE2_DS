@@ -119,6 +119,13 @@ Open `sprites/index.html` in a browser to review the sheets.
 
 See [PLAN.md](./PLAN.md) for the development roadmap.
 
+## Terrain System
+
+The terrain is now managed by a dedicated module:
+- `source/terrain.h`, `source/terrain.cpp`: owns the tile grid, provides passability/buildability checks, and renders tiles into the bitmap BG.
+- `TerrainMap::init()` builds a simple starter layout (grass + dirt band + water patch).
+- `TerrainMap::render()` stamps 16x16 tiles from `grass.png`, `dirt.png`, `water.png` into the bottom-screen bitmap BG.
+
 ## Notes / Learnings
 
 - **Grass background**: Use a bitmap BG (BG2) with `BgType_Bmp8` and put it in VRAM bank A (`VRAM_A_MAIN_BG`). Sprites must be moved to a different bank (e.g. `VRAM_B_MAIN_SPRITE`) or the BG will be black.

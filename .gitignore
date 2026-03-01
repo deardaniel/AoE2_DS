@@ -10,3 +10,7 @@ sprites/index.html
 assets/*.png
 assets/game_b*/
 assets/trees/
+build/
+*.elf
+*.nds
+.screenshots/

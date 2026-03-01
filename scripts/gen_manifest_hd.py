@@ -42,7 +42,7 @@ def read_slp_info(path):
 def main():
     ap = argparse.ArgumentParser(description='Generate a manifest of candidate HD SLPs.')
     ap.add_argument('--graphics-dir', default='/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics', help='Age2HD graphics directory')
-    ap.add_argument('--palette', default='/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal', help='Palette path')
+    ap.add_argument('--palette', default='/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina', help='Palette path (default: AoE2 HD 50500.bina)')
     ap.add_argument('--out', default='assets/manifest_hd.json', help='Output manifest path')
     ap.add_argument('--limit', type=int, default=30, help='Max entries to include')
     args = ap.parse_args()

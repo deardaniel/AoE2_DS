@@ -61,6 +61,9 @@ aoe2_dsi/
 - [x] Graphics rendering working (green terrain on top, console on bottom)
 - [x] Working sprite demo with animated sprites
 - [ ] Phase 1: Terrain system
+  - [x] Dedicated terrain module (`TerrainMap`) with tile grid + bitmap rendering
+  - [x] Passability/buildability checks via tile IDs
+  - [ ] Procedural variety (scatter patches, edges, roads)
 
 ### Recent Learnings
 - **Bitmap BG + VRAM**: For a 256×256 textured grass background, use BG2 in `BgType_Bmp8` and map VRAM bank A to main BG (`VRAM_A_MAIN_BG`). Move sprite VRAM to a separate bank (e.g. `VRAM_B_MAIN_SPRITE`) or the BG will render black/flat.

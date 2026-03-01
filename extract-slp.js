@@ -36,15 +36,17 @@ if (!fs.existsSync(outputDir)) {
 }
 
 // Try to find palette - check multiple possible locations
+// The correct AoE2 unit palette is 50500.bina from the interface DRS directory (JASC-PAL format)
 const slpDir = path.dirname(slpPath);
 const possiblePalettes = [
     ...(paletteOverride ? [paletteOverride] : []),
+    // Correct AoE2 HD unit rendering palette
+    '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina',
+    // Fallback paths
+    path.join(slpDir, '..', 'interface', '50500.bina'),
     path.join(slpDir, '..', '..', 'palettes', 'original.pal'),
     path.join(slpDir, '..', 'palettes', 'original.pal'),
-    '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/palettes/original.pal',
     '/mnt/c/Program Files (x86)/Steam/steamapps/common/AoE2DE/resources/_common/palettes/original.pal',
-    '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal',
-    '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_6.pal',
     'original.pal'
 ];
 
@@ -85,7 +87,7 @@ for (let i = start; i < end; i++) {
     console.log(`Frame ${i}: ${frameInfo.width}x${frameInfo.height}`);
     
     // Skip huge frames (likely backgrounds/terrain)
-    if (frameInfo.width > 256 || frameInfo.height > 256) {
+    if (frameInfo.width > 400 || frameInfo.height > 400) {
         console.log(`  Skipping (too large)`);
         continue;
     }

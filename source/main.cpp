@@ -1,423 +1,263 @@
-// AoE2 DSi - Villager on Grass (Tilemap + Sprite)
+// AoE2 DSi — Age of Empires 2 for Nintendo DSi
+// Main entry point and game loop
 #include <nds.h>
 #include <stdio.h>
 
-#include <grass.h>
-#include <dirt.h>
-#include <water.h>
-#include <villager.h>
+#include "config.h"
+#include "game.h"
+#include "terrain.h"
+#include "units.h"
+#include "buildings.h"
+#include "input.h"
+#include "render.h"
+#include "ui.h"
+#include "fog.h"
+#include "tech.h"
+#include "ai.h"
+#include "sound.h"
 
-typedef struct
-{
-    int x;
-    int y;
-    u16* sprite_gfx_mem;
-    u8*  frame_gfx;
-    int state;
-    int anim_frame;
-    int target_x;
-    int target_y;
-    bool moving;
-} Villager;
+// Global game state (accessible by tech.cpp via extern)
+GameState gameState;
 
-typedef struct
-{
-    int x;
-    int y;
-    bool active;
-    u16* sprite_gfx_mem;
-    int build_timer;
-    int state; // 0 = foundation, 1 = built
-} Building;
+static TerrainMap terrain;
 
-typedef struct
-{
-    int x;
-    int y;
-    u8 prev;
-    bool active;
-} Marker;
-
-enum InputState {Input_Default = 0, Input_PlacingBuilding = 1};
-
-enum SpriteState {W_UP = 0, W_RIGHT = 1, W_DOWN = 2, W_LEFT = 3};
-enum {SCREEN_TOP = 0, SCREEN_BOTTOM = 192, SCREEN_LEFT = 0, SCREEN_RIGHT = 256};
-enum {MAP_W = 256, MAP_H = 256, SPRITE_SIZE = 32};
-enum {TILE_SIZE = 16, MAP_TW = MAP_W / TILE_SIZE, MAP_TH = MAP_H / TILE_SIZE};
-
-#define FRAMES_PER_ANIMATION 3
-#define DIR_COUNT 4
-
-enum ActionType {Action_None = 0, Action_Move = 1, Action_Build = 2};
-
-typedef struct
-{
-    bool selected = false;
-    InputState inputState = Input_Default;
-    ActionType action = Action_None;
-} UnitManager;
-
-static bool canBuildOnTile(u8 tile)
-{
-    return tile != 2;
-}
-
-static bool onTapPrimary(UnitManager &um, Villager &villager, Building &building, int tx, int ty, u8 tiles[MAP_TH][MAP_TW])
-{
-    bool onVillager = (tx >= villager.x && tx < villager.x + SPRITE_SIZE &&
-                       ty >= villager.y && ty < villager.y + SPRITE_SIZE);
-
-    if (onVillager) {
-        um.selected = !um.selected;
-        if (!um.selected) {
-            um.action = Action_None;
-            um.inputState = Input_Default;
+// ---------------------------------------------------------------------------
+// Start a new game
+// ---------------------------------------------------------------------------
+static void game_start() {
+    // Free all allocated OAM gfx before reinitializing (prevents VRAM leak on restart)
+    for (int i = 0; i < MAX_UNITS; i++) {
+        if (units[i].spriteGfx) {
+            oamFreeGfx(&oamSub, units[i].spriteGfx);
+            units[i].spriteGfx = NULL;
         }
-        return true;
+    }
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        if (buildings[i].spriteGfx) {
+            oamFreeGfx(&oamSub, buildings[i].spriteGfx);
+            buildings[i].spriteGfx = NULL;
+        }
     }
 
-    if (um.selected && um.inputState == Input_PlacingBuilding) {
-        int tileX = tx / TILE_SIZE;
-        int tileY = ty / TILE_SIZE;
-        if (tileX < 0 || tileX >= MAP_TW || tileY < 0 || tileY >= MAP_TH) return true;
-        if (!canBuildOnTile(tiles[tileY][tileX])) return true;
-        building.active = true;
-        building.x = tx - (SPRITE_SIZE / 2);
-        building.y = ty - (SPRITE_SIZE / 2);
-        if (building.x < 0) building.x = 0;
-        if (building.y < 0) building.y = 0;
-        if (building.x > (MAP_W - SPRITE_SIZE)) building.x = MAP_W - SPRITE_SIZE;
-        if (building.y > (MAP_H - SPRITE_SIZE)) building.y = MAP_H - SPRITE_SIZE;
-        building.build_timer = 90;
-        building.state = 0;
-        um.inputState = Input_Default;
-        um.action = Action_None;
-        return true;
+    game_init(gameState);
+    units_init();
+    buildings_init();
+    fogMap.init();
+    tech_init_stats();
+    ai_init();
+
+    // Generate map with a semi-random seed
+    terrain.generate(12345);
+
+    // --- Player 0 (human) — top-left corner ---
+    // Place Town Center at tile (2,2)
+    int tc0 = building_place(BLDG_TOWN_CENTER, 0, 2, 2, gameState, terrain);
+    if (tc0 >= 0) {
+        buildings[tc0].buildProgress = BLDG_STATS[BLDG_TOWN_CENTER].buildTime; // start complete
     }
 
-    return false;
+    // Spawn 3 villagers near TC
+    unit_spawn(UNIT_VILLAGER, 0, 4 * TILE_PX, 4 * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 0, 5 * TILE_PX, 4 * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 0, 4 * TILE_PX, 5 * TILE_PX);
+
+    // --- Player 1 (AI) — bottom-right corner ---
+    int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 4, MAP_TILES - 4, gameState, terrain);
+    if (tc1 >= 0) {
+        buildings[tc1].buildProgress = BLDG_STATS[BLDG_TOWN_CENTER].buildTime;
+    }
+
+    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 3) * TILE_PX, (MAP_TILES - 3) * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 3) * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 3) * TILE_PX, (MAP_TILES - 2) * TILE_PX);
+
+    // Update initial fog and pop caps
+    fogMap.update();
+    game_update_pop_cap(gameState, 0);
+    game_update_pop_cap(gameState, 1);
+
+    // Center camera on player's TC
+    gameState.camX = 2 * TILE_PX - SCREEN_W / 2;
+    gameState.camY = 2 * TILE_PX - SCREEN_H / 2;
+    if (gameState.camX < 0) gameState.camX = 0;
+    if (gameState.camY < 0) gameState.camY = 0;
 }
 
-static void onTapCommand(UnitManager &um, Villager &villager, int tx, int ty, u8 tiles[MAP_TH][MAP_TW])
-{
-    if (!um.selected) return;
-
-    int tileX = tx / TILE_SIZE;
-    int tileY = ty / TILE_SIZE;
-    if (tileX < 0 || tileX >= MAP_TW || tileY < 0 || tileY >= MAP_TH) return;
-    if (tiles[tileY][tileX] == 2) return;
-
-    villager.target_x = tx - (SPRITE_SIZE / 2);
-    villager.target_y = ty - (SPRITE_SIZE / 2);
-    if (villager.target_x < 0) villager.target_x = 0;
-    if (villager.target_y < 0) villager.target_y = 0;
-    if (villager.target_x > (MAP_W - SPRITE_SIZE)) villager.target_x = MAP_W - SPRITE_SIZE;
-    if (villager.target_y > (MAP_H - SPRITE_SIZE)) villager.target_y = MAP_H - SPRITE_SIZE;
-    villager.moving = true;
-    um.action = Action_Move;
-}
-
-void animateVillager(Villager *sprite)
-{
-    // Frames are packed in a 4x3 grid (columns = directions, rows = frames)
-    int frame = sprite->state + sprite->anim_frame * DIR_COUNT;
-    u8* offset = sprite->frame_gfx + frame * 32*32;
-    dmaCopy(offset, sprite->sprite_gfx_mem, 32*32);
-}
-
-void initVillager(Villager *sprite, u8* gfx)
-{
-    sprite->sprite_gfx_mem = oamAllocateGfx(&oamSub, SpriteSize_32x32, SpriteColorFormat_256Color);
-    sprite->frame_gfx = (u8*)gfx;
-}
-
-int main(void)
-{
-    Villager villager = {0,0,0,0,0,0,0,0,false};
-    Building building = {0,0,false,0,0,0};
-    UnitManager unitManager;
-    int camX = 0;
-    int camY = 0;
-    bool followCam = true;
-    
-    // Main: sprites, Sub: bitmap map
-    videoSetMode(MODE_0_2D);
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+int main(void) {
+    // --- Sub screen (bottom): bitmap BG + OAM sprites for game ---
     videoSetModeSub(MODE_5_2D);
-
-    // VRAM: B for main sprites (unused for now), C for sub BG bitmap, D for sub sprites
-    vramSetBankA(VRAM_A_LCD);
-    vramSetBankB(VRAM_B_MAIN_SPRITE);
     vramSetBankC(VRAM_C_SUB_BG);
     vramSetBankD(VRAM_D_SUB_SPRITE);
 
-    oamInit(&oamMain, SpriteMapping_1D_128, false);
     oamInit(&oamSub, SpriteMapping_1D_128, false);
     oamEnable(&oamSub);
 
-    // BG2 bitmap (bottom screen)
+    // Sub BG2: 8-bit bitmap for terrain
     int bg2 = bgInitSub(2, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
-    u8* vram = (u8*)bgGetGfxPtr(bg2);
-    dmaCopy(grassPal, BG_PALETTE_SUB, grassPalLen);
-    bgShow(bg2);
+    u8* subVram = (u8*)bgGetGfxPtr(bg2);
 
-    // Build a simple tilemap (0 = grass, 1 = dirt, 2 = water)
-    static u8 tiles[MAP_TH][MAP_TW];
-    for (int y = 0; y < MAP_TH; y++) {
-        for (int x = 0; x < MAP_TW; x++) {
-            tiles[y][x] = 0;
-        }
-    }
-    // Dirt band
-    for (int y = 6; y < 10; y++) {
-        for (int x = 2; x < MAP_TW - 2; x++) tiles[y][x] = 1;
-    }
-    // Water patch
-    for (int y = 12; y < 15; y++) {
-        for (int x = 4; x < 7; x++) tiles[y][x] = 2;
-    }
+    // --- Top screen (main): handled by ui_init ---
+    vramSetBankB(VRAM_B_MAIN_SPRITE);
+    oamInit(&oamMain, SpriteMapping_1D_128, false);
 
-    // Render tiles to bitmap using 16x16 stamps from textures
-    auto stamp = [&](int dstX, int dstY, const u8* src) {
-        for (int y = 0; y < TILE_SIZE; y++) {
-            u8* dst = vram + ((dstY + y) * 256) + dstX;
-            const u8* row = src + (y * 256);
-            dmaCopy(row, dst, TILE_SIZE);
-        }
-    };
+    ui_init();  // sets up main engine video mode, VRAM_A, console
 
-    for (int ty = 0; ty < MAP_TH; ty++) {
-        for (int tx = 0; tx < MAP_TW; tx++) {
-            int dstX = tx * TILE_SIZE;
-            int dstY = ty * TILE_SIZE;
-            if (tiles[ty][tx] == 2) {
-                stamp(dstX, dstY, (u8*)waterBitmap);
-            } else if (tiles[ty][tx] == 1) {
-                stamp(dstX, dstY, (u8*)dirtBitmap);
-            } else {
-                stamp(dstX, dstY, (u8*)grassBitmap);
+    // Load shared terrain palette into BG_PALETTE_SUB (includes UI colors at 0-15)
+    terrain_initPalette();
+
+    // Init terrain tile graphics cache from preprocessed binary data
+    terrain.initTileGfx();
+
+    // Init render system
+    render_init();
+
+    // Init sound (stubs for now)
+    sound_init();
+
+    // Start first game
+    game_start();
+
+    // === Main Loop ===
+    while (pmMainLoop()) {
+        // Handle game-over touch-to-restart
+        if (gameState.phase != PHASE_PLAYING) {
+            scanKeys();
+            if (keysDown() & KEY_TOUCH) {
+                game_start();
             }
-        }
-    }
-    
-    initVillager(&villager, (u8*)villagerTiles);
-    villager.x = 112;
-    villager.y = 80;
-
-    dmaCopy(villagerPal, SPRITE_PALETTE_SUB, 512);
-
-    // Simple map marker (1px) for villager and building positions
-    u8* map = (u8*)bgGetGfxPtr(bg2);
-    const int buildBtnX = 4;
-    const int buildBtnY = 4;
-    const int buildBtnW = 16;
-    const int buildBtnH = 16;
-
-    // Draw build button (simple square in top-left of map)
-    for (int y = 0; y < buildBtnH; y++) {
-        for (int x = 0; x < buildBtnW; x++) {
-            int idx = (buildBtnY + y) * 256 + (buildBtnX + x);
-            map[idx] = 4;
-        }
-    }
-
-    while(pmMainLoop())
-    {
-        scanKeys();
-        int keys = keysHeld();
-        int keysPressed = keysDown();
-
-        if(keys & KEY_START) break;
-        if(keysPressed & KEY_SELECT) followCam = !followCam;
-
-        touchPosition touch;
-        touchRead(&touch);
-        bool touchDown = (keys & KEY_TOUCH) != 0;
-        bool touchPressed = (keysPressed & KEY_TOUCH) != 0;
-
-        // Clear previous markers (restore previous pixel value)
-        static Marker vMark = {-1,-1,0,false};
-        static Marker bMark = {-1,-1,0,false};
-        static Marker pMark = {-1,-1,0,false};
-        if (vMark.active) { map[vMark.y * 256 + vMark.x] = vMark.prev; vMark.active = false; }
-        if (bMark.active) { map[bMark.y * 256 + bMark.x] = bMark.prev; bMark.active = false; }
-        if (pMark.active) { map[pMark.y * 256 + pMark.x] = pMark.prev; pMark.active = false; }
-
-        // Selection/building/move logic via touch (bottom screen map)
-        if (touchPressed) {
-            int tx = touch.px + camX;
-            int ty = touch.py + camY;
-
-            bool onBuildBtn = (touch.px >= buildBtnX && touch.px < buildBtnX + buildBtnW &&
-                               touch.py >= buildBtnY && touch.py < buildBtnY + buildBtnH);
-
-            if (onBuildBtn) {
-                unitManager.inputState = (unitManager.inputState == Input_Default) ? Input_PlacingBuilding : Input_Default;
-                unitManager.action = (unitManager.inputState == Input_PlacingBuilding) ? Action_Build : Action_None;
-            } else if (!onTapPrimary(unitManager, villager, building, tx, ty, tiles)) {
-                onTapCommand(unitManager, villager, tx, ty, tiles);
-            }
+            // Still update UI to show victory/defeat
+            ui_update(gameState, terrain);
+            swiWaitForVBlank();
+            continue;
         }
 
-        // Step toward target if moving (respect water tiles)
-        if (villager.moving) {
-            auto passable = [&](int px, int py) -> bool {
-                int cx = px + (SPRITE_SIZE / 2);
-                int cy = py + (SPRITE_SIZE / 2);
-                int tx = cx / TILE_SIZE;
-                int ty = cy / TILE_SIZE;
-                if (tx < 0 || tx >= MAP_TW || ty < 0 || ty >= MAP_TH) return false;
-                return tiles[ty][tx] != 2;
-            };
+        // Input
+        input_update(gameState, terrain);
 
-            int nextX = villager.x;
-            int nextY = villager.y;
-            if (villager.x < villager.target_x) { nextX = villager.x + 1; }
-            if (villager.x > villager.target_x) { nextX = villager.x - 1; }
-            if (villager.y < villager.target_y) { nextY = villager.y + 1; }
-            if (villager.y > villager.target_y) { nextY = villager.y - 1; }
+        // Handle training/research from selected building via START
+        // Note: scanKeys() already called in input_update() — reuse keysDown()
+        {
+            int kp = keysDown();
+            if (kp & KEY_START) {
+                if (gameState.selectedBldg >= 0 && buildings[gameState.selectedBldg].alive &&
+                    building_is_complete(gameState.selectedBldg)) {
+                    Building& b = buildings[gameState.selectedBldg];
+                    bool didAction = false;
 
-            bool moved = false;
-            if (nextX != villager.x && passable(nextX, villager.y)) {
-                villager.state = (nextX > villager.x) ? W_RIGHT : W_LEFT;
-                villager.x = nextX;
-                moved = true;
-            } else if (nextY != villager.y && passable(villager.x, nextY)) {
-                villager.state = (nextY > villager.y) ? W_DOWN : W_UP;
-                villager.y = nextY;
-                moved = true;
-            }
+                    // TC: age advancement (priority over training)
+                    if (b.type == BLDG_TOWN_CENTER && gameState.players[0].ageProgress < 0 &&
+                        gameState.players[0].age < AGE_IMPERIAL) {
+                        int nextAge = gameState.players[0].age + 1;
+                        if (game_can_afford(gameState, 0, AGE_COST[nextAge])) {
+                            game_deduct_cost(gameState, 0, AGE_COST[nextAge]);
+                            gameState.players[0].ageProgress = 0;
+                            didAction = true;
+                        }
+                    }
 
-            if (!moved || (villager.x == villager.target_x && villager.y == villager.target_y)) {
-                villager.moving = false;
-            }
-        }
+                    // Military buildings: research tech if available
+                    if (!didAction) {
+                        for (int t = 0; t < TECH_COUNT; t++) {
+                            if (TECH_TABLE[t].bldgReq == b.type &&
+                                !tech_is_researched(gameState, 0, t) &&
+                                gameState.players[0].age >= TECH_TABLE[t].ageReq) {
+                                if (tech_start_research(gameState, 0, t)) {
+                                    didAction = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
 
-        // Simple animation tick
-        static int animTick = 0;
-        animTick++;
-        if (animTick >= 10) {
-            if (villager.moving) {
-                villager.anim_frame++;
-                if(villager.anim_frame >= FRAMES_PER_ANIMATION) villager.anim_frame = 0;
-            } else {
-                villager.anim_frame = 0;
-            }
-            animTick = 0;
-        }
-
-        // Draw markers on the map
-        int mvx = villager.x;
-        int mvy = villager.y;
-        if (mvx >= 0 && mvx < MAP_W && mvy >= 0 && mvy < MAP_H) {
-            int idx = mvy * 256 + mvx;
-            vMark.prev = map[idx];
-            map[idx] = unitManager.selected ? 3 : 2;
-            vMark.x = mvx;
-            vMark.y = mvy;
-            vMark.active = true;
-        }
-
-        if (building.active) {
-            int mbx = building.x;
-            int mby = building.y;
-            if (mbx >= 0 && mbx < MAP_W && mby >= 0 && mby < MAP_H) {
-                int idx = mby * 256 + mbx;
-                bMark.prev = map[idx];
-                map[idx] = 1;
-                bMark.x = mbx;
-                bMark.y = mby;
-                bMark.active = true;
-            }
-        }
-
-        // Build preview marker under stylus when selected
-        if (unitManager.selected && unitManager.inputState == Input_PlacingBuilding && touchDown) {
-            int tx = touch.px + camX;
-            int ty = touch.py + camY;
-            if (tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H) {
-                int tileX = tx / TILE_SIZE;
-                int tileY = ty / TILE_SIZE;
-                bool valid = (tileX >= 0 && tileX < MAP_TW && tileY >= 0 && tileY < MAP_TH) &&
-                             canBuildOnTile(tiles[tileY][tileX]);
-                int idx = ty * 256 + tx;
-                pMark.prev = map[idx];
-                map[idx] = valid ? 3 : 1;
-                pMark.x = tx;
-                pMark.y = ty;
-                pMark.active = true;
-            }
-        }
-
-        // Camera scroll (manual) with buttons, X/Y clamped to map bounds
-        if(!followCam) {
-            if(keys & KEY_L) { if(camY > 0) camY--; }
-            if(keys & KEY_R) { if(camY < (MAP_H - 192)) camY++; }
-            if(keys & KEY_A) { if(camX > 0) camX--; }
-            if(keys & KEY_Y) { if(camX < (MAP_W - 256)) camX++; }
-        }
-
-        // Follow camera (center on villager)
-        if(followCam) {
-            camX = villager.x - (256 / 2);
-            camY = villager.y - (192 / 2);
-            if(camX < 0) camX = 0;
-            if(camY < 0) camY = 0;
-            if(camX > (MAP_W - 256)) camX = MAP_W - 256;
-            if(camY > (MAP_H - 192)) camY = MAP_H - 192;
-        }
-
-        bgSetScroll(bg2, camX, camY);
-        bgUpdate();
-
-        animateVillager(&villager);
-
-        int screenX = villager.x - camX;
-        int screenY = villager.y - camY;
-
-        oamSet(&oamSub, 0, screenX, screenY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
-            villager.sprite_gfx_mem, -1, false, false, false, unitManager.selected, false);
-
-
-        if (building.active) {
-            if (building.build_timer > 0) {
-                building.build_timer--;
-                if (building.build_timer == 0) building.state = 1;
-            }
-            // Render building as a simple 32x32 solid tile from sprite memory (reuse villager gfx palette)
-            if (!building.sprite_gfx_mem) {
-                building.sprite_gfx_mem = oamAllocateGfx(&oamSub, SpriteSize_32x32, SpriteColorFormat_256Color);
-            }
-
-            // Update sprite gfx if state changes
-            static int last_state = -1;
-            if (building.state != last_state) {
-                u8* dst = (u8*)building.sprite_gfx_mem;
-                for (int y = 0; y < 32; y++) {
-                    for (int x = 0; x < 32; x++) {
-                        bool border = (x == 0 || y == 0 || x == 31 || y == 31);
-                        if (building.state == 0) {
-                            // Foundation: outline + sparse fill
-                            if (border || ((x + y) % 6 == 0)) dst[y * 32 + x] = 1;
-                            else dst[y * 32 + x] = 0;
-                        } else {
-                            // Built hut: border + fill + door
-                            bool door = (y > 20 && y < 31 && x > 13 && x < 19);
-                            if (border) dst[y * 32 + x] = 1;
-                            else if (door) dst[y * 32 + x] = 3;
-                            else dst[y * 32 + x] = 2;
+                    // Quick-train: train the first available unit
+                    if (!didAction) {
+                        for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
+                            if (UNIT_STATS[ut].bldgReq == b.type &&
+                                gameState.players[0].age >= UNIT_STATS[ut].ageReq) {
+                                building_train(gameState.selectedBldg, ut, gameState);
+                                break;
+                            }
                         }
                     }
                 }
-                last_state = building.state;
             }
-            int bX = building.x - camX;
-            int bY = building.y - camY;
-            oamSet(&oamSub, 1, bX, bY, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
-                building.sprite_gfx_mem, -1, false, false, false, false, false);
         }
 
+        // Game logic
+        units_update(gameState, terrain);
+        buildings_update(gameState, terrain);
+        game_update(gameState);
+
+        // Fog of war (every other frame for performance)
+        if ((gameState.frameCount & 1) == 0) {
+            fogMap.update();
+        }
+
+        // AI
+        ai_update(gameState, terrain);
+
+        // --- Rendering ---
+
+        // Sub screen: terrain bitmap
+        terrain.renderViewport(subVram, gameState.camX, gameState.camY);
+
+        // Sub screen: fog overlay on bitmap
+        {
+            int startTX = gameState.camX / TILE_PX;
+            int startTY = gameState.camY / TILE_PX;
+            int offX = gameState.camX % TILE_PX;
+            int offY = gameState.camY % TILE_PX;
+            int tilesW = (SCREEN_W / TILE_PX) + 2;
+            int tilesH = (SCREEN_H / TILE_PX) + 2;
+
+            for (int ty = 0; ty < tilesH; ty++) {
+                for (int tx = 0; tx < tilesW; tx++) {
+                    int mapTX = startTX + tx;
+                    int mapTY = startTY + ty;
+                    if (mapTX < 0 || mapTX >= MAP_TILES || mapTY < 0 || mapTY >= MAP_TILES) continue;
+
+                    u8 fogState = fogMap.state[0][mapTY][mapTX];
+                    if (fogState == FOG_VISIBLE) continue;
+
+                    int dstX = tx * TILE_PX - offX;
+                    int dstY = ty * TILE_PX - offY;
+
+                    for (int py = 0; py < TILE_PX; py++) {
+                        int screenY = dstY + py;
+                        if (screenY < 0 || screenY >= SCREEN_H) continue;
+                        for (int px = 0; px < TILE_PX; px++) {
+                            int screenX = dstX + px;
+                            if (screenX < 0 || screenX >= SCREEN_W) continue;
+                            int idx = screenY * 256 + screenX;
+                            if (fogState == FOG_UNEXPLORED) {
+                                subVram[idx] = PAL_BLACK;
+                            } else {
+                                // Explored but not visible: darken with checkerboard
+                                // Every other pixel becomes dark, showing dimmed terrain
+                                if ((px + py) & 1) {
+                                    subVram[idx] = PAL_BLACK;
+                                }
+                                // Leave odd pixels as-is (terrain shows through)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sub screen: build menu overlay on bitmap
+        render_build_menu(subVram, gameState);
+
+        // Sub screen: OAM sprites for units and buildings
+        render_sprites(gameState, terrain);
+
+        // Top screen: minimap + info panel
+        ui_update(gameState, terrain);
+
         swiWaitForVBlank();
-        oamUpdate(&oamSub);
     }
 
     return 0;

@@ -67,7 +67,9 @@ CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
-SPRITE_FILES   :=  $(foreach dir, $(SPRITES),$(notdir $(wildcard $(dir)/*.png)))
+# All terrain + sprite data is preprocessed to data/*.bin files
+# No grit-processed PNGs needed
+SPRITE_FILES   :=
 
 #---------------------------------------------------------------------------------
 # use CXX for linking C++ projects, CC for standard C
@@ -95,7 +97,7 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 .PHONY: $(BUILD) clean assets assets-batch
-.PHONY: assets-batch-hd
+.PHONY: assets-batch-hd assets-game sprites
 
 #---------------------------------------------------------------------------------
 $(BUILD):
@@ -138,6 +140,19 @@ assets-batch-hd:
 	@python3 scripts/build_assets_from_manifest.py assets/manifest_hd.json
 
 #---------------------------------------------------------------------------------
+# Extract game unit/building sprites (villager, militia, archer, knight, spearman)
+#---------------------------------------------------------------------------------
+assets-game:
+	@python3 scripts/build_assets_from_manifest.py assets/manifest_game.json
+
+#---------------------------------------------------------------------------------
+# Preprocess HD sprite PNGs into NDS-ready indexed binary data (data/*.bin)
+#---------------------------------------------------------------------------------
+sprites:
+	@python3 scripts/preprocess_sprites.py
+	@python3 scripts/preprocess_terrain.py
+
+#---------------------------------------------------------------------------------
 else
 
 #---------------------------------------------------------------------------------
@@ -146,18 +161,6 @@ else
 $(OUTPUT).nds	: 	$(OUTPUT).elf
 $(OUTPUT).elf	:	$(OFILES)
 
-#---------------------------------------------------------------------------------
-grass.s grass.h : grass.png ../sprites/grass.grit
-	grit $< -ff../sprites/grass.grit -ograss
-
-dirt.s dirt.h : dirt.png ../sprites/dirt.grit
-	grit $< -ff../sprites/dirt.grit -odirt
-
-water.s water.h : water.png ../sprites/water.grit
-	grit $< -ff../sprites/water.grit -owater
-
-%.s %.h : %.png
-	grit $< -ff../sprites/sprite.grit -o$*
 #---------------------------------------------------------------------------------
 
 

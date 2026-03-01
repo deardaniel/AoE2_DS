@@ -1,0 +1,446 @@
+#include "render.h"
+#include "game.h"
+#include "units.h"
+#include "buildings.h"
+#include "terrain.h"
+#include "fog.h"
+#include <string.h>
+
+// ---------------------------------------------------------------------------
+// Binary sprite data (linked from data/ via bin2o)
+// Each _bin is a pointer to raw indexed pixel data, _bin_size is its length
+// Index 0 = transparent, 1-255 = palette color
+// ---------------------------------------------------------------------------
+
+// Palette and remap table
+extern const u8 sprite_pal_bin[];
+extern const u32 sprite_pal_bin_size;
+extern const u8 sprite_remap_bin[];
+extern const u32 sprite_remap_bin_size;
+
+// Unit sprite sheets (160x96 = 5 cols x 3 rows of 32x32 cells)
+extern const u8 spr_villager_bin[];
+extern const u8 spr_villager_walk_bin[];
+extern const u8 spr_villager_f_bin[];
+extern const u8 spr_militia_bin[];
+extern const u8 spr_militia_fight_bin[];
+extern const u8 spr_archer_bin[];
+extern const u8 spr_archer_fire_bin[];
+extern const u8 spr_knight_bin[];
+extern const u8 spr_knight_fight_bin[];
+extern const u8 spr_spearman_bin[];
+extern const u8 spr_spearman_fight_bin[];
+
+// Building sprites (32x32 or 16x16, single frame)
+extern const u8 spr_town_center_bin[];
+extern const u8 spr_house_bin[];
+extern const u8 spr_barracks_bin[];
+extern const u8 spr_archery_range_bin[];
+extern const u8 spr_stable_bin[];
+extern const u8 spr_mining_camp_bin[];
+extern const u8 spr_lumber_camp_bin[];
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+// Build menu layout (shared with input.cpp)
+enum { BUILD_MENU_Y = 176, BUILD_MENU_H = 16, BUILD_MENU_ITEM_W = 32 };
+
+// OAM slot management
+static const int MAX_OAM_UNITS = 50;
+static const int MAX_OAM_BLDGS = 30;
+static const int OAM_UNIT_START = 0;
+static const int OAM_BLDG_START = MAX_OAM_UNITS;
+static const int OAM_UI_START = 80;
+
+// Sprite sheet dimensions
+static const int SHEET_W = 160;   // 5 columns of 32px
+static const int SHEET_H = 96;    // 3 rows of 32px
+static const int CELL_W = 32;
+static const int CELL_H = 32;
+static const int SHEET_COLS = 5;
+static const int SHEET_ROWS = 3;
+
+// ---------------------------------------------------------------------------
+// Sprite sheet table — maps unit type + state to sheet data pointer
+// ---------------------------------------------------------------------------
+
+// Stand sheets indexed by UnitTypeId
+static const u8* unitStandSheet[UNIT_TYPE_COUNT];
+// Walk sheets (NULL if no walk sheet — fallback to stand)
+static const u8* unitWalkSheet[UNIT_TYPE_COUNT];
+// Attack/fight sheets (NULL if none — fallback to stand)
+static const u8* unitFightSheet[UNIT_TYPE_COUNT];
+
+// Building sheets indexed by BuildingTypeId
+static const u8* buildingSheet[BLDG_TYPE_COUNT];
+// Building sprite sizes (side length in pixels)
+static int buildingSprW[BLDG_TYPE_COUNT];
+static int buildingSprH[BLDG_TYPE_COUNT];
+
+// ---------------------------------------------------------------------------
+// Direction to sprite frame mapping
+// AoE2 SLP standing sprites have 5 frames: S, SW, W, NW, N
+// Our 4-direction system maps as:
+//   DIR_UP(0)    -> frame 4 (N)
+//   DIR_RIGHT(1) -> frame 2 (W) + hFlip
+//   DIR_DOWN(2)  -> frame 0 (S)
+//   DIR_LEFT(3)  -> frame 2 (W)
+// ---------------------------------------------------------------------------
+static const int DIR_TO_FRAME[DIR_COUNT] = { 4, 2, 0, 2 };
+static const bool DIR_HFLIP[DIR_COUNT] = { false, true, false, false };
+
+// For walking/attack sheets (5 dirs x 3 anim frames = 15 frames):
+// Dir 0 (S): frames 0,1,2
+// Dir 1 (SW): frames 3,4,5 (not used directly)
+// Dir 2 (W): frames 6,7,8
+// Dir 3 (NW): frames 9,10,11 (not used directly)
+// Dir 4 (N): frames 12,13,14
+static const int DIR_TO_ANIM_BASE[DIR_COUNT] = { 12, 6, 0, 6 };
+
+// ---------------------------------------------------------------------------
+// Convert linear pixel buffer to NDS 8x8 tile layout (256-color, 1D mapping)
+// ---------------------------------------------------------------------------
+static void linear_to_tiled(const u8* src, u8* dst, int w, int h) {
+    int tilesX = w / 8;
+    int tilesY = h / 8;
+    int dstIdx = 0;
+    for (int ty = 0; ty < tilesY; ty++) {
+        for (int tx = 0; tx < tilesX; tx++) {
+            for (int py = 0; py < 8; py++) {
+                for (int px = 0; px < 8; px++) {
+                    int srcX = tx * 8 + px;
+                    int srcY = ty * 8 + py;
+                    dst[dstIdx++] = src[srcY * w + srcX];
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Convert linear pixel buffer to NDS 8x8 tile layout with horizontal flip
+// ---------------------------------------------------------------------------
+static void linear_to_tiled_hflip(const u8* src, u8* dst, int w, int h) {
+    int tilesX = w / 8;
+    int tilesY = h / 8;
+    int dstIdx = 0;
+    for (int ty = 0; ty < tilesY; ty++) {
+        for (int tx = 0; tx < tilesX; tx++) {
+            for (int py = 0; py < 8; py++) {
+                for (int px = 0; px < 8; px++) {
+                    int srcX = (w - 1) - (tx * 8 + px);
+                    int srcY = ty * 8 + py;
+                    dst[dstIdx++] = src[srcY * w + srcX];
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Extract a single 32x32 frame from a 160x96 sprite sheet
+// ---------------------------------------------------------------------------
+static void extract_frame(const u8* sheet, int frameIdx, u8* dst32x32) {
+    int col = frameIdx % SHEET_COLS;
+    int row = frameIdx / SHEET_COLS;
+    int srcX = col * CELL_W;
+    int srcY = row * CELL_H;
+
+    for (int y = 0; y < CELL_H; y++) {
+        memcpy(&dst32x32[y * CELL_W],
+               &sheet[(srcY + y) * SHEET_W + srcX],
+               CELL_W);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Apply player color remap for player 2 (in-place, modifies buffer)
+// ---------------------------------------------------------------------------
+static void apply_color_remap(u8* buf, int size) {
+    const u8* remap = sprite_remap_bin;
+    for (int i = 0; i < size; i++) {
+        buf[i] = remap[buf[i]];
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Get the appropriate sprite sheet for a unit based on its state
+// ---------------------------------------------------------------------------
+static const u8* get_unit_sheet(int unitType, int unitState) {
+    switch (unitState) {
+    case USTATE_MOVING:
+    case USTATE_RETURNING:
+        if (unitWalkSheet[unitType]) return unitWalkSheet[unitType];
+        break;
+    case USTATE_ATTACKING:
+    case USTATE_GATHERING:
+        if (unitFightSheet[unitType]) return unitFightSheet[unitType];
+        break;
+    default:
+        break;
+    }
+    return unitStandSheet[unitType];
+}
+
+// ---------------------------------------------------------------------------
+// Check if a sheet is an animated sheet (walk/fight) vs stand
+// ---------------------------------------------------------------------------
+static bool is_animated_sheet(const u8* sheet, int unitType) {
+    return sheet != unitStandSheet[unitType];
+}
+
+// ---------------------------------------------------------------------------
+// Initialize HD sprite rendering
+// ---------------------------------------------------------------------------
+void render_init() {
+    // Load HD palette into OAM sprite palette
+    dmaCopy(sprite_pal_bin, SPRITE_PALETTE_SUB, 512);
+
+    // Reserve palette index 255 as death tint color (dark gray)
+    SPRITE_PALETTE_SUB[255] = RGB15(4, 4, 4);
+
+    // Set up unit sheet lookup tables
+    unitStandSheet[UNIT_VILLAGER]  = spr_villager_bin;
+    unitStandSheet[UNIT_MILITIA]   = spr_militia_bin;
+    unitStandSheet[UNIT_ARCHER]    = spr_archer_bin;
+    unitStandSheet[UNIT_KNIGHT]    = spr_knight_bin;
+    unitStandSheet[UNIT_SPEARMAN]  = spr_spearman_bin;
+
+    unitWalkSheet[UNIT_VILLAGER]   = spr_villager_walk_bin;
+    unitWalkSheet[UNIT_MILITIA]    = NULL;  // no walk sheet, use stand
+    unitWalkSheet[UNIT_ARCHER]     = NULL;
+    unitWalkSheet[UNIT_KNIGHT]     = NULL;
+    unitWalkSheet[UNIT_SPEARMAN]   = NULL;
+
+    unitFightSheet[UNIT_VILLAGER]  = NULL;  // no fight sheet for villager
+    unitFightSheet[UNIT_MILITIA]   = spr_militia_fight_bin;
+    unitFightSheet[UNIT_ARCHER]    = spr_archer_fire_bin;
+    unitFightSheet[UNIT_KNIGHT]    = spr_knight_fight_bin;
+    unitFightSheet[UNIT_SPEARMAN]  = spr_spearman_fight_bin;
+
+    // Set up building sheet lookup tables
+    buildingSheet[BLDG_TOWN_CENTER]   = spr_town_center_bin;
+    buildingSheet[BLDG_HOUSE]         = spr_house_bin;
+    buildingSheet[BLDG_BARRACKS]      = spr_barracks_bin;
+    buildingSheet[BLDG_ARCHERY_RANGE] = spr_archery_range_bin;
+    buildingSheet[BLDG_STABLE]        = spr_stable_bin;
+    buildingSheet[BLDG_FARM]          = NULL;  // farm rendered as terrain
+    buildingSheet[BLDG_MINING_CAMP]   = spr_mining_camp_bin;
+    buildingSheet[BLDG_LUMBER_CAMP]   = spr_lumber_camp_bin;
+
+    // Building sprite pixel sizes (must match preprocessing target sizes)
+    buildingSprW[BLDG_TOWN_CENTER]   = 32;  buildingSprH[BLDG_TOWN_CENTER]   = 32;
+    buildingSprW[BLDG_HOUSE]         = 16;  buildingSprH[BLDG_HOUSE]         = 16;
+    buildingSprW[BLDG_BARRACKS]      = 32;  buildingSprH[BLDG_BARRACKS]      = 32;
+    buildingSprW[BLDG_ARCHERY_RANGE] = 32;  buildingSprH[BLDG_ARCHERY_RANGE] = 32;
+    buildingSprW[BLDG_STABLE]        = 32;  buildingSprH[BLDG_STABLE]        = 32;
+    buildingSprW[BLDG_FARM]          = 16;  buildingSprH[BLDG_FARM]          = 16;
+    buildingSprW[BLDG_MINING_CAMP]   = 16;  buildingSprH[BLDG_MINING_CAMP]   = 16;
+    buildingSprW[BLDG_LUMBER_CAMP]   = 16;  buildingSprH[BLDG_LUMBER_CAMP]   = 16;
+}
+
+// ---------------------------------------------------------------------------
+// Render all sprites
+// ---------------------------------------------------------------------------
+void render_sprites(const GameState& gs, const TerrainMap& terrain) {
+    // First, hide all OAM entries
+    for (int i = 0; i < 128; i++) {
+        oamSet(&oamSub, i, 0, 192, 0, 0, SpriteSize_16x16, SpriteColorFormat_256Color,
+               NULL, -1, false, true, false, false, false);
+    }
+
+    int oamIdx = OAM_UNIT_START;
+
+    // --- Render units (32x32 OAM sprites from HD sprite sheets) ---
+    for (int i = 0; i < MAX_UNITS && oamIdx < OAM_BLDG_START; i++) {
+        Unit& u = units[i];
+        if (!u.alive) continue;
+
+        // Check if on screen (32x32 sprite, centered on unit tile pos)
+        int sx = u.x - gs.camX - 8;  // offset to center 32px sprite on 16px tile
+        int sy = u.y - gs.camY - 8;
+        if (sx < -CELL_W || sx >= SCREEN_W || sy < -CELL_H || sy >= SCREEN_H) continue;
+
+        // Fog check — only show enemy units in visible tiles
+        if (u.owner != 0) {
+            int tx = (u.x + TILE_PX / 2) / TILE_PX;
+            int ty = (u.y + TILE_PX / 2) / TILE_PX;
+            if (!fogMap.isVisible(0, tx, ty)) continue;
+        }
+
+        // Allocate OAM gfx if needed (32x32 = 1024 bytes)
+        if (!u.spriteGfx) {
+            u.spriteGfx = oamAllocateGfx(&oamSub, SpriteSize_32x32, SpriteColorFormat_256Color);
+        }
+        if (!u.spriteGfx) continue;
+
+        // Select sprite sheet based on unit state
+        const u8* sheet = get_unit_sheet(u.type, u.state);
+
+        // Select frame based on direction and animation
+        int frameIdx;
+        bool hflip;
+        if (is_animated_sheet(sheet, u.type)) {
+            // Animated sheet: 5 dirs x 3 anim frames
+            int base = DIR_TO_ANIM_BASE[u.direction];
+            int anim = u.animFrame % 3;
+            frameIdx = base + anim;
+            hflip = DIR_HFLIP[u.direction];
+        } else {
+            // Stand sheet: 5 frames, one per direction
+            frameIdx = DIR_TO_FRAME[u.direction];
+            hflip = DIR_HFLIP[u.direction];
+        }
+
+        // Clamp frame index to valid range
+        if (frameIdx >= SHEET_COLS * SHEET_ROWS) frameIdx = 0;
+
+        // Extract 32x32 frame from sheet
+        u8 frame[CELL_W * CELL_H];
+        extract_frame(sheet, frameIdx, frame);
+
+        // Apply player 2 color remap
+        if (u.owner == 1) {
+            apply_color_remap(frame, CELL_W * CELL_H);
+        }
+
+        // Death tint: darken all non-transparent pixels to dark gray
+        if (u.state == USTATE_DEAD) {
+            for (int j = 0; j < CELL_W * CELL_H; j++) {
+                if (frame[j] != 0) frame[j] = 255; // palette 255 = death tint
+            }
+        }
+
+        // Convert to NDS tiled format and copy to OAM VRAM
+        u8 tiled[CELL_W * CELL_H];
+        if (hflip) {
+            linear_to_tiled_hflip(frame, tiled, CELL_W, CELL_H);
+        } else {
+            linear_to_tiled(frame, tiled, CELL_W, CELL_H);
+        }
+        dmaCopy(tiled, u.spriteGfx, CELL_W * CELL_H);
+
+        bool selected = (gs.selectedUnit == i);
+        oamSet(&oamSub, oamIdx, sx, sy, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
+               u.spriteGfx, -1, false, false, selected, false, false);
+        u.oamSlot = oamIdx;
+        oamIdx++;
+    }
+
+    // --- Render buildings ---
+    for (int i = 0; i < MAX_BUILDINGS && oamIdx < OAM_UI_START; i++) {
+        Building& b = buildings[i];
+        if (!b.alive) continue;
+
+        const BuildingStats& st = BLDG_STATS[b.type];
+        int pw = buildingSprW[b.type];
+        int ph = buildingSprH[b.type];
+
+        int sx = b.x - gs.camX;
+        int sy = b.y - gs.camY;
+        if (sx < -pw || sx >= SCREEN_W || sy < -ph || sy >= SCREEN_H) continue;
+
+        // Fog check
+        if (b.owner != 0) {
+            int tx = b.x / TILE_PX;
+            int ty = b.y / TILE_PX;
+            if (!fogMap.isExplored(0, tx, ty)) continue;
+        }
+
+        bool complete = (b.buildProgress >= st.buildTime);
+
+        // Determine OAM sprite size
+        SpriteSize sprSize;
+        if (pw >= 32) {
+            sprSize = SpriteSize_32x32;
+        } else {
+            sprSize = SpriteSize_16x16;
+        }
+
+        if (!b.spriteGfx) {
+            b.spriteGfx = oamAllocateGfx(&oamSub, sprSize, SpriteColorFormat_256Color);
+        }
+        if (!b.spriteGfx) continue;
+
+        u8 buf[32 * 32]; // max building sprite size
+        memset(buf, 0, sizeof(buf));
+
+        if (!complete || buildingSheet[b.type] == NULL) {
+            // Under construction or no sprite: show simple construction pattern
+            for (int y = 0; y < ph; y++) {
+                for (int x = 0; x < pw; x++) {
+                    bool border = (x == 0 || y == 0 || x == pw - 1 || y == ph - 1);
+                    if (border || ((x + y) % 6 == 0)) {
+                        buf[y * pw + x] = 1; // use first palette entry (dark)
+                    }
+                }
+            }
+        } else {
+            // Copy HD building sprite data
+            memcpy(buf, buildingSheet[b.type], pw * ph);
+
+            // Apply player 2 color remap
+            if (b.owner == 1) {
+                apply_color_remap(buf, pw * ph);
+            }
+        }
+
+        // Convert to tiled format and copy to OAM VRAM
+        u8 tiled[32 * 32];
+        linear_to_tiled(buf, tiled, pw, ph);
+        dmaCopy(tiled, b.spriteGfx, pw * ph);
+
+        bool selected = (gs.selectedBldg == i);
+        oamSet(&oamSub, oamIdx, sx, sy, 0, 0, sprSize, SpriteColorFormat_256Color,
+               b.spriteGfx, -1, false, false, selected, false, false);
+        b.oamSlot = oamIdx;
+        oamIdx++;
+    }
+
+    oamUpdate(&oamSub);
+}
+
+// ---------------------------------------------------------------------------
+// Build menu bar (drawn into bitmap VRAM, uses palette indices)
+// ---------------------------------------------------------------------------
+void render_build_menu(u8* vram, const GameState& gs) {
+    if (!gs.buildMenuOpen) return;
+
+    // Draw a bar at bottom of screen
+    for (int y = BUILD_MENU_Y; y < SCREEN_H; y++) {
+        for (int x = 0; x < SCREEN_W; x++) {
+            vram[y * 256 + x] = PAL_DARKGRAY;
+        }
+    }
+
+    // Draw icons for each building type
+    for (int i = 0; i < BLDG_TYPE_COUNT; i++) {
+        int ix = i * BUILD_MENU_ITEM_W;
+        if (ix + BUILD_MENU_ITEM_W > SCREEN_W) break;
+
+        bool available = (gs.players[0].age >= BLDG_STATS[i].ageReq);
+        u8 color = available ? PAL_WHITE : PAL_GRAY;
+
+        // Draw small icon (4x4 block)
+        int cx = ix + BUILD_MENU_ITEM_W / 2 - 2;
+        int cy = BUILD_MENU_Y + BUILD_MENU_H / 2 - 2;
+
+        for (int dy = 0; dy < 4; dy++) {
+            for (int dx = 0; dx < 4; dx++) {
+                int px = cx + dx;
+                int py = cy + dy;
+                if (px >= 0 && px < SCREEN_W && py >= 0 && py < SCREEN_H) {
+                    vram[py * 256 + px] = color;
+                }
+            }
+        }
+
+        // Border between items
+        for (int y = BUILD_MENU_Y; y < SCREEN_H; y++) {
+            int bx = ix + BUILD_MENU_ITEM_W - 1;
+            if (bx < SCREEN_W) vram[y * 256 + bx] = PAL_BLACK;
+        }
+    }
+}

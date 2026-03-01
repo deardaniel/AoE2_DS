@@ -3,7 +3,7 @@
     {
       "name": "villager_example",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/2.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/villager.png",
       "cell": "32x32",
       "cols": 4,

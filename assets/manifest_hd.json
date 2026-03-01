@@ -3,7 +3,7 @@
     {
       "name": "hd_3986",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3986.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3986.png",
       "cell": "32x32",
       "cols": 4,
@@ -12,7 +12,7 @@
     {
       "name": "hd_3974",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3974.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3974.png",
       "cell": "32x32",
       "cols": 4,
@@ -21,7 +21,7 @@
     {
       "name": "hd_212",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/212.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_212.png",
       "cell": "32x32",
       "cols": 4,
@@ -30,7 +30,7 @@
     {
       "name": "hd_3803",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3803.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3803.png",
       "cell": "32x32",
       "cols": 4,
@@ -39,7 +39,7 @@
     {
       "name": "hd_3804",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3804.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3804.png",
       "cell": "32x32",
       "cols": 4,
@@ -48,7 +48,7 @@
     {
       "name": "hd_3807",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3807.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3807.png",
       "cell": "32x32",
       "cols": 4,
@@ -57,7 +57,7 @@
     {
       "name": "hd_3815",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3815.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3815.png",
       "cell": "32x32",
       "cols": 4,
@@ -66,7 +66,7 @@
     {
       "name": "hd_3816",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3816.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3816.png",
       "cell": "32x32",
       "cols": 4,
@@ -75,7 +75,7 @@
     {
       "name": "hd_3754",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3754.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3754.png",
       "cell": "32x32",
       "cols": 4,
@@ -84,7 +84,7 @@
     {
       "name": "hd_4194",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/4194.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_4194.png",
       "cell": "32x32",
       "cols": 4,
@@ -93,7 +93,7 @@
     {
       "name": "hd_3983",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3983.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3983.png",
       "cell": "32x32",
       "cols": 4,
@@ -102,7 +102,7 @@
     {
       "name": "hd_3814",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3814.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3814.png",
       "cell": "32x32",
       "cols": 4,
@@ -111,7 +111,7 @@
     {
       "name": "hd_3987",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3987.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3987.png",
       "cell": "32x32",
       "cols": 4,
@@ -120,7 +120,7 @@
     {
       "name": "hd_210",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/210.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_210.png",
       "cell": "32x32",
       "cols": 4,
@@ -129,7 +129,7 @@
     {
       "name": "hd_2606",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/2606.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_2606.png",
       "cell": "32x32",
       "cols": 4,
@@ -138,7 +138,7 @@
     {
       "name": "hd_3547",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3547.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3547.png",
       "cell": "32x32",
       "cols": 4,
@@ -147,7 +147,7 @@
     {
       "name": "hd_3975",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3975.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3975.png",
       "cell": "32x32",
       "cols": 4,
@@ -156,7 +156,7 @@
     {
       "name": "hd_3977",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3977.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3977.png",
       "cell": "32x32",
       "cols": 4,
@@ -165,7 +165,7 @@
     {
       "name": "hd_971",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/971.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_971.png",
       "cell": "32x32",
       "cols": 4,
@@ -174,7 +174,7 @@
     {
       "name": "hd_3984",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3984.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3984.png",
       "cell": "32x32",
       "cols": 4,
@@ -183,7 +183,7 @@
     {
       "name": "hd_5300",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/5300.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_5300.png",
       "cell": "32x32",
       "cols": 4,
@@ -192,7 +192,7 @@
     {
       "name": "hd_4729",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/4729.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_4729.png",
       "cell": "32x32",
       "cols": 4,
@@ -201,7 +201,7 @@
     {
       "name": "hd_424",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/424.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_424.png",
       "cell": "32x32",
       "cols": 4,
@@ -210,7 +210,7 @@
     {
       "name": "hd_425",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/425.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_425.png",
       "cell": "32x32",
       "cols": 4,
@@ -219,7 +219,7 @@
     {
       "name": "hd_426",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/426.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_426.png",
       "cell": "32x32",
       "cols": 4,
@@ -228,7 +228,7 @@
     {
       "name": "hd_1372",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1372.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_1372.png",
       "cell": "64x64",
       "cols": 4,
@@ -237,7 +237,7 @@
     {
       "name": "hd_50",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/50.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_50.png",
       "cell": "32x32",
       "cols": 4,
@@ -246,7 +246,7 @@
     {
       "name": "hd_3800",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3800.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3800.png",
       "cell": "32x32",
       "cols": 4,
@@ -255,7 +255,7 @@
     {
       "name": "hd_3802",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/3802.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_3802.png",
       "cell": "32x32",
       "cols": 4,
@@ -264,7 +264,7 @@
     {
       "name": "hd_1373",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1373.slp",
-      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/hd_1373.png",
       "cell": "32x32",
       "cols": 4,
