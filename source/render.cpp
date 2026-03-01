@@ -22,7 +22,8 @@ extern const u32 sprite_pal_bin_size;
 extern const u8 sprite_remap_bin[];
 extern const u32 sprite_remap_bin_size;
 
-// Unit sprite sheets (160x96 = 5 cols x 3 rows of 32x32 cells)
+// Unit sprite sheets (160x160 = 5 cols x 5 rows of 32x32 cells for walk/fight,
+//                     160x96  = 5 cols x 3 rows for stand)
 extern const u8 spr_villager_bin[];
 extern const u8 spr_villager_walk_bin[];
 extern const u8 spr_villager_f_bin[];
@@ -60,11 +61,11 @@ static const int OAM_UI_START = 80;
 
 // Sprite sheet dimensions
 static const int SHEET_W = 160;   // 5 columns of 32px
-static const int SHEET_H = 96;    // 3 rows of 32px
+static const int SHEET_H = 160;   // 5 rows of 32px (walk/fight sheets)
 static const int CELL_W = 32;
 static const int CELL_H = 32;
 static const int SHEET_COLS = 5;
-static const int SHEET_ROWS = 3;
+static const int SHEET_ROWS = 5;
 
 // ---------------------------------------------------------------------------
 // Sprite sheet table — maps unit type + state to sheet data pointer
@@ -95,13 +96,13 @@ static int buildingSprH[BLDG_TYPE_COUNT];
 static const int DIR_TO_FRAME[DIR_COUNT] = { 4, 2, 0, 2 };
 static const bool DIR_HFLIP[DIR_COUNT] = { false, true, false, false };
 
-// For walking/attack sheets (5 dirs x 3 anim frames = 15 frames):
-// Dir 0 (S): frames 0,1,2
-// Dir 1 (SW): frames 3,4,5 (not used directly)
-// Dir 2 (W): frames 6,7,8
-// Dir 3 (NW): frames 9,10,11 (not used directly)
-// Dir 4 (N): frames 12,13,14
-static const int DIR_TO_ANIM_BASE[DIR_COUNT] = { 12, 6, 0, 6 };
+// For walking/attack sheets (5 dirs x 5 anim frames = 25 frames):
+// Dir 0 (S): frames 0-4
+// Dir 1 (SW): frames 5-9 (not used directly)
+// Dir 2 (W): frames 10-14
+// Dir 3 (NW): frames 15-19 (not used directly)
+// Dir 4 (N): frames 20-24
+static const int DIR_TO_ANIM_BASE[DIR_COUNT] = { 20, 10, 0, 10 };
 
 // ---------------------------------------------------------------------------
 // Convert linear pixel buffer to NDS 8x8 tile layout (256-color, 1D mapping)
@@ -235,7 +236,7 @@ void render_init() {
     buildingSheet[BLDG_LUMBER_CAMP]   = spr_lumber_camp_bin;
 
     // Building sprite pixel sizes (must match preprocessing target sizes)
-    buildingSprW[BLDG_TOWN_CENTER]   = 32;  buildingSprH[BLDG_TOWN_CENTER]   = 32;
+    buildingSprW[BLDG_TOWN_CENTER]   = 48;  buildingSprH[BLDG_TOWN_CENTER]   = 48;
     buildingSprW[BLDG_HOUSE]         = 16;  buildingSprH[BLDG_HOUSE]         = 16;
     buildingSprW[BLDG_BARRACKS]      = 32;  buildingSprH[BLDG_BARRACKS]      = 32;
     buildingSprW[BLDG_ARCHERY_RANGE] = 32;  buildingSprH[BLDG_ARCHERY_RANGE] = 32;
@@ -289,7 +290,7 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
         if (is_animated_sheet(sheet, u.type)) {
             // Animated sheet: 5 dirs x 3 anim frames
             int base = DIR_TO_ANIM_BASE[u.direction];
-            int anim = u.animFrame % 3;
+            int anim = u.animFrame % 5;
             frameIdx = base + anim;
             hflip = DIR_HFLIP[u.direction];
         } else {
@@ -368,7 +369,7 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
         }
         if (!b.spriteGfx) continue;
 
-        u8 buf[32 * 32]; // max building sprite size
+        u8 buf[48 * 48]; // max building sprite size (TC is 48x48)
         memset(buf, 0, sizeof(buf));
 
         if (!complete || buildingSheet[b.type] == NULL) {
@@ -392,7 +393,7 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
         }
 
         // Convert to tiled format and copy to OAM VRAM
-        u8 tiled[32 * 32];
+        u8 tiled[48 * 48];
         linear_to_tiled(buf, tiled, pw, ph);
         dmaCopy(tiled, b.spriteGfx, pw * ph);
 
@@ -483,7 +484,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         }
 
         bool complete = (b.buildProgress >= BLDG_STATS[b.type].buildTime);
-        u8 frame[32 * 32];
+        u8 frame[48 * 48]; // max building sprite size (TC is 48x48)
         memset(frame, 0, sizeof(frame));
 
         if (!complete || buildingSheet[b.type] == NULL) {
@@ -532,7 +533,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         bool hflip;
         if (is_animated_sheet(sheet, u.type)) {
             int base = DIR_TO_ANIM_BASE[u.direction];
-            int anim = u.animFrame % 3;
+            int anim = u.animFrame % 5;
             frameIdx = base + anim;
             hflip = DIR_HFLIP[u.direction];
         } else {

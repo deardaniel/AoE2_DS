@@ -241,7 +241,9 @@ u8 TerrainMap::tileAtPixel(int px, int py) const {
 
 bool TerrainMap::passable(int tx, int ty) const {
     u8 t = tileAt(tx, ty);
-    return t != TERRAIN_WATER && t != TERRAIN_FOREST;
+    // Only grass, dirt, and farm tiles are walkable
+    // Water, forest, gold, stone are obstacles
+    return t == TERRAIN_GRASS || t == TERRAIN_DIRT || t == TERRAIN_FARM;
 }
 
 bool TerrainMap::passablePixel(int px, int py) const {

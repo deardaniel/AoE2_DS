@@ -28,6 +28,9 @@ def main():
     ap.add_argument('--cols', type=int, default=0, help='Columns in sheet (default: auto)')
     ap.add_argument('--limit', type=int, default=0, help='Limit number of frames packed')
     ap.add_argument('--fit', action='store_true', help='Scale frames down to fit cell')
+    ap.add_argument('--dirs', type=int, default=0,
+                    help='Number of directions in SLP (e.g. 5). '
+                         'Samples 5 evenly-spaced frames per direction.')
     # Frames are centered in their cell by default.
     args = ap.parse_args()
 
@@ -42,7 +45,24 @@ def main():
         print(f'No PNG frames found in {args.frames_dir}', file=sys.stderr)
         return 2
 
-    if args.limit and args.limit > 0:
+    if args.dirs and args.dirs > 0:
+        # Multi-directional SLP: sample 5 frames per direction
+        total = len(paths)
+        fpd = total // args.dirs  # frames per direction
+        if fpd < 5:
+            print(f'Not enough frames per direction: {fpd} (need >= 5)', file=sys.stderr)
+            return 2
+        sampled = []
+        for d in range(args.dirs):
+            base = d * fpd
+            # Pick 5 evenly spaced across the walk/attack cycle
+            for i in range(5):
+                idx = base + i * fpd // 5
+                if idx < total:
+                    sampled.append(paths[idx])
+        paths = sampled
+        print(f'Sampled {len(paths)} frames from {total} ({args.dirs} dirs × 5 anim)')
+    elif args.limit and args.limit > 0:
         paths = paths[: args.limit]
 
     n = len(paths)

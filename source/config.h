@@ -135,7 +135,7 @@ static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
 // - Build times in frames at 60fps
 //                                      hp  build   F    W    G    S   age  pop  tw th
 static const BuildingStats BLDG_STATS[BLDG_TYPE_COUNT] = {
-    /* TOWN_CENTER   */ { 600, 600, {  0, 275,  0, 100}, AGE_DARK,    5,  2, 2 },
+    /* TOWN_CENTER   */ { 600, 600, {  0, 275,  0, 100}, AGE_DARK,    5,  3, 3 },
     /* HOUSE         */ { 150, 150, {  0,  25,  0,   0}, AGE_DARK,    5,  1, 1 },
     /* BARRACKS      */ { 350, 300, {  0, 175,  0,   0}, AGE_DARK,    0,  2, 2 },
     /* ARCHERY_RANGE */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  2, 2 },

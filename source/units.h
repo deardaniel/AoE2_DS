@@ -33,6 +33,8 @@ struct Unit {
     u8   pathLen;
     u8   pathIdx;
     u8   pathDirs[64]; // direction sequence
+    s8   pathDestTX, pathDestTY; // final destination tile
+    s8   stepTX, stepTY;         // target tile for current path step
 };
 
 // ---------------------------------------------------------------------------

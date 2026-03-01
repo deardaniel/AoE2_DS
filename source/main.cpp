@@ -61,26 +61,26 @@ static void game_start() {
     }
 
     // --- Player 0 (human) — top-left corner ---
-    // Place Town Center at tile (2,2)
+    // Place Town Center at tile (2,2) — 3x3 building
     int tc0 = building_place(BLDG_TOWN_CENTER, 0, 2, 2, gameState, terrain);
     if (tc0 >= 0) {
         buildings[tc0].buildProgress = BLDG_STATS[BLDG_TOWN_CENTER].buildTime; // start complete
     }
 
-    // Spawn 3 villagers near TC
-    unit_spawn(UNIT_VILLAGER, 0, 4 * TILE_PX, 4 * TILE_PX);
-    unit_spawn(UNIT_VILLAGER, 0, 5 * TILE_PX, 4 * TILE_PX);
-    unit_spawn(UNIT_VILLAGER, 0, 4 * TILE_PX, 5 * TILE_PX);
+    // Spawn 3 villagers near TC (below and right of 3x3 TC)
+    unit_spawn(UNIT_VILLAGER, 0, 5 * TILE_PX, 5 * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 0, 6 * TILE_PX, 5 * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 0, 5 * TILE_PX, 6 * TILE_PX);
 
     // --- Player 1 (AI) — bottom-right corner ---
-    int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 4, MAP_TILES - 4, gameState, terrain);
+    int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 5, MAP_TILES - 5, gameState, terrain);
     if (tc1 >= 0) {
         buildings[tc1].buildProgress = BLDG_STATS[BLDG_TOWN_CENTER].buildTime;
     }
 
-    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 3) * TILE_PX, (MAP_TILES - 3) * TILE_PX);
-    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 3) * TILE_PX);
-    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 3) * TILE_PX, (MAP_TILES - 2) * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 2) * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 1) * TILE_PX, (MAP_TILES - 2) * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 1) * TILE_PX);
 
     // Reset resources to actual starting values (TC placement was free)
     for (int p = 0; p < NUM_PLAYERS; p++) {
@@ -95,9 +95,9 @@ static void game_start() {
     game_update_pop_cap(gameState, 0);
     game_update_pop_cap(gameState, 1);
 
-    // Center camera on player's TC
-    gameState.camX = 2 * TILE_PX - SCREEN_W / 2;
-    gameState.camY = 2 * TILE_PX - SCREEN_H / 2;
+    // Center camera on player's TC (3x3, center at tile 3.5, 3.5)
+    gameState.camX = 3 * TILE_PX + TILE_PX / 2 - SCREEN_W / 2;
+    gameState.camY = 3 * TILE_PX + TILE_PX / 2 - SCREEN_H / 2;
     if (gameState.camX < 0) gameState.camX = 0;
     if (gameState.camY < 0) gameState.camY = 0;
 }

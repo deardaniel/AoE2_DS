@@ -69,6 +69,8 @@ struct AStarNode {
 };
 
 static AStarNode astarGrid[MAP_TILES][MAP_TILES];
+static bool passMap[MAP_TILES][MAP_TILES]; // combined terrain + building passability
+static s16 openList[MAP_TILES * MAP_TILES]; // encoded as y * MAP_TILES + x
 
 // Direction offsets (8-directional)
 static const s8 DX8[8] = { 0, 1, 1, 1, 0,-1,-1,-1};
@@ -82,6 +84,28 @@ static int heuristic(int ax, int ay, int bx, int by) {
     return (dx > dy) ? dx : dy; // Chebyshev distance
 }
 
+// Build combined passability map: terrain + buildings
+static void build_pass_map(const TerrainMap& terrain) {
+    for (int y = 0; y < MAP_TILES; y++)
+        for (int x = 0; x < MAP_TILES; x++)
+            passMap[y][x] = terrain.passable(x, y);
+
+    // Mark building tiles as impassable
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        if (!buildings[i].alive) continue;
+        int bx = buildings[i].x / TILE_PX;
+        int by = buildings[i].y / TILE_PX;
+        int bw = BLDG_STATS[buildings[i].type].tileW;
+        int bh = BLDG_STATS[buildings[i].type].tileH;
+        for (int dy = 0; dy < bh; dy++)
+            for (int dx = 0; dx < bw; dx++) {
+                int tx = bx + dx, ty = by + dy;
+                if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES)
+                    passMap[ty][tx] = false;
+            }
+    }
+}
+
 bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
                     u8* outDirs, u8& outLen) {
     outLen = 0;
@@ -93,14 +117,20 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
     if (ty < 0) ty = 0;
     if (ty >= MAP_TILES) ty = MAP_TILES - 1;
 
+    // Build combined passability map (terrain + buildings)
+    build_pass_map(terrain);
+
+    // Ensure start tile is passable (unit might be on a building tile)
+    passMap[sy][sx] = true;
+
     // If target is impassable, find nearest passable neighbor
-    if (!terrain.passable(tx, ty)) {
+    if (!passMap[ty][tx]) {
         bool found = false;
-        for (int r = 1; r <= 3 && !found; r++) {
+        for (int r = 1; r <= 5 && !found; r++) {
             for (int d = 0; d < 8; d++) {
                 int nx = tx + DX8[d] * r;
                 int ny = ty + DY8[d] * r;
-                if (nx >= 0 && nx < MAP_TILES && ny >= 0 && ny < MAP_TILES && terrain.passable(nx, ny)) {
+                if (nx >= 0 && nx < MAP_TILES && ny >= 0 && ny < MAP_TILES && passMap[ny][nx]) {
                     tx = nx; ty = ny;
                     found = true;
                     break;
@@ -116,23 +146,34 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
         for (int x = 0; x < MAP_TILES; x++)
             astarGrid[y][x].parentX = astarGrid[y][x].parentY = -1;
 
+    int openCount = 0;
+
     astarGrid[sy][sx].g = 0;
-    astarGrid[sy][sx].f = heuristic(sx, sy, tx, ty);
+    astarGrid[sy][sx].f = heuristic(sx, sy, tx, ty) * 10;
     astarGrid[sy][sx].open = true;
+    openList[openCount++] = sy * MAP_TILES + sx;
 
     for (int iterations = 0; iterations < 1024; iterations++) {
-        // Find open node with lowest f
-        int bestX = -1, bestY = -1;
-        int bestF = 32767;
-        for (int y = 0; y < MAP_TILES; y++) {
-            for (int x = 0; x < MAP_TILES; x++) {
-                if (astarGrid[y][x].open && astarGrid[y][x].f < bestF) {
-                    bestF = astarGrid[y][x].f;
-                    bestX = x; bestY = y;
-                }
+        if (openCount == 0) return false; // no path
+
+        // Find open node with lowest f in the open list
+        int bestListIdx = 0;
+        int bestF = astarGrid[openList[0] / MAP_TILES][openList[0] % MAP_TILES].f;
+        for (int i = 1; i < openCount; i++) {
+            int y = openList[i] / MAP_TILES;
+            int x = openList[i] % MAP_TILES;
+            if (astarGrid[y][x].f < bestF) {
+                bestF = astarGrid[y][x].f;
+                bestListIdx = i;
             }
         }
-        if (bestX < 0) return false; // no path
+
+        int bestPos = openList[bestListIdx];
+        int bestX = bestPos % MAP_TILES;
+        int bestY = bestPos / MAP_TILES;
+
+        // Swap-remove from open list
+        openList[bestListIdx] = openList[--openCount];
 
         if (bestX == tx && bestY == ty) {
             // Reconstruct path
@@ -142,7 +183,6 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
             while (!(cx == sx && cy == sy) && len < 64) {
                 int px = astarGrid[cy][cx].parentX;
                 int py = astarGrid[cy][cx].parentY;
-                // Find direction from parent to current
                 int dx = cx - px;
                 int dy = cy - py;
                 u8 dir = 0;
@@ -168,12 +208,11 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
             int ny = bestY + DY8[d];
             if (nx < 0 || nx >= MAP_TILES || ny < 0 || ny >= MAP_TILES) continue;
             if (astarGrid[ny][nx].closed) continue;
-            if (!terrain.passable(nx, ny)) continue;
+            if (!passMap[ny][nx]) continue;
 
-            // Diagonal: check corner-cutting
+            // Diagonal: check corner-cutting (don't cut through obstacles)
             if (DX8[d] != 0 && DY8[d] != 0) {
-                if (!terrain.passable(bestX + DX8[d], bestY) ||
-                    !terrain.passable(bestX, bestY + DY8[d])) continue;
+                if (!passMap[bestY][bestX + DX8[d]] || !passMap[bestY + DY8[d]][bestX]) continue;
             }
 
             int ng = astarGrid[bestY][bestX].g + ((DX8[d] != 0 && DY8[d] != 0) ? 14 : 10);
@@ -182,7 +221,10 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
                 astarGrid[ny][nx].f = ng + heuristic(nx, ny, tx, ty) * 10;
                 astarGrid[ny][nx].parentX = bestX;
                 astarGrid[ny][nx].parentY = bestY;
-                astarGrid[ny][nx].open = true;
+                if (!astarGrid[ny][nx].open) {
+                    astarGrid[ny][nx].open = true;
+                    openList[openCount++] = ny * MAP_TILES + nx;
+                }
             }
         }
     }
@@ -192,39 +234,44 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
 
 // ---------------------------------------------------------------------------
 // Movement along path
+// Uses pre-computed step target (stepTX, stepTY) to avoid drift from
+// recalculating the target tile each frame based on current position.
 // ---------------------------------------------------------------------------
 static void unit_step_path(Unit& u, const TerrainMap& terrain) {
     if (u.pathIdx >= u.pathLen) {
+        // Snap to final destination and stop
+        u.x = u.pathDestTX * TILE_PX;
+        u.y = u.pathDestTY * TILE_PX;
         u.state = USTATE_IDLE;
         u.pathLen = 0;
         return;
     }
 
-    u8 dir8 = u.pathDirs[u.pathIdx];
     int speed = playerUnitStats[u.owner][u.type].speed;
+    int targetPX = u.stepTX * TILE_PX;
+    int targetPY = u.stepTY * TILE_PX;
 
-    s16 nx = u.x + DX8[dir8] * speed;
-    s16 ny = u.y + DY8[dir8] * speed;
+    int dx = targetPX - u.x;
+    int dy = targetPY - u.y;
+    int adx = (dx < 0) ? -dx : dx;
+    int ady = (dy < 0) ? -dy : dy;
 
-    // Check if we've crossed into the next tile center
-    int curTX = (u.x + TILE_PX / 2) / TILE_PX;
-    int curTY = (u.y + TILE_PX / 2) / TILE_PX;
-    int nextTX = curTX + DX8[dir8];
-    int nextTY = curTY + DY8[dir8];
-
-    // Snap to target tile center when close
-    int targetPX = nextTX * TILE_PX;
-    int targetPY = nextTY * TILE_PX;
-    int dx = targetPX - u.x; if (dx < 0) dx = -dx;
-    int dy = targetPY - u.y; if (dy < 0) dy = -dy;
-
-    if (dx <= speed && dy <= speed) {
+    if (adx <= speed && ady <= speed) {
+        // Close enough — snap to tile origin and advance path
         u.x = targetPX;
         u.y = targetPY;
         u.pathIdx++;
+        // Compute next step's target tile
+        if (u.pathIdx < u.pathLen) {
+            u.stepTX += DX8[u.pathDirs[u.pathIdx]];
+            u.stepTY += DY8[u.pathDirs[u.pathIdx]];
+        }
     } else {
-        u.x = nx;
-        u.y = ny;
+        // Move toward target (each axis independently to prevent overshoot)
+        if (adx > speed) u.x += (dx > 0) ? speed : -speed;
+        else u.x = targetPX;
+        if (ady > speed) u.y += (dy > 0) ? speed : -speed;
+        else u.y = targetPY;
     }
 
     // Clamp to map
@@ -233,7 +280,23 @@ static void unit_step_path(Unit& u, const TerrainMap& terrain) {
     if (u.x > MAP_PX - TILE_PX) u.x = MAP_PX - TILE_PX;
     if (u.y > MAP_PX - TILE_PX) u.y = MAP_PX - TILE_PX;
 
-    u.direction = DIR8_TO_4[dir8];
+    // Direction from current path step
+    u8 dirIdx = (u.pathIdx < u.pathLen) ? u.pathIdx : u.pathLen - 1;
+    u.direction = DIR8_TO_4[u.pathDirs[dirIdx]];
+}
+
+// ---------------------------------------------------------------------------
+// Helper: initialize path state after unit_find_path succeeds
+// ---------------------------------------------------------------------------
+static void unit_begin_path(Unit& u, int sx, int sy, int tx, int ty) {
+    u.pathIdx = 0;
+    u.pathDestTX = tx;
+    u.pathDestTY = ty;
+    // Compute first step target tile
+    if (u.pathLen > 0) {
+        u.stepTX = sx + DX8[u.pathDirs[0]];
+        u.stepTY = sy + DY8[u.pathDirs[0]];
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -243,13 +306,13 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     Unit& u = units[idx];
 
-    int sx = (u.x + TILE_PX/2) / TILE_PX;
-    int sy = (u.y + TILE_PX/2) / TILE_PX;
+    int sx = u.x / TILE_PX;
+    int sy = u.y / TILE_PX;
     int tx = px / TILE_PX;
     int ty = py / TILE_PX;
 
     if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen)) {
-        u.pathIdx = 0;
+        unit_begin_path(u, sx, sy, tx, ty);
         u.state = USTATE_MOVING;
         u.attackTarget = -1;
         u.attackBldgTarget = -1;
@@ -280,8 +343,8 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     else if (tt == TERRAIN_FARM) u.carryType = RES_FOOD;
 
     // Find path to adjacent passable tile
-    int sx = (u.x + TILE_PX/2) / TILE_PX;
-    int sy = (u.y + TILE_PX/2) / TILE_PX;
+    int sx = u.x / TILE_PX;
+    int sy = u.y / TILE_PX;
 
     // Try to path to an adjacent tile of the resource
     bool pathed = false;
@@ -290,7 +353,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
         int ay = tileTY + DY8[d];
         if (terrain.passable(ax, ay)) {
             if (unit_find_path(sx, sy, ax, ay, terrain, u.pathDirs, u.pathLen)) {
-                u.pathIdx = 0;
+                unit_begin_path(u, sx, sy, ax, ay);
                 u.state = USTATE_MOVING; // will switch to gathering on arrival
                 pathed = true;
                 break;
@@ -300,7 +363,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     // If resource tile itself is passable (e.g., farm), go directly
     if (!pathed && terrain.passable(tileTX, tileTY)) {
         if (unit_find_path(sx, sy, tileTX, tileTY, terrain, u.pathDirs, u.pathLen)) {
-            u.pathIdx = 0;
+            unit_begin_path(u, sx, sy, tileTX, tileTY);
             u.state = USTATE_MOVING;
         }
     }
@@ -449,7 +512,6 @@ static void unit_update_returning(Unit& u, GameState& gs, TerrainMap& terrain) {
         return;
     }
 
-    extern Building buildings[MAX_BUILDINGS];
     Building& b = buildings[bestBldg];
 
     // Check if adjacent to building
@@ -483,10 +545,10 @@ static void unit_update_returning(Unit& u, GameState& gs, TerrainMap& terrain) {
                 int nx = bx + dx;
                 int ny = by + dy;
                 if (terrain.passable(nx, ny)) {
-                    int sx = (u.x + TILE_PX/2) / TILE_PX;
-                    int sy = (u.y + TILE_PX/2) / TILE_PX;
+                    int sx = u.x / TILE_PX;
+                    int sy = u.y / TILE_PX;
                     if (unit_find_path(sx, sy, nx, ny, terrain, u.pathDirs, u.pathLen)) {
-                        u.pathIdx = 0;
+                        unit_begin_path(u, sx, sy, nx, ny);
                         u.state = USTATE_MOVING;
                         // Will re-enter RETURNING when path completes
                         return;
@@ -634,12 +696,14 @@ void units_update(GameState& gs, TerrainMap& terrain) {
             continue;
         }
 
-        // Animation tick
+        // Animation tick (5 frames = ~12fps walk, 8 frames = ~7.5fps attack)
         u.animTick++;
-        if (u.animTick >= 10) {
+        int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING) ? 5 : 8;
+        if (u.animTick >= animSpeed) {
             u.animTick = 0;
-            if (u.state == USTATE_MOVING || u.state == USTATE_ATTACKING) {
-                u.animFrame = (u.animFrame + 1) % 3;
+            if (u.state == USTATE_MOVING || u.state == USTATE_ATTACKING ||
+                u.state == USTATE_GATHERING || u.state == USTATE_RETURNING) {
+                u.animFrame = (u.animFrame + 1) % 5;
             } else {
                 u.animFrame = 0;
             }

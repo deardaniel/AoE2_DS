@@ -78,7 +78,7 @@ UNIT_SHEETS = [
 
 # Building sprites
 BUILDING_SPRITES = [
-    ('spr_town_center',   'town_center.png',   32, 32),
+    ('spr_town_center',   'town_center.png',   48, 48),
     ('spr_house',         'house.png',          16, 16),
     ('spr_barracks',      'barracks.png',       32, 32),
     ('spr_archery_range', 'archery_range.png',  32, 32),

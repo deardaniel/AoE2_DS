@@ -49,9 +49,13 @@ def main():
             cmd.extend(['--cols', str(cols)])
         if entry.get('fit'):
             cmd.append('--fit')
-        limit = entry.get('limit')
-        if limit:
-            cmd.extend(['--limit', str(limit)])
+        dirs = entry.get('dirs')
+        if dirs:
+            cmd.extend(['--dirs', str(dirs)])
+        else:
+            limit = entry.get('limit')
+            if limit:
+                cmd.extend(['--limit', str(limit)])
 
         run(cmd)
 
