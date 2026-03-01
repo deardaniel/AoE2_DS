@@ -25,7 +25,7 @@ void input_update(GameState& gs, TerrainMap& terrain) {
 
     // D-pad: camera scroll
     if (!gs.followCam) {
-        int scrollSpeed = 2;
+        int scrollSpeed = 4;
         if (keys & KEY_UP)    gs.camY -= scrollSpeed;
         if (keys & KEY_DOWN)  gs.camY += scrollSpeed;
         if (keys & KEY_LEFT)  gs.camX -= scrollSpeed;
@@ -115,11 +115,21 @@ void input_update(GameState& gs, TerrainMap& terrain) {
             int tileX = mapX / TILE_PX;
             int tileY = mapY / TILE_PX;
 
+            int savedVil = gs.selectedUnit;
             int result = building_place(gs.placeBldgType, 0, tileX, tileY, gs, terrain);
             if (result >= 0) {
                 gs.inputMode = 0;
-                gs.selectedBldg = result;
-                gs.selectedUnit = -1;
+                // Keep villager selected so build menu stays open
+                // Send villager to the building site
+                if (savedVil >= 0 && units[savedVil].alive &&
+                    units[savedVil].type == UNIT_VILLAGER) {
+                    gs.selectedUnit = savedVil;
+                    gs.selectedBldg = -1;
+                    unit_command_move(savedVil, buildings[result].x, buildings[result].y, terrain);
+                } else {
+                    gs.selectedBldg = result;
+                    gs.selectedUnit = -1;
+                }
             }
             return;
         }
@@ -180,6 +190,15 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         if (gs.selectedUnit >= 0) {
             unit_command_move(gs.selectedUnit, mapX, mapY, terrain);
         }
+    }
+
+    // Auto-show build menu when villager selected, hide when not
+    if (gs.inputMode == 0) {
+        bool villagerSelected = (gs.selectedUnit >= 0 &&
+                                 units[gs.selectedUnit].alive &&
+                                 units[gs.selectedUnit].owner == 0 &&
+                                 units[gs.selectedUnit].type == UNIT_VILLAGER);
+        gs.buildMenuOpen = villagerSelected;
     }
 
     // Follow camera on selected unit

@@ -4,7 +4,11 @@
 #include "buildings.h"
 #include "terrain.h"
 #include "fog.h"
+#include "tech.h"
 #include <string.h>
+
+// Access tech-modified stats for HP bar max values
+extern UnitStats playerUnitStats[NUM_PLAYERS][UNIT_TYPE_COUNT];
 
 // ---------------------------------------------------------------------------
 // Binary sprite data (linked from data/ via bin2o)
@@ -403,6 +407,37 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
 }
 
 // ---------------------------------------------------------------------------
+// Draw a horizontal HP bar into the bitmap buffer
+// ---------------------------------------------------------------------------
+static void draw_hp_bar(u8* buf, int cx, int sy, int barW, int hp, int maxHp) {
+    if (maxHp <= 0) return;
+    int filledW = (hp * barW) / maxHp;
+    if (filledW < 0) filledW = 0;
+    if (filledW > barW) filledW = barW;
+    int x0 = cx - barW / 2;
+
+    // Only draw if damaged
+    if (hp >= maxHp) return;
+
+    for (int px = 0; px < barW; px++) {
+        int screenX = x0 + px;
+        if (screenX < 0 || screenX >= SCREEN_W) continue;
+        if (sy < 0 || sy >= SCREEN_H) continue;
+        u8 color = (px < filledW) ? PAL_GREEN : PAL_RED;
+        buf[sy * 256 + screenX] = color;
+    }
+    // Black outline above and below (1px)
+    for (int px = -1; px <= barW; px++) {
+        int screenX = x0 + px;
+        if (screenX < 0 || screenX >= SCREEN_W) continue;
+        if (sy - 1 >= 0 && sy - 1 < SCREEN_H)
+            buf[(sy - 1) * 256 + screenX] = PAL_BLACK;
+        if (sy + 1 >= 0 && sy + 1 < SCREEN_H)
+            buf[(sy + 1) * 256 + screenX] = PAL_BLACK;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Software blit: draw a sprite frame into the bitmap buffer
 // Skips transparent pixels (index 0). Uses sprite palette indices directly.
 // ---------------------------------------------------------------------------
@@ -471,6 +506,9 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         }
 
         blit_frame(buf, frame, pw, ph, sx, sy, false);
+
+        // HP bar above building
+        draw_hp_bar(buf, sx + pw / 2, sy - 3, pw, b.hp, BLDG_STATS[b.type].hp);
     }
 
     // --- Render units (on top of buildings) ---
@@ -521,11 +559,90 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         }
 
         blit_frame(buf, frame, CELL_W, CELL_H, sx, sy, hflip);
+
+        // HP bar above unit
+        draw_hp_bar(buf, sx + CELL_W / 2, sy - 3, 16, u.hp, playerUnitStats[u.owner][u.type].hp);
     }
 }
 
 // ---------------------------------------------------------------------------
-// Build menu bar (drawn into bitmap VRAM, uses palette indices)
+// Minimal 4x5 bitmap font for build menu labels
+// Each character stored as 5 rows of 4 bits (MSB = leftmost pixel)
+// ---------------------------------------------------------------------------
+static const u8 MINI_FONT[][5] = {
+    // 'A'=0
+    { 0b0110, 0b1001, 0b1111, 0b1001, 0b1001 },
+    // 'B'=1
+    { 0b1110, 0b1001, 0b1110, 0b1001, 0b1110 },
+    // 'C'=2
+    { 0b0111, 0b1000, 0b1000, 0b1000, 0b0111 },
+    // 'F'=3
+    { 0b1111, 0b1000, 0b1110, 0b1000, 0b1000 },
+    // 'H'=4
+    { 0b1001, 0b1001, 0b1111, 0b1001, 0b1001 },
+    // 'K'=5
+    { 0b1001, 0b1010, 0b1100, 0b1010, 0b1001 },
+    // 'L'=6
+    { 0b1000, 0b1000, 0b1000, 0b1000, 0b1111 },
+    // 'M'=7
+    { 0b1001, 0b1111, 0b1111, 0b1001, 0b1001 },
+    // 'R'=8
+    { 0b1110, 0b1001, 0b1110, 0b1010, 0b1001 },
+    // 'S'=9
+    { 0b0111, 0b1000, 0b0110, 0b0001, 0b1110 },
+    // 'T'=10
+    { 0b1111, 0b0110, 0b0110, 0b0110, 0b0110 },
+    // 'c'=11
+    { 0b0000, 0b0110, 0b1000, 0b1000, 0b0110 },
+    // 'k'=12
+    { 0b1000, 0b1010, 0b1100, 0b1010, 0b1001 },
+    // 'm'=13
+    { 0b0000, 0b1111, 0b1111, 0b1001, 0b1001 },
+    // 's'=14
+    { 0b0000, 0b0111, 0b0110, 0b0001, 0b1110 },
+};
+
+// Lookup: character to font index
+static int font_idx(char ch) {
+    switch(ch) {
+        case 'A': return 0;  case 'B': return 1;  case 'C': return 2;
+        case 'F': return 3;  case 'H': return 4;  case 'K': return 5;
+        case 'L': return 6;  case 'M': return 7;  case 'R': return 8;
+        case 'S': return 9;  case 'T': return 10; case 'c': return 11;
+        case 'k': return 12; case 'm': return 13; case 's': return 14;
+        default:  return -1;
+    }
+}
+
+static void draw_mini_text(u8* vram, int x0, int y0, const char* str, u8 color) {
+    int cx = x0;
+    while (*str) {
+        int fi = font_idx(*str);
+        if (fi >= 0) {
+            for (int row = 0; row < 5; row++) {
+                int sy = y0 + row;
+                if (sy < 0 || sy >= SCREEN_H) continue;
+                for (int col = 0; col < 4; col++) {
+                    int sx = cx + col;
+                    if (sx < 0 || sx >= SCREEN_W) continue;
+                    if (MINI_FONT[fi][row] & (0b1000 >> col)) {
+                        vram[sy * 256 + sx] = color;
+                    }
+                }
+            }
+        }
+        cx += 5; // 4px char + 1px gap
+        str++;
+    }
+}
+
+// Building abbreviations for the menu
+static const char* BLDG_ABBREV[BLDG_TYPE_COUNT] = {
+    "TC", "Hs", "Bk", "AR", "SB", "Fm", "Mc", "Lc"
+};
+
+// ---------------------------------------------------------------------------
+// Build menu bar (drawn into bitmap buffer, uses palette indices)
 // ---------------------------------------------------------------------------
 void render_build_menu(u8* vram, const GameState& gs) {
     if (!gs.buildMenuOpen) return;
@@ -533,7 +650,7 @@ void render_build_menu(u8* vram, const GameState& gs) {
     // Draw a bar at bottom of screen
     for (int y = BUILD_MENU_Y; y < SCREEN_H; y++) {
         for (int x = 0; x < SCREEN_W; x++) {
-            vram[y * 256 + x] = PAL_DARKGRAY;
+            vram[y * 256 + x] = PAL_DARKBROWN;
         }
     }
 
@@ -543,21 +660,22 @@ void render_build_menu(u8* vram, const GameState& gs) {
         if (ix + BUILD_MENU_ITEM_W > SCREEN_W) break;
 
         bool available = (gs.players[0].age >= BLDG_STATS[i].ageReq);
-        u8 color = available ? PAL_WHITE : PAL_GRAY;
+        bool affordable = game_can_afford(gs, 0, BLDG_STATS[i].cost);
+        u8 textColor = (available && affordable) ? PAL_WHITE : PAL_GRAY;
+        u8 bgColor = (available && affordable) ? PAL_BROWN : PAL_DARKGRAY;
 
-        // Draw small icon (4x4 block)
-        int cx = ix + BUILD_MENU_ITEM_W / 2 - 2;
-        int cy = BUILD_MENU_Y + BUILD_MENU_H / 2 - 2;
-
-        for (int dy = 0; dy < 4; dy++) {
-            for (int dx = 0; dx < 4; dx++) {
-                int px = cx + dx;
-                int py = cy + dy;
-                if (px >= 0 && px < SCREEN_W && py >= 0 && py < SCREEN_H) {
-                    vram[py * 256 + px] = color;
-                }
+        // Fill slot background
+        for (int y = BUILD_MENU_Y + 1; y < SCREEN_H - 1; y++) {
+            for (int x = ix + 1; x < ix + BUILD_MENU_ITEM_W - 1; x++) {
+                if (x < SCREEN_W) vram[y * 256 + x] = bgColor;
             }
         }
+
+        // Draw abbreviation text, centered in slot
+        int textW = 2 * 5 - 1; // 2 chars × 5px - 1px gap = 9px
+        int tx = ix + (BUILD_MENU_ITEM_W - textW) / 2;
+        int ty = BUILD_MENU_Y + (BUILD_MENU_H - 5) / 2;
+        draw_mini_text(vram, tx, ty, BLDG_ABBREV[i], textColor);
 
         // Border between items
         for (int y = BUILD_MENU_Y; y < SCREEN_H; y++) {

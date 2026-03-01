@@ -49,8 +49,10 @@ static void game_start() {
     tech_init_stats();
     ai_init();
 
-    // Generate map with a semi-random seed
-    terrain.generate(12345);
+    // Generate map with a random seed from hardware timer
+    u32 seed = (u32)(TIMER0_DATA | (TIMER1_DATA << 16)) ^ (u32)gameState.frameCount;
+    if (seed == 0) seed = 12345;
+    terrain.generate(seed);
 
     // Temporarily give enough resources to place starting TCs (free in AoE2)
     for (int p = 0; p < NUM_PLAYERS; p++) {
@@ -134,6 +136,10 @@ int main(void) {
 
     // Init sound (stubs for now)
     sound_init();
+
+    // Start free-running hardware timers for random seed generation
+    TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1;
+    TIMER1_CR = TIMER_ENABLE | TIMER_CASCADE;
 
     // Start first game
     game_start();
