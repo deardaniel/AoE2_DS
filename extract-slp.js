@@ -85,26 +85,36 @@ const end = hasFrameIndex ? Math.min(slpIndex + 1, slp.numFrames) : slp.numFrame
 for (let i = start; i < end; i++) {
     const frameInfo = slp.frames[i];
     console.log(`Frame ${i}: ${frameInfo.width}x${frameInfo.height}`);
-    
+
     // Skip huge frames (likely backgrounds/terrain)
     if (frameInfo.width > 400 || frameInfo.height > 400) {
         console.log(`  Skipping (too large)`);
         continue;
     }
-    
+
     try {
         const imageData = slp.renderFrame(i, safePalette, { player: 1, drawOutline: false });
         if (!imageData) continue;
-        
+
         const { width, height, data: pixels } = imageData;
-        
+
         const png = new PNG({ width, height });
         png.data.set(pixels);
-        
+
         const outPath = path.join(outputDir, `frame_${i}.png`);
         fs.writeFileSync(outPath, PNG.sync.write(png));
         console.log(`  Saved: ${path.basename(outPath)}`);
-        
+
+        // Save hotspot metadata
+        if (frameInfo.hotspot) {
+            const metaPath = path.join(outputDir, `frame_${i}.json`);
+            fs.writeFileSync(metaPath, JSON.stringify({
+                width, height,
+                hotspotX: frameInfo.hotspot.x,
+                hotspotY: frameInfo.hotspot.y
+            }));
+        }
+
     } catch (e) {
         console.log(`  Error: ${e.message}`);
     }

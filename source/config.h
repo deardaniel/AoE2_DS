@@ -74,7 +74,20 @@ enum UnitState {
     USTATE_GATHERING  = 2,
     USTATE_RETURNING  = 3,
     USTATE_ATTACKING  = 4,
-    USTATE_DEAD       = 5
+    USTATE_BUILDING   = 5,
+    USTATE_DEAD       = 6
+};
+
+// ---------------------------------------------------------------------------
+// Villager roles (determines sprite sheet used)
+// ---------------------------------------------------------------------------
+enum VillagerRole {
+    VROLE_BASE       = 0,
+    VROLE_LUMBERJACK = 1,
+    VROLE_MINER      = 2,
+    VROLE_BUILDER    = 3,
+    VROLE_FARMER     = 4,
+    VROLE_COUNT      = 5
 };
 
 // ---------------------------------------------------------------------------

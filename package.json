@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "genie-dat": "^0.4.0",
     "genie-slp": "^1.1.0",
     "jascpal": "^0.1.4",
     "pngjs": "^7.0.0"

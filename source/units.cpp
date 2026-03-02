@@ -13,10 +13,12 @@ void units_init() {
         units[i].alive = false;
         units[i].attackTarget = -1;
         units[i].attackBldgTarget = -1;
+        units[i].buildTarget = -1;
         units[i].gatherTX = -1;
         units[i].gatherTY = -1;
         units[i].oamSlot = -1;
         units[i].carryType = RES_COUNT;
+        units[i].role = VROLE_BASE;
     }
 }
 
@@ -37,9 +39,11 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.gatherTick = 0;
             u.carryType = RES_COUNT;
             u.carryAmount = 0;
+            u.role = VROLE_BASE;
             u.gatherTX = -1; u.gatherTY = -1;
             u.attackTarget = -1;
             u.attackBldgTarget = -1;
+            u.buildTarget = -1;
             u.attackCooldown = 0;
             u.deadTimer = 0;
             u.spriteGfx = NULL;
@@ -300,6 +304,37 @@ static void unit_begin_path(Unit& u, int sx, int sy, int tx, int ty) {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: find nearest resource tile of same type as carry
+// ---------------------------------------------------------------------------
+static bool find_nearest_resource(int cx, int cy, u8 carryType, const TerrainMap& terrain,
+                                  int& outTX, int& outTY) {
+    // Map carry type to terrain type(s)
+    int bestDist = 99999;
+    outTX = -1;
+    outTY = -1;
+    for (int ty = 0; ty < MAP_TILES; ty++) {
+        for (int tx = 0; tx < MAP_TILES; tx++) {
+            u8 tt = terrain.tileAt(tx, ty);
+            bool match = false;
+            if (carryType == RES_WOOD  && tt == TERRAIN_FOREST) match = true;
+            if (carryType == RES_GOLD  && tt == TERRAIN_GOLD)   match = true;
+            if (carryType == RES_STONE && tt == TERRAIN_STONE)  match = true;
+            if (carryType == RES_FOOD  && tt == TERRAIN_FARM)   match = true;
+            if (!match) continue;
+            int dx = tx - cx; if (dx < 0) dx = -dx;
+            int dy = ty - cy; if (dy < 0) dy = -dy;
+            int dist = dx + dy; // Manhattan distance
+            if (dist < bestDist) {
+                bestDist = dist;
+                outTX = tx;
+                outTY = ty;
+            }
+        }
+    }
+    return outTX >= 0;
+}
+
+// ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
 void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
@@ -316,8 +351,13 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
         u.state = USTATE_MOVING;
         u.attackTarget = -1;
         u.attackBldgTarget = -1;
+        u.buildTarget = -1;
         u.gatherTX = -1;
         u.gatherTY = -1;
+        // Reset role to base when given explicit move command
+        if (u.type == UNIT_VILLAGER && u.carryAmount == 0) {
+            u.role = VROLE_BASE;
+        }
     }
 }
 
@@ -333,14 +373,15 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     u.gatherTX = tileTX;
     u.gatherTY = tileTY;
     u.attackTarget = -1;
+    u.buildTarget = -1;
     u.carryType = RES_COUNT;
     u.carryAmount = 0;
 
-    // Determine carry type from terrain
-    if (tt == TERRAIN_FOREST) u.carryType = RES_WOOD;
-    else if (tt == TERRAIN_GOLD) u.carryType = RES_GOLD;
-    else if (tt == TERRAIN_STONE) u.carryType = RES_STONE;
-    else if (tt == TERRAIN_FARM) u.carryType = RES_FOOD;
+    // Determine carry type and role from terrain
+    if (tt == TERRAIN_FOREST) { u.carryType = RES_WOOD;  u.role = VROLE_LUMBERJACK; }
+    else if (tt == TERRAIN_GOLD)   { u.carryType = RES_GOLD;  u.role = VROLE_MINER; }
+    else if (tt == TERRAIN_STONE)  { u.carryType = RES_STONE; u.role = VROLE_MINER; }
+    else if (tt == TERRAIN_FARM)   { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
 
     // Find path to adjacent passable tile
     int sx = u.x / TILE_PX;
@@ -385,8 +426,47 @@ void unit_command_attack_building(int idx, int bldgIdx) {
     Unit& u = units[idx];
     u.attackBldgTarget = bldgIdx;
     u.attackTarget = -1;
+    u.buildTarget = -1;
     u.gatherTX = -1;
     u.gatherTY = -1;
+}
+
+void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
+    if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
+    if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
+    Unit& u = units[idx];
+    if (u.type != UNIT_VILLAGER) return;
+
+    u.buildTarget = bldgIdx;
+    u.attackTarget = -1;
+    u.attackBldgTarget = -1;
+    u.gatherTX = -1;
+    u.gatherTY = -1;
+    u.role = VROLE_BUILDER;
+
+    Building& b = buildings[bldgIdx];
+    const BuildingStats& bst = BLDG_STATS[b.type];
+
+    // Path to adjacent tile of building
+    int bx = b.x / TILE_PX;
+    int by = b.y / TILE_PX;
+    int sx = u.x / TILE_PX;
+    int sy = u.y / TILE_PX;
+
+    for (int dy = -1; dy <= bst.tileH; dy++) {
+        for (int dx = -1; dx <= bst.tileW; dx++) {
+            if (dx >= 0 && dx < bst.tileW && dy >= 0 && dy < bst.tileH) continue;
+            int tx = bx + dx;
+            int ty = by + dy;
+            if (terrain.passable(tx, ty)) {
+                if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen)) {
+                    unit_begin_path(u, sx, sy, tx, ty);
+                    u.state = USTATE_MOVING;
+                    return;
+                }
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -483,9 +563,21 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
     // Check if resource still exists
     u8 tt = terrain.tileAt(u.gatherTX, u.gatherTY);
     if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE && tt != TERRAIN_FARM) {
-        u.state = USTATE_IDLE;
-        u.gatherTX = -1;
-        u.gatherTY = -1;
+        // Resource depleted — try to find nearest similar resource
+        int newTX, newTY;
+        if (u.carryType < RES_COUNT && find_nearest_resource(ux, uy, u.carryType, terrain, newTX, newTY)) {
+            unit_command_gather(&u - units, newTX, newTY, terrain);
+        } else {
+            // No more resources of this type — return what we have
+            if (u.carryAmount > 0) {
+                u.state = USTATE_RETURNING;
+            } else {
+                u.state = USTATE_IDLE;
+                u.gatherTX = -1;
+                u.gatherTY = -1;
+                u.role = VROLE_BASE;
+            }
+        }
         return;
     }
 
@@ -537,27 +629,89 @@ static void unit_update_returning(Unit& u, GameState& gs, TerrainMap& terrain) {
             u.state = USTATE_IDLE;
         }
     } else {
-        // Path to building
-        // Find adjacent passable tile
+        // Path to nearest adjacent passable tile of the building
+        int sx = u.x / TILE_PX;
+        int sy = u.y / TILE_PX;
+        int bestNx = -1, bestNy = -1, bestDist = 99999;
         for (int dy = -1; dy <= bh; dy++) {
             for (int dx = -1; dx <= bw; dx++) {
                 if (dx >= 0 && dx < bw && dy >= 0 && dy < bh) continue; // skip building tiles
                 int nx = bx + dx;
                 int ny = by + dy;
-                if (terrain.passable(nx, ny)) {
-                    int sx = u.x / TILE_PX;
-                    int sy = u.y / TILE_PX;
-                    if (unit_find_path(sx, sy, nx, ny, terrain, u.pathDirs, u.pathLen)) {
-                        unit_begin_path(u, sx, sy, nx, ny);
-                        u.state = USTATE_MOVING;
-                        // Will re-enter RETURNING when path completes
-                        return;
-                    }
+                if (!terrain.passable(nx, ny)) continue;
+                int dist = (nx - sx) * (nx - sx) + (ny - sy) * (ny - sy);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestNx = nx;
+                    bestNy = ny;
                 }
             }
         }
+        if (bestNx >= 0 && unit_find_path(sx, sy, bestNx, bestNy, terrain, u.pathDirs, u.pathLen)) {
+            unit_begin_path(u, sx, sy, bestNx, bestNy);
+            u.state = USTATE_MOVING;
+            // Will re-enter RETURNING when path completes
+            return;
+        }
         u.state = USTATE_IDLE;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Building construction state update
+// ---------------------------------------------------------------------------
+static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
+    if (u.buildTarget < 0 || u.buildTarget >= MAX_BUILDINGS || !buildings[u.buildTarget].alive) {
+        u.buildTarget = -1;
+        u.state = USTATE_IDLE;
+        u.role = VROLE_BASE;
+        return;
+    }
+
+    Building& b = buildings[u.buildTarget];
+    const BuildingStats& bst = BLDG_STATS[b.type];
+
+    // Check if already complete
+    if (b.buildProgress >= bst.buildTime) {
+        u.buildTarget = -1;
+        u.state = USTATE_IDLE;
+        // If this was a farm, become farmer automatically
+        if (b.type == BLDG_FARM) {
+            int tx = b.x / TILE_PX;
+            int ty = b.y / TILE_PX;
+            unit_command_gather(&u - units, tx, ty, terrain);
+        } else {
+            u.role = VROLE_BASE;
+        }
+        return;
+    }
+
+    // Check if adjacent to building
+    int ux = (u.x + TILE_PX/2) / TILE_PX;
+    int uy = (u.y + TILE_PX/2) / TILE_PX;
+    int bx = b.x / TILE_PX;
+    int by = b.y / TILE_PX;
+
+    bool adjacent = (ux >= bx - 1 && ux <= bx + bst.tileW && uy >= by - 1 && uy <= by + bst.tileH);
+
+    if (!adjacent) {
+        // Path to building
+        unit_command_build(&u - units, u.buildTarget, terrain);
+        return;
+    }
+
+    // Face the building
+    int bCenterX = b.x + (bst.tileW * TILE_PX) / 2;
+    int bCenterY = b.y + (bst.tileH * TILE_PX) / 2;
+    int rdx = bCenterX - u.x;
+    int rdy = bCenterY - u.y;
+    if (rdx > 0) u.direction = DIR_RIGHT;
+    else if (rdx < 0) u.direction = DIR_LEFT;
+    else if (rdy > 0) u.direction = DIR_DOWN;
+    else u.direction = DIR_UP;
+
+    // Advance build progress (1 point per frame per villager)
+    b.buildProgress++;
 }
 
 static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
@@ -696,14 +850,16 @@ void units_update(GameState& gs, TerrainMap& terrain) {
             continue;
         }
 
-        // Animation tick (5 frames = ~12fps walk, 8 frames = ~7.5fps attack)
+        // Animation tick (3 frames = ~20fps walk, 4 frames = ~15fps attack/work)
+        // 10 anim frames × 3 ticks = 30 tick cycle (similar to old 5 frames × 5 ticks = 25)
         u.animTick++;
-        int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING) ? 5 : 8;
+        int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING) ? 3 : 4;
         if (u.animTick >= animSpeed) {
             u.animTick = 0;
             if (u.state == USTATE_MOVING || u.state == USTATE_ATTACKING ||
-                u.state == USTATE_GATHERING || u.state == USTATE_RETURNING) {
-                u.animFrame = (u.animFrame + 1) % 5;
+                u.state == USTATE_GATHERING || u.state == USTATE_RETURNING ||
+                u.state == USTATE_BUILDING) {
+                u.animFrame = (u.animFrame + 1) % 10;
             } else {
                 u.animFrame = 0;
             }
@@ -725,7 +881,9 @@ void units_update(GameState& gs, TerrainMap& terrain) {
             unit_step_path(u, terrain);
             // If path done, check what we should do next
             if (u.state == USTATE_IDLE) {
-                if (u.gatherTX >= 0 && u.gatherTY >= 0 && u.type == UNIT_VILLAGER) {
+                if (u.buildTarget >= 0 && u.type == UNIT_VILLAGER) {
+                    u.state = USTATE_BUILDING;
+                } else if (u.gatherTX >= 0 && u.gatherTY >= 0 && u.type == UNIT_VILLAGER) {
                     u.state = USTATE_GATHERING;
                 } else if (u.attackTarget >= 0 || u.attackBldgTarget >= 0) {
                     u.state = USTATE_ATTACKING;
@@ -745,6 +903,10 @@ void units_update(GameState& gs, TerrainMap& terrain) {
 
         case USTATE_ATTACKING:
             unit_update_attacking(u, gs, terrain);
+            break;
+
+        case USTATE_BUILDING:
+            unit_update_building(u, gs, terrain);
             break;
         }
 

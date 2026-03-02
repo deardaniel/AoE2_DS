@@ -119,13 +119,12 @@ void input_update(GameState& gs, TerrainMap& terrain) {
             int result = building_place(gs.placeBldgType, 0, tileX, tileY, gs, terrain);
             if (result >= 0) {
                 gs.inputMode = 0;
-                // Keep villager selected so build menu stays open
-                // Send villager to the building site
+                // Send villager to build the building
                 if (savedVil >= 0 && units[savedVil].alive &&
                     units[savedVil].type == UNIT_VILLAGER) {
                     gs.selectedUnit = savedVil;
                     gs.selectedBldg = -1;
-                    unit_command_move(savedVil, buildings[result].x, buildings[result].y, terrain);
+                    unit_command_build(savedVil, result, terrain);
                 } else {
                     gs.selectedBldg = result;
                     gs.selectedUnit = -1;
@@ -159,6 +158,12 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         int tileY = mapY / TILE_PX;
         int tappedBldg = building_at_tile(tileX, tileY);
         if (tappedBldg >= 0 && buildings[tappedBldg].owner == 0) {
+            // If villager selected and building incomplete, send to build
+            if (gs.selectedUnit >= 0 && units[gs.selectedUnit].type == UNIT_VILLAGER &&
+                !building_is_complete(tappedBldg)) {
+                unit_command_build(gs.selectedUnit, tappedBldg, terrain);
+                return;
+            }
             gs.selectedBldg = tappedBldg;
             gs.selectedUnit = -1;
             return;

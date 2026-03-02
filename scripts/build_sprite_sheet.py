@@ -24,7 +24,9 @@ def main():
     ap.add_argument('--fit', action='store_true', help='Scale frames down to fit cell')
     ap.add_argument('--limit', type=int, default=0, help='Limit number of frames packed')
     ap.add_argument('--dirs', type=int, default=0,
-                    help='Number of directions in SLP (samples 3 frames per dir)')
+                    help='Number of directions in SLP (samples frames per dir)')
+    ap.add_argument('--fpd', type=int, default=10,
+                    help='Frames per direction to sample (default: 10)')
     args = ap.parse_args()
 
     slp = args.slp
@@ -47,6 +49,7 @@ def main():
             pack_cmd.append('--fit')
         if args.dirs and args.dirs > 0:
             pack_cmd.extend(['--dirs', str(args.dirs)])
+            pack_cmd.extend(['--fpd', str(args.fpd)])
         elif args.limit and args.limit > 0:
             pack_cmd.extend(['--limit', str(args.limit)])
         run(pack_cmd)

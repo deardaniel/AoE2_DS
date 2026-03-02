@@ -24,17 +24,27 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 # Unit sprite sheets: (output_name, filename)
 # All are 160x96 (5 cols x 3 rows of 32x32 cells = 15 frames max)
 UNIT_SHEETS = [
-    ('spr_villager',       'villager.png'),
-    ('spr_villager_walk',  'villager_walk.png'),
-    ('spr_villager_f',     'villager_f.png'),
-    ('spr_militia',        'militia.png'),
-    ('spr_militia_fight',  'militia_fight.png'),
-    ('spr_archer',         'archer.png'),
-    ('spr_archer_fire',    'archer_fire.png'),
-    ('spr_knight',         'knight.png'),
-    ('spr_knight_fight',   'knight_fight.png'),
-    ('spr_spearman',       'spearman.png'),
-    ('spr_spearman_fight', 'spearman_fight.png'),
+    ('spr_villager',         'villager.png'),
+    ('spr_villager_walk',    'villager_walk.png'),
+    ('spr_villager_attack',  'villager_attack.png'),
+    ('spr_villager_f',       'villager_f.png'),
+    ('spr_lumberjack',       'lumberjack.png'),
+    ('spr_lumberjack_walk',  'lumberjack_walk.png'),
+    ('spr_lumberjack_chop',  'lumberjack_chop.png'),
+    ('spr_miner',            'miner.png'),
+    ('spr_miner_walk',       'miner_walk.png'),
+    ('spr_builder',          'builder.png'),
+    ('spr_builder_walk',     'builder_walk.png'),
+    ('spr_farmer',           'farmer.png'),
+    ('spr_farmer_walk',      'farmer_walk.png'),
+    ('spr_militia',          'militia.png'),
+    ('spr_militia_fight',    'militia_fight.png'),
+    ('spr_archer',           'archer.png'),
+    ('spr_archer_fire',      'archer_fire.png'),
+    ('spr_knight',           'knight.png'),
+    ('spr_knight_fight',     'knight_fight.png'),
+    ('spr_spearman',         'spearman.png'),
+    ('spr_spearman_fight',   'spearman_fight.png'),
 ]
 
 # Building sprites: (output_name, filename, target_w, target_h)

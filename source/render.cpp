@@ -26,7 +26,17 @@ extern const u32 sprite_remap_bin_size;
 //                     160x96  = 5 cols x 3 rows for stand)
 extern const u8 spr_villager_bin[];
 extern const u8 spr_villager_walk_bin[];
+extern const u8 spr_villager_attack_bin[];
 extern const u8 spr_villager_f_bin[];
+extern const u8 spr_lumberjack_bin[];
+extern const u8 spr_lumberjack_walk_bin[];
+extern const u8 spr_lumberjack_chop_bin[];
+extern const u8 spr_miner_bin[];
+extern const u8 spr_miner_walk_bin[];
+extern const u8 spr_builder_bin[];
+extern const u8 spr_builder_walk_bin[];
+extern const u8 spr_farmer_bin[];
+extern const u8 spr_farmer_walk_bin[];
 extern const u8 spr_militia_bin[];
 extern const u8 spr_militia_fight_bin[];
 extern const u8 spr_archer_bin[];
@@ -60,12 +70,13 @@ static const int OAM_BLDG_START = MAX_OAM_UNITS;
 static const int OAM_UI_START = 80;
 
 // Sprite sheet dimensions
-static const int SHEET_W = 160;   // 5 columns of 32px
-static const int SHEET_H = 160;   // 5 rows of 32px (walk/fight sheets)
+static const int ANIM_SHEET_W = 320;  // 10 columns of 32px (walk/fight sheets)
+static const int ANIM_SHEET_COLS = 10;
+static const int STAND_SHEET_W = 160; // 5 columns of 32px (standing sheets)
+static const int STAND_SHEET_COLS = 5;
+static const int SHEET_ROWS = 5;      // max 5 rows
 static const int CELL_W = 32;
 static const int CELL_H = 32;
-static const int SHEET_COLS = 5;
-static const int SHEET_ROWS = 5;
 
 // ---------------------------------------------------------------------------
 // Sprite sheet table — maps unit type + state to sheet data pointer
@@ -77,6 +88,12 @@ static const u8* unitStandSheet[UNIT_TYPE_COUNT];
 static const u8* unitWalkSheet[UNIT_TYPE_COUNT];
 // Attack/fight sheets (NULL if none — fallback to stand)
 static const u8* unitFightSheet[UNIT_TYPE_COUNT];
+
+// Villager role-specific sprite sheets
+// Indexed by VillagerRole: stand, walk, work
+static const u8* villagerRoleStand[VROLE_COUNT];
+static const u8* villagerRoleWalk[VROLE_COUNT];
+static const u8* villagerRoleWork[VROLE_COUNT];  // work animation (chop/mine/build/farm)
 
 // Building sheets indexed by BuildingTypeId
 static const u8* buildingSheet[BLDG_TYPE_COUNT];
@@ -96,13 +113,13 @@ static int buildingSprH[BLDG_TYPE_COUNT];
 static const int DIR_TO_FRAME[DIR_COUNT] = { 4, 2, 0, 2 };
 static const bool DIR_HFLIP[DIR_COUNT] = { false, true, false, false };
 
-// For walking/attack sheets (5 dirs x 5 anim frames = 25 frames):
-// Dir 0 (S): frames 0-4
-// Dir 1 (SW): frames 5-9 (not used directly)
-// Dir 2 (W): frames 10-14
-// Dir 3 (NW): frames 15-19 (not used directly)
-// Dir 4 (N): frames 20-24
-static const int DIR_TO_ANIM_BASE[DIR_COUNT] = { 20, 10, 0, 10 };
+// For walking/attack sheets (5 dirs x 10 anim frames = 50 frames):
+// Dir 0 (S): frames 0-9
+// Dir 1 (SW): frames 10-19
+// Dir 2 (W): frames 20-29
+// Dir 3 (NW): frames 30-39
+// Dir 4 (N): frames 40-49
+static const int DIR_TO_ANIM_BASE[DIR_COUNT] = { 40, 20, 0, 20 };
 
 // ---------------------------------------------------------------------------
 // Convert linear pixel buffer to NDS 8x8 tile layout (256-color, 1D mapping)
@@ -145,17 +162,18 @@ static void linear_to_tiled_hflip(const u8* src, u8* dst, int w, int h) {
 }
 
 // ---------------------------------------------------------------------------
-// Extract a single 32x32 frame from a 160x96 sprite sheet
+// Extract a single 32x32 frame from a sprite sheet of given width/cols
 // ---------------------------------------------------------------------------
-static void extract_frame(const u8* sheet, int frameIdx, u8* dst32x32) {
-    int col = frameIdx % SHEET_COLS;
-    int row = frameIdx / SHEET_COLS;
+static void extract_frame(const u8* sheet, int frameIdx, u8* dst32x32,
+                          int sheetCols, int sheetW) {
+    int col = frameIdx % sheetCols;
+    int row = frameIdx / sheetCols;
     int srcX = col * CELL_W;
     int srcY = row * CELL_H;
 
     for (int y = 0; y < CELL_H; y++) {
         memcpy(&dst32x32[y * CELL_W],
-               &sheet[(srcY + y) * SHEET_W + srcX],
+               &sheet[(srcY + y) * sheetW + srcX],
                CELL_W);
     }
 }
@@ -171,29 +189,58 @@ static void apply_color_remap(u8* buf, int size) {
 }
 
 // ---------------------------------------------------------------------------
-// Get the appropriate sprite sheet for a unit based on its state
+// Get the appropriate sprite sheet for a unit based on its state and role
 // ---------------------------------------------------------------------------
-static const u8* get_unit_sheet(int unitType, int unitState) {
-    switch (unitState) {
+static const u8* get_unit_sheet(const Unit& u) {
+    // Villager role-specific sheets
+    if (u.type == UNIT_VILLAGER) {
+        int role = u.role;
+        if (role >= VROLE_COUNT) role = VROLE_BASE;
+        switch (u.state) {
+        case USTATE_MOVING:
+        case USTATE_RETURNING:
+            if (villagerRoleWalk[role]) return villagerRoleWalk[role];
+            break;
+        case USTATE_GATHERING:
+        case USTATE_BUILDING:
+            if (villagerRoleWork[role]) return villagerRoleWork[role];
+            if (villagerRoleWalk[role]) return villagerRoleWalk[role];
+            break;
+        case USTATE_ATTACKING:
+            if (unitFightSheet[UNIT_VILLAGER]) return unitFightSheet[UNIT_VILLAGER];
+            break;
+        default:
+            break;
+        }
+        return villagerRoleStand[role] ? villagerRoleStand[role] : unitStandSheet[UNIT_VILLAGER];
+    }
+
+    // Non-villager units
+    switch (u.state) {
     case USTATE_MOVING:
     case USTATE_RETURNING:
-        if (unitWalkSheet[unitType]) return unitWalkSheet[unitType];
+        if (unitWalkSheet[u.type]) return unitWalkSheet[u.type];
         break;
     case USTATE_ATTACKING:
     case USTATE_GATHERING:
-        if (unitFightSheet[unitType]) return unitFightSheet[unitType];
+        if (unitFightSheet[u.type]) return unitFightSheet[u.type];
         break;
     default:
         break;
     }
-    return unitStandSheet[unitType];
+    return unitStandSheet[u.type];
 }
 
 // ---------------------------------------------------------------------------
-// Check if a sheet is an animated sheet (walk/fight) vs stand
+// Check if a sheet is an animated sheet (walk/fight/work) vs stand
 // ---------------------------------------------------------------------------
-static bool is_animated_sheet(const u8* sheet, int unitType) {
-    return sheet != unitStandSheet[unitType];
+static bool is_animated_sheet(const u8* sheet, const Unit& u) {
+    if (u.type == UNIT_VILLAGER) {
+        int role = u.role;
+        if (role >= VROLE_COUNT) role = VROLE_BASE;
+        return sheet != villagerRoleStand[role] && sheet != unitStandSheet[u.type];
+    }
+    return sheet != unitStandSheet[u.type];
 }
 
 // ---------------------------------------------------------------------------
@@ -219,11 +266,32 @@ void render_init() {
     unitWalkSheet[UNIT_KNIGHT]     = NULL;
     unitWalkSheet[UNIT_SPEARMAN]   = NULL;
 
-    unitFightSheet[UNIT_VILLAGER]  = NULL;  // no fight sheet for villager
+    unitFightSheet[UNIT_VILLAGER]  = spr_villager_attack_bin;
     unitFightSheet[UNIT_MILITIA]   = spr_militia_fight_bin;
     unitFightSheet[UNIT_ARCHER]    = spr_archer_fire_bin;
     unitFightSheet[UNIT_KNIGHT]    = spr_knight_fight_bin;
     unitFightSheet[UNIT_SPEARMAN]  = spr_spearman_fight_bin;
+
+    // Villager role-specific sheets
+    villagerRoleStand[VROLE_BASE]       = spr_villager_bin;
+    villagerRoleWalk[VROLE_BASE]        = spr_villager_walk_bin;
+    villagerRoleWork[VROLE_BASE]        = spr_villager_attack_bin;
+
+    villagerRoleStand[VROLE_LUMBERJACK] = spr_lumberjack_bin;
+    villagerRoleWalk[VROLE_LUMBERJACK]  = spr_lumberjack_walk_bin;
+    villagerRoleWork[VROLE_LUMBERJACK]  = spr_lumberjack_chop_bin;
+
+    villagerRoleStand[VROLE_MINER]      = spr_miner_bin;
+    villagerRoleWalk[VROLE_MINER]       = spr_miner_walk_bin;
+    villagerRoleWork[VROLE_MINER]       = spr_villager_attack_bin; // no miner work SLP
+
+    villagerRoleStand[VROLE_BUILDER]    = spr_builder_bin;
+    villagerRoleWalk[VROLE_BUILDER]     = spr_builder_walk_bin;
+    villagerRoleWork[VROLE_BUILDER]     = spr_villager_attack_bin; // no builder work SLP
+
+    villagerRoleStand[VROLE_FARMER]     = spr_farmer_bin;
+    villagerRoleWalk[VROLE_FARMER]      = spr_farmer_walk_bin;
+    villagerRoleWork[VROLE_FARMER]      = spr_villager_attack_bin; // no farmer work SLP
 
     // Set up building sheet lookup tables
     buildingSheet[BLDG_TOWN_CENTER]   = spr_town_center_bin;
@@ -281,16 +349,17 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
         }
         if (!u.spriteGfx) continue;
 
-        // Select sprite sheet based on unit state
-        const u8* sheet = get_unit_sheet(u.type, u.state);
+        // Select sprite sheet based on unit state and role
+        const u8* sheet = get_unit_sheet(u);
 
         // Select frame based on direction and animation
         int frameIdx;
         bool hflip;
-        if (is_animated_sheet(sheet, u.type)) {
-            // Animated sheet: 5 dirs x 3 anim frames
+        bool animated = is_animated_sheet(sheet, u);
+        if (animated) {
+            // Animated sheet: 5 dirs x 10 anim frames
             int base = DIR_TO_ANIM_BASE[u.direction];
-            int anim = u.animFrame % 5;
+            int anim = u.animFrame % 10;
             frameIdx = base + anim;
             hflip = DIR_HFLIP[u.direction];
         } else {
@@ -299,12 +368,15 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
             hflip = DIR_HFLIP[u.direction];
         }
 
+        int sheetCols = animated ? ANIM_SHEET_COLS : STAND_SHEET_COLS;
+        int sheetW = animated ? ANIM_SHEET_W : STAND_SHEET_W;
+
         // Clamp frame index to valid range
-        if (frameIdx >= SHEET_COLS * SHEET_ROWS) frameIdx = 0;
+        if (frameIdx >= sheetCols * SHEET_ROWS) frameIdx = 0;
 
         // Extract 32x32 frame from sheet
         u8 frame[CELL_W * CELL_H];
-        extract_frame(sheet, frameIdx, frame);
+        extract_frame(sheet, frameIdx, frame, sheetCols, sheetW);
 
         // Apply player 2 color remap
         if (u.owner == 1) {
@@ -459,19 +531,125 @@ static void blit_frame(u8* buf, const u8* frame, int fw, int fh,
 }
 
 // ---------------------------------------------------------------------------
+// Render list entry for Y-sorted drawing (back-to-front depth ordering)
+// ---------------------------------------------------------------------------
+struct RenderEntry {
+    s16 sortY;   // bottom Y in world pixels (feet position) — lower = drawn first
+    u8  isUnit;  // 1 = unit, 0 = building
+    u8  idx;     // index into units[] or buildings[]
+};
+
+// Simple insertion sort — fast for small N (max ~80 entries)
+static void sort_render_list(RenderEntry* list, int count) {
+    for (int i = 1; i < count; i++) {
+        RenderEntry tmp = list[i];
+        int j = i - 1;
+        while (j >= 0 && list[j].sortY > tmp.sortY) {
+            list[j + 1] = list[j];
+            j--;
+        }
+        list[j + 1] = tmp;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Draw a single building into the bitmap buffer
+// ---------------------------------------------------------------------------
+static void render_building_sw(u8* buf, const GameState& gs, int i) {
+    Building& b = buildings[i];
+    int pw = buildingSprW[b.type];
+    int ph = buildingSprH[b.type];
+
+    int sx = b.x - gs.camX;
+    int sy = b.y - gs.camY;
+
+    bool complete = (b.buildProgress >= BLDG_STATS[b.type].buildTime);
+    u8 frame[48 * 48];
+    memset(frame, 0, sizeof(frame));
+
+    if (!complete || buildingSheet[b.type] == NULL) {
+        for (int y = 0; y < ph; y++)
+            for (int x = 0; x < pw; x++) {
+                bool border = (x == 0 || y == 0 || x == pw-1 || y == ph-1);
+                if (border || ((x + y) % 6 == 0))
+                    frame[y * pw + x] = PAL_BROWN;
+            }
+    } else {
+        memcpy(frame, buildingSheet[b.type], pw * ph);
+        if (b.owner == 1) apply_color_remap(frame, pw * ph);
+    }
+
+    if (gs.selectedBldg == i) {
+        for (int x = 0; x < pw; x++) { frame[x] = PAL_WHITE; frame[(ph-1)*pw+x] = PAL_WHITE; }
+        for (int y = 0; y < ph; y++) { frame[y*pw] = PAL_WHITE; frame[y*pw+pw-1] = PAL_WHITE; }
+    }
+
+    blit_frame(buf, frame, pw, ph, sx, sy, false);
+    draw_hp_bar(buf, sx + pw / 2, sy - 3, pw, b.hp, BLDG_STATS[b.type].hp);
+}
+
+// ---------------------------------------------------------------------------
+// Draw a single unit into the bitmap buffer
+// ---------------------------------------------------------------------------
+static void render_unit_sw(u8* buf, const GameState& gs, int i) {
+    Unit& u = units[i];
+
+    int sx = u.x - gs.camX - 8;
+    int sy = u.y - gs.camY - 8;
+
+    const u8* sheet = get_unit_sheet(u);
+    int frameIdx;
+    bool hflip;
+    bool animated = is_animated_sheet(sheet, u);
+    if (animated) {
+        int base = DIR_TO_ANIM_BASE[u.direction];
+        int anim = u.animFrame % 10;
+        frameIdx = base + anim;
+        hflip = DIR_HFLIP[u.direction];
+    } else {
+        frameIdx = DIR_TO_FRAME[u.direction];
+        hflip = DIR_HFLIP[u.direction];
+    }
+    int sheetCols = animated ? ANIM_SHEET_COLS : STAND_SHEET_COLS;
+    int sheetW = animated ? ANIM_SHEET_W : STAND_SHEET_W;
+    if (frameIdx >= sheetCols * SHEET_ROWS) frameIdx = 0;
+
+    u8 frame[CELL_W * CELL_H];
+    extract_frame(sheet, frameIdx, frame, sheetCols, sheetW);
+    if (u.owner == 1) apply_color_remap(frame, CELL_W * CELL_H);
+    if (u.state == USTATE_DEAD) {
+        for (int j = 0; j < CELL_W * CELL_H; j++)
+            if (frame[j] != 0) frame[j] = PAL_DARKGRAY;
+    }
+
+    if (gs.selectedUnit == i) {
+        for (int y = 0; y < CELL_H; y++)
+            for (int x = 0; x < CELL_W; x++)
+                if (frame[y*CELL_W+x] != 0 &&
+                    (x == 0 || y == 0 || x == CELL_W-1 || y == CELL_H-1))
+                    frame[y*CELL_W+x] = PAL_WHITE;
+    }
+
+    blit_frame(buf, frame, CELL_W, CELL_H, sx, sy, hflip);
+    draw_hp_bar(buf, sx + CELL_W / 2, sy - 3, 16, u.hp, playerUnitStats[u.owner][u.type].hp);
+}
+
+// ---------------------------------------------------------------------------
 // Software-render all visible units and buildings into bitmap buffer
-// Uses sprite palette indices — caller must ensure sprite palette is also
-// loaded into BG_PALETTE_SUB (shared palette) for correct colors.
+// Y-sorted back-to-front so entities behind others draw first.
 // ---------------------------------------------------------------------------
 void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) {
-    // --- Render buildings first (behind units) ---
+    // Build a combined render list of all visible entities
+    static RenderEntry renderList[MAX_UNITS + MAX_BUILDINGS];
+    int count = 0;
+
+    // Add visible buildings
     for (int i = 0; i < MAX_BUILDINGS; i++) {
         Building& b = buildings[i];
         if (!b.alive) continue;
 
         int pw = buildingSprW[b.type];
         int ph = buildingSprH[b.type];
-
         int sx = b.x - gs.camX;
         int sy = b.y - gs.camY;
         if (sx < -pw || sx >= SCREEN_W || sy < -ph || sy >= SCREEN_H) continue;
@@ -483,36 +661,14 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
             if (!fogMap.isExplored(0, tx, ty)) continue;
         }
 
-        bool complete = (b.buildProgress >= BLDG_STATS[b.type].buildTime);
-        u8 frame[48 * 48]; // max building sprite size (TC is 48x48)
-        memset(frame, 0, sizeof(frame));
-
-        if (!complete || buildingSheet[b.type] == NULL) {
-            // Under construction: simple pattern
-            for (int y = 0; y < ph; y++)
-                for (int x = 0; x < pw; x++) {
-                    bool border = (x == 0 || y == 0 || x == pw-1 || y == ph-1);
-                    if (border || ((x + y) % 6 == 0))
-                        frame[y * pw + x] = PAL_BROWN;
-                }
-        } else {
-            memcpy(frame, buildingSheet[b.type], pw * ph);
-            if (b.owner == 1) apply_color_remap(frame, pw * ph);
-        }
-
-        // Selection highlight: draw border
-        if (gs.selectedBldg == i) {
-            for (int x = 0; x < pw; x++) { frame[x] = PAL_WHITE; frame[(ph-1)*pw+x] = PAL_WHITE; }
-            for (int y = 0; y < ph; y++) { frame[y*pw] = PAL_WHITE; frame[y*pw+pw-1] = PAL_WHITE; }
-        }
-
-        blit_frame(buf, frame, pw, ph, sx, sy, false);
-
-        // HP bar above building
-        draw_hp_bar(buf, sx + pw / 2, sy - 3, pw, b.hp, BLDG_STATS[b.type].hp);
+        // Sort by bottom edge of building (feet position)
+        renderList[count].sortY = b.y + BLDG_STATS[b.type].tileH * TILE_PX;
+        renderList[count].isUnit = 0;
+        renderList[count].idx = i;
+        count++;
     }
 
-    // --- Render units (on top of buildings) ---
+    // Add visible units
     for (int i = 0; i < MAX_UNITS; i++) {
         Unit& u = units[i];
         if (!u.alive) continue;
@@ -521,48 +677,30 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         int sy = u.y - gs.camY - 8;
         if (sx < -CELL_W || sx >= SCREEN_W || sy < -CELL_H || sy >= SCREEN_H) continue;
 
-        // Fog check — only show enemy units in visible tiles
+        // Fog check
         if (u.owner != 0) {
             int tx = (u.x + TILE_PX/2) / TILE_PX;
             int ty = (u.y + TILE_PX/2) / TILE_PX;
             if (!fogMap.isVisible(0, tx, ty)) continue;
         }
 
-        const u8* sheet = get_unit_sheet(u.type, u.state);
-        int frameIdx;
-        bool hflip;
-        if (is_animated_sheet(sheet, u.type)) {
-            int base = DIR_TO_ANIM_BASE[u.direction];
-            int anim = u.animFrame % 5;
-            frameIdx = base + anim;
-            hflip = DIR_HFLIP[u.direction];
+        // Sort by bottom of unit tile (feet position)
+        renderList[count].sortY = u.y + TILE_PX;
+        renderList[count].isUnit = 1;
+        renderList[count].idx = i;
+        count++;
+    }
+
+    // Sort by Y (back-to-front)
+    sort_render_list(renderList, count);
+
+    // Render in sorted order
+    for (int r = 0; r < count; r++) {
+        if (renderList[r].isUnit) {
+            render_unit_sw(buf, gs, renderList[r].idx);
         } else {
-            frameIdx = DIR_TO_FRAME[u.direction];
-            hflip = DIR_HFLIP[u.direction];
+            render_building_sw(buf, gs, renderList[r].idx);
         }
-        if (frameIdx >= SHEET_COLS * SHEET_ROWS) frameIdx = 0;
-
-        u8 frame[CELL_W * CELL_H];
-        extract_frame(sheet, frameIdx, frame);
-        if (u.owner == 1) apply_color_remap(frame, CELL_W * CELL_H);
-        if (u.state == USTATE_DEAD) {
-            for (int j = 0; j < CELL_W * CELL_H; j++)
-                if (frame[j] != 0) frame[j] = PAL_DARKGRAY;
-        }
-
-        // Selection highlight: draw 1px border around non-transparent area
-        if (gs.selectedUnit == i) {
-            for (int y = 0; y < CELL_H; y++)
-                for (int x = 0; x < CELL_W; x++)
-                    if (frame[y*CELL_W+x] != 0 &&
-                        (x == 0 || y == 0 || x == CELL_W-1 || y == CELL_H-1))
-                        frame[y*CELL_W+x] = PAL_WHITE;
-        }
-
-        blit_frame(buf, frame, CELL_W, CELL_H, sx, sy, hflip);
-
-        // HP bar above unit
-        draw_hp_bar(buf, sx + CELL_W / 2, sy - 3, 16, u.hp, playerUnitStats[u.owner][u.type].hp);
     }
 }
 

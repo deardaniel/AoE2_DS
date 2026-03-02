@@ -56,6 +56,18 @@ static bool ai_find_resource(int nearTX, int nearTY, u8 terrType,
     return found;
 }
 
+// Place a building and send nearest idle villager to build it
+static int ai_place_and_build(int type, int bx, int by, GameState& gs, TerrainMap& terrain) {
+    int slot = building_place(type, AI_PLAYER, bx, by, gs, terrain);
+    if (slot >= 0) {
+        int vil = unit_find_idle_villager(AI_PLAYER, 0);
+        if (vil >= 0) {
+            unit_command_build(vil, slot, terrain);
+        }
+    }
+    return slot;
+}
+
 void ai_update(GameState& gs, TerrainMap& terrain) {
     // Only update once per second (60 frames)
     aiTimer++;
@@ -113,11 +125,32 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
 
     // ---- Building phase ----
 
+    // Send idle villagers to incomplete buildings first
+    for (int bi = 0; bi < MAX_BUILDINGS; bi++) {
+        if (!buildings[bi].alive || buildings[bi].owner != AI_PLAYER) continue;
+        if (building_is_complete(bi)) continue;
+        // Check if any villager is already building this
+        bool hasBuilder = false;
+        for (int ui = 0; ui < MAX_UNITS; ui++) {
+            if (units[ui].alive && units[ui].owner == AI_PLAYER &&
+                units[ui].type == UNIT_VILLAGER && units[ui].buildTarget == bi) {
+                hasBuilder = true;
+                break;
+            }
+        }
+        if (!hasBuilder) {
+            int vil = unit_find_idle_villager(AI_PLAYER, 0);
+            if (vil >= 0) {
+                unit_command_build(vil, bi, terrain);
+            }
+        }
+    }
+
     // House if near pop cap
     if (p.popCount >= p.popCap - 2) {
         int bx, by;
         if (ai_find_build_spot(tcTX, tcTY, 1, 1, terrain, bx, by)) {
-            building_place(BLDG_HOUSE, AI_PLAYER, bx, by, gs, terrain);
+            ai_place_and_build(BLDG_HOUSE, bx, by, gs, terrain);
         }
     }
 
@@ -125,7 +158,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (building_count(AI_PLAYER, BLDG_BARRACKS) == 0) {
         int bx, by;
         if (ai_find_build_spot(tcTX + 2, tcTY, 2, 2, terrain, bx, by)) {
-            building_place(BLDG_BARRACKS, AI_PLAYER, bx, by, gs, terrain);
+            ai_place_and_build(BLDG_BARRACKS, bx, by, gs, terrain);
         }
     }
 
@@ -133,7 +166,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (p.resources[RES_FOOD] < 100 && building_count(AI_PLAYER, BLDG_FARM) < 3) {
         int bx, by;
         if (ai_find_build_spot(tcTX - 1, tcTY + 2, 1, 1, terrain, bx, by)) {
-            building_place(BLDG_FARM, AI_PLAYER, bx, by, gs, terrain);
+            ai_place_and_build(BLDG_FARM, bx, by, gs, terrain);
         }
     }
 
@@ -143,7 +176,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         if (ai_find_resource(tcTX, tcTY, TERRAIN_FOREST, terrain, fx, fy)) {
             int bx, by;
             if (ai_find_build_spot(fx, fy, 1, 1, terrain, bx, by)) {
-                building_place(BLDG_LUMBER_CAMP, AI_PLAYER, bx, by, gs, terrain);
+                ai_place_and_build(BLDG_LUMBER_CAMP, bx, by, gs, terrain);
             }
         }
     }
@@ -154,7 +187,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         if (ai_find_resource(tcTX, tcTY, TERRAIN_GOLD, terrain, gx, gy)) {
             int bx, by;
             if (ai_find_build_spot(gx, gy, 1, 1, terrain, bx, by)) {
-                building_place(BLDG_MINING_CAMP, AI_PLAYER, bx, by, gs, terrain);
+                ai_place_and_build(BLDG_MINING_CAMP, bx, by, gs, terrain);
             }
         }
     }
@@ -163,7 +196,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_ARCHERY_RANGE) == 0) {
         int bx, by;
         if (ai_find_build_spot(tcTX, tcTY + 3, 2, 2, terrain, bx, by)) {
-            building_place(BLDG_ARCHERY_RANGE, AI_PLAYER, bx, by, gs, terrain);
+            ai_place_and_build(BLDG_ARCHERY_RANGE, bx, by, gs, terrain);
         }
     }
 
@@ -171,7 +204,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (p.age >= AGE_CASTLE && building_count(AI_PLAYER, BLDG_STABLE) == 0) {
         int bx, by;
         if (ai_find_build_spot(tcTX - 3, tcTY, 2, 2, terrain, bx, by)) {
-            building_place(BLDG_STABLE, AI_PLAYER, bx, by, gs, terrain);
+            ai_place_and_build(BLDG_STABLE, bx, by, gs, terrain);
         }
     }
 

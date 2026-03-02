@@ -52,6 +52,9 @@ def main():
         dirs = entry.get('dirs')
         if dirs:
             cmd.extend(['--dirs', str(dirs)])
+            fpd = entry.get('fpd')
+            if fpd:
+                cmd.extend(['--fpd', str(fpd)])
         else:
             limit = entry.get('limit')
             if limit:

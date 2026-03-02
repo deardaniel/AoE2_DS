@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import math
 import os
 import re
@@ -20,6 +21,16 @@ def load_frames(frames_dir: str):
     return paths
 
 
+def load_hotspot(png_path: str):
+    """Load hotspot metadata from companion .json file if present."""
+    json_path = os.path.splitext(png_path)[0] + '.json'
+    if os.path.exists(json_path):
+        with open(json_path, 'r') as f:
+            meta = json.load(f)
+        return meta.get('hotspotX'), meta.get('hotspotY')
+    return None, None
+
+
 def main():
     ap = argparse.ArgumentParser(description='Pack frame PNGs into a sprite sheet.')
     ap.add_argument('frames_dir', help='Directory containing frame_*.png files')
@@ -30,8 +41,9 @@ def main():
     ap.add_argument('--fit', action='store_true', help='Scale frames down to fit cell')
     ap.add_argument('--dirs', type=int, default=0,
                     help='Number of directions in SLP (e.g. 5). '
-                         'Samples 5 evenly-spaced frames per direction.')
-    # Frames are centered in their cell by default.
+                         'Samples --fpd evenly-spaced frames per direction.')
+    ap.add_argument('--fpd', type=int, default=10,
+                    help='Frames per direction to sample (default: 10)')
     args = ap.parse_args()
 
     try:
@@ -46,22 +58,23 @@ def main():
         return 2
 
     if args.dirs and args.dirs > 0:
-        # Multi-directional SLP: sample 5 frames per direction
+        # Multi-directional SLP: sample N frames per direction
+        sample_count = args.fpd
         total = len(paths)
-        fpd = total // args.dirs  # frames per direction
-        if fpd < 5:
-            print(f'Not enough frames per direction: {fpd} (need >= 5)', file=sys.stderr)
+        fpd = total // args.dirs  # frames per direction in source
+        if fpd < sample_count:
+            print(f'Not enough frames per direction: {fpd} (need >= {sample_count})', file=sys.stderr)
             return 2
         sampled = []
         for d in range(args.dirs):
             base = d * fpd
-            # Pick 5 evenly spaced across the walk/attack cycle
-            for i in range(5):
-                idx = base + i * fpd // 5
+            # Pick sample_count evenly spaced across the walk/attack cycle
+            for i in range(sample_count):
+                idx = base + i * fpd // sample_count
                 if idx < total:
                     sampled.append(paths[idx])
         paths = sampled
-        print(f'Sampled {len(paths)} frames from {total} ({args.dirs} dirs × 5 anim)')
+        print(f'Sampled {len(paths)} frames from {total} ({args.dirs} dirs x {sample_count} anim)')
     elif args.limit and args.limit > 0:
         paths = paths[: args.limit]
 
@@ -73,10 +86,42 @@ def main():
     sheet_h = rows * cell_h
     sheet = Image.new('RGBA', (sheet_w, sheet_h), (0, 0, 0, 0))
 
+    # Hotspot anchor point within the cell: center-X, near-bottom-Y
+    # This keeps the unit's feet at a stable position
+    anchor_x = cell_w // 2
+    anchor_y = cell_h - 2  # 2px from bottom edge
+
+    # Pre-scan all frames to compute a uniform scale factor
+    # so all frames stay the same size relative to each other
+    uniform_scale = 1.0
+    if args.fit:
+        max_w = 0
+        max_h = 0
+        for path in paths:
+            img = Image.open(path)
+            if img.width > max_w:
+                max_w = img.width
+            if img.height > max_h:
+                max_h = img.height
+            img.close()
+        if max_w > cell_w or max_h > cell_h:
+            uniform_scale = min(cell_w / max_w, cell_h / max_h)
+            print(f'Uniform scale: {uniform_scale:.3f} (max frame {max_w}x{max_h})')
+
     for i, path in enumerate(paths):
         img = Image.open(path).convert('RGBA')
-        if args.fit:
-            img.thumbnail((cell_w, cell_h), Image.NEAREST)
+
+        # Load hotspot metadata
+        hx, hy = load_hotspot(path)
+
+        if uniform_scale < 1.0:
+            new_w = max(1, int(img.width * uniform_scale))
+            new_h = max(1, int(img.height * uniform_scale))
+            img = img.resize((new_w, new_h), Image.NEAREST)
+            if hx is not None:
+                hx = int(hx * uniform_scale)
+                hy = int(hy * uniform_scale)
+
         if img.width > cell_w or img.height > cell_h:
             print(
                 f'Frame too large for cell: {os.path.basename(path)} '
@@ -88,11 +133,30 @@ def main():
 
         col = i % cols
         row = i // cols
-        x = col * cell_w
-        y = row * cell_h
-        x += (cell_w - img.width) // 2
-        y += (cell_h - img.height) // 2
-        sheet.alpha_composite(img, (x, y))
+        cell_x = col * cell_w
+        cell_y = row * cell_h
+
+        if hx is not None and hy is not None:
+            # Align hotspot to anchor point within cell
+            x = cell_x + anchor_x - hx
+            y = cell_y + anchor_y - hy
+        else:
+            # Fallback: center in cell
+            x = cell_x + (cell_w - img.width) // 2
+            y = cell_y + (cell_h - img.height) // 2
+
+        # Clamp to cell bounds (crop if placement goes outside)
+        # Calculate source crop region if the frame extends outside the cell
+        src_x0 = max(0, cell_x - x)
+        src_y0 = max(0, cell_y - y)
+        dst_x = max(cell_x, x)
+        dst_y = max(cell_y, y)
+        src_x1 = min(img.width, cell_x + cell_w - x)
+        src_y1 = min(img.height, cell_y + cell_h - y)
+
+        if src_x1 > src_x0 and src_y1 > src_y0:
+            cropped = img.crop((src_x0, src_y0, src_x1, src_y1))
+            sheet.alpha_composite(cropped, (dst_x, dst_y))
 
     os.makedirs(os.path.dirname(args.out_png) or '.', exist_ok=True)
     sheet.save(args.out_png)

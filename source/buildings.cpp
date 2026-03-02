@@ -87,9 +87,9 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
 
         const BuildingStats& st = BLDG_STATS[b.type];
 
-        // Construction progress
+        // Construction progress — only advances via villagers in USTATE_BUILDING
+        // (see unit_update_building in units.cpp)
         if (b.buildProgress < st.buildTime) {
-            b.buildProgress++;
             continue; // Can't train while building
         }
 
