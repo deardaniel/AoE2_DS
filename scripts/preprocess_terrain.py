@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """Preprocess terrain tile textures into NDS-ready indexed binary data.
 
-Extracts 16x16 terrain tiles from source images and builds a shared 256-color
-BG palette. Handles 7 terrain types: grass, dirt, water, forest, gold, stone, farm.
+Extracts 32x16 isometric diamond terrain tiles from source images and indexes
+them against the SPRITE palette (from sprite_pal.bin) so that terrain and
+software-rendered sprites share the same BG palette at runtime.
 
 Output:
-  data/terrain_pal.bin   - 256-entry BGR555 palette (512 bytes)
-  data/terrain_tiles.bin - 7 terrain tiles × 16×16 pixels = 1792 bytes
+  data/terrain_tiles.bin - 7 base terrain tiles + 4 grass variants = 11 tiles
+                           Each tile is 32x16 pixels = 512 bytes
+                           Layout: [0-6] = base terrain types, [7-10] = grass variants
+                           Pixels outside the diamond mask are set to index 0
+                           Inside pixels use sprite palette indices (16-255)
 
-Palette layout:
-  Index 0:     Transparent / unused
-  Index 1-15:  Reserved for UI colors (PAL_BLACK through PAL_DARKBROWN)
-  Index 16-255: Terrain tile colors (shared across all 7 tiles)
+Requires: data/sprite_pal.bin must exist (run preprocess_sprites.py first)
 """
 
 import os
@@ -24,8 +25,15 @@ SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
 TERRAIN_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/terrain/textures'
 
-TILE_PX = 16
+ISO_TILE_W = 32
+ISO_TILE_H = 16
 NUM_TILES = 7  # TERRAIN_COUNT
+GRASS_VARIANTS = 4  # Number of grass tile variants for visual variety
+
+# Diamond mask: for each row, the start and end X of the filled region
+# Must match ISO_DIAMOND_XSTART/XEND in iso.h
+DIAMOND_XSTART = [15, 13, 11, 9, 7, 5, 3, 1, 1, 3, 5, 7, 9, 11, 13, 15]
+DIAMOND_XEND   = [16, 18, 20, 22, 24, 26, 28, 30, 30, 28, 26, 24, 22, 20, 18, 16]
 
 # UI palette entries (indices 1-15) — must match config.h PAL_* values
 UI_PALETTE = {
@@ -48,26 +56,36 @@ UI_PALETTE = {
 
 # Terrain tile sources: (type_index, source_path_or_sprite, crop_region)
 # crop_region = (left, top, right, bottom) in the source image
+# Crop 32x16 regions for isometric tiles
 TERRAIN_SOURCES = [
-    # TERRAIN_GRASS (0): existing grass.png from sprites/
-    (0, 'sprites', 'grass.png', (0, 0, TILE_PX, TILE_PX)),
-    # TERRAIN_DIRT (1): existing dirt.png from sprites/
-    (1, 'sprites', 'dirt.png', (0, 0, TILE_PX, TILE_PX)),
-    # TERRAIN_WATER (2): existing water.png from sprites/
-    (2, 'sprites', 'water.png', (0, 0, TILE_PX, TILE_PX)),
+    # TERRAIN_GRASS (0): AoE2 HD grass texture (base variant — also used as fallback)
+    (0, 'terrain', 'g_grs_00_color.png', (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H)),
+    # TERRAIN_DIRT (1): AoE2 HD road/dirt texture
+    (1, 'terrain', 'g_rd1_00_color.png', (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H)),
+    # TERRAIN_WATER (2): AoE2 HD water texture
+    (2, 'terrain', 'g_wtr_00_color.png', (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H)),
     # TERRAIN_FOREST (3): AoE2 HD forest texture
-    (3, 'terrain', 'g_for_00_color.png', (200, 200, 200 + TILE_PX, 200 + TILE_PX)),
+    (3, 'terrain', 'g_for_00_color.png', (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H)),
     # TERRAIN_GOLD (4): AoE2 HD desert texture (golden color)
-    (4, 'terrain', 'g_des_00_color.png', (200, 200, 200 + TILE_PX, 200 + TILE_PX)),
+    (4, 'terrain', 'g_des_00_color.png', (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H)),
     # TERRAIN_STONE (5): AoE2 HD rock texture
-    (5, 'terrain', 'g_rck_00_COLOR.png', (200, 200, 200 + TILE_PX, 200 + TILE_PX)),
-    # TERRAIN_FARM (6): AoE2 HD farm texture
-    (6, 'terrain', 'g_fm1_00_color.png', (200, 200, 200 + TILE_PX, 200 + TILE_PX)),
+    (5, 'terrain', 'g_rck_00_COLOR.png', (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H)),
+    # TERRAIN_FARM (6): AoE2 HD farm crop texture
+    (6, 'terrain', 'g_fc1_00_color.png', (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H)),
+]
+
+# Grass variant sample positions — 4 well-spaced positions in the 512x512 texture
+# chosen for maximum visual diversity (different brightness/color)
+GRASS_VARIANT_CROPS = [
+    (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H),  # variant 0: medium (base)
+    (256, 224, 256 + ISO_TILE_W, 224 + ISO_TILE_H),  # variant 1: lighter
+    (160, 448, 160 + ISO_TILE_W, 448 + ISO_TILE_H),  # variant 2: darker
+    (128, 384, 128 + ISO_TILE_W, 384 + ISO_TILE_H),  # variant 3: greener
 ]
 
 
 def load_tile(source_type, filename, crop):
-    """Load a 16x16 tile crop from the source image."""
+    """Load a 32x16 tile crop from the source image."""
     if source_type == 'sprites':
         path = os.path.join(SPRITES_DIR, filename)
     else:
@@ -80,11 +98,29 @@ def load_tile(source_type, filename, crop):
     img = Image.open(path).convert('RGB')
     tile = img.crop(crop)
 
-    # Ensure exactly 16x16
-    if tile.size != (TILE_PX, TILE_PX):
-        tile = tile.resize((TILE_PX, TILE_PX), Image.NEAREST)
+    # Ensure exactly 32x16
+    if tile.size != (ISO_TILE_W, ISO_TILE_H):
+        tile = tile.resize((ISO_TILE_W, ISO_TILE_H), Image.NEAREST)
 
     return np.array(tile)
+
+
+def apply_diamond_mask(indexed_tile):
+    """Set pixels outside the diamond shape to index 0 (transparent)."""
+    for row in range(ISO_TILE_H):
+        xs = DIAMOND_XSTART[row]
+        xe = DIAMOND_XEND[row]
+        for x in range(ISO_TILE_W):
+            if x < xs or x >= xe:
+                indexed_tile[row * ISO_TILE_W + x] = 0  # PAL_TRANSPARENT
+
+
+def bgr555_to_rgb(val):
+    """Convert NDS BGR555 to RGB888."""
+    r = (val & 0x1F) << 3
+    g = ((val >> 5) & 0x1F) << 3
+    b = ((val >> 10) & 0x1F) << 3
+    return (r, g, b)
 
 
 def rgb_to_bgr555(r, g, b):
@@ -98,88 +134,60 @@ def rgb_to_bgr555(r, g, b):
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    print("=== NDS Terrain Tile Preprocessor ===\n")
+    print("=== NDS Terrain Tile Preprocessor (Isometric 32x16) ===\n")
+
+    # Read sprite palette (generated by preprocess_sprites.py)
+    sprite_pal_path = os.path.join(DATA_DIR, 'sprite_pal.bin')
+    if not os.path.exists(sprite_pal_path):
+        print(f"ERROR: {sprite_pal_path} not found. Run preprocess_sprites.py first.")
+        sys.exit(1)
+
+    print("Loading sprite palette...")
+    with open(sprite_pal_path, 'rb') as f:
+        sprite_pal_data = f.read()
+
+    # Read remap table to find red player-color indices to exclude
+    remap_path = os.path.join(DATA_DIR, 'sprite_remap.bin')
+    excluded_indices = set()
+    if os.path.exists(remap_path):
+        with open(remap_path, 'rb') as f:
+            remap = f.read()
+        for i in range(256):
+            if remap[i] != i:
+                excluded_indices.add(remap[i])  # red target indices
+        print(f"  Excluding {len(excluded_indices)} red player-color indices: {sorted(excluded_indices)}")
+
+    # Extract RGB888 colors from sprite palette at indices 16-255
+    # (indices 1-15 will be overwritten with UI colors at runtime)
+    # Skip red player-color indices to prevent red bleeding in terrain
+    sprite_colors = []
+    valid_pal_indices = []  # actual palette index for each entry in sprite_colors
+    for i in range(16, 256):
+        if i in excluded_indices:
+            continue
+        val = struct.unpack_from('<H', sprite_pal_data, i * 2)[0]
+        sprite_colors.append(bgr555_to_rgb(val))
+        valid_pal_indices.append(i)
+    print(f"  Loaded {len(sprite_colors)} sprite palette colors (indices 16-255, excl. red)")
+
+    # Build palette array for nearest-color matching
+    pal_array = np.array(sprite_colors, dtype=np.int32)
 
     # Load all terrain tiles
-    print("Loading terrain tiles...")
+    print("\nLoading terrain tiles...")
     tiles = [None] * NUM_TILES
-    all_pixels = []
 
     for idx, source_type, filename, crop in TERRAIN_SOURCES:
         tile = load_tile(source_type, filename, crop)
         if tile is None:
             # Fallback: create a solid color tile
             print(f"  [{idx}] FALLBACK: solid color for {filename}")
-            tile = np.full((TILE_PX, TILE_PX, 3), 128, dtype=np.uint8)
+            tile = np.full((ISO_TILE_H, ISO_TILE_W, 3), 128, dtype=np.uint8)
         tiles[idx] = tile
-        all_pixels.append(tile.reshape(-1, 3))
         print(f"  [{idx}] {filename}: {tile.shape[1]}x{tile.shape[0]}")
 
-    # Build shared terrain palette
-    print("\nBuilding shared palette...")
-    all_px = np.vstack(all_pixels)
-    unique_colors = np.unique(all_px, axis=0)
-    print(f"  {len(unique_colors)} unique colors across all tiles")
-
-    # We have 240 slots (indices 16-255). Quantize to fit.
-    max_terrain_colors = 240
-
-    if len(unique_colors) <= max_terrain_colors:
-        palette = [tuple(c) for c in unique_colors]
-    else:
-        # Quantize using PIL
-        n = len(unique_colors)
-        w = min(n, 256)
-        h = (n + w - 1) // w
-        composite = Image.new('RGB', (w, h), (0, 0, 0))
-        pixels = composite.load()
-        for i, (r, g, b) in enumerate(unique_colors):
-            pixels[i % w, i // w] = (int(r), int(g), int(b))
-        quantized = composite.quantize(colors=max_terrain_colors, method=Image.Quantize.MEDIANCUT)
-        pal_flat = quantized.getpalette()
-        palette = []
-        for i in range(max_terrain_colors):
-            palette.append((pal_flat[i * 3], pal_flat[i * 3 + 1], pal_flat[i * 3 + 2]))
-        # Deduplicate
-        seen = set()
-        deduped = []
-        for c in palette:
-            if c not in seen:
-                seen.add(c)
-                deduped.append(c)
-        palette = deduped
-
-    print(f"  Terrain palette: {len(palette)} colors (indices 16-{16 + len(palette) - 1})")
-
-    # Pad to 240
-    while len(palette) < max_terrain_colors:
-        palette.append((0, 0, 0))
-
-    # Build full 256-entry NDS palette
-    print("\nBuilding NDS palette...")
-    pal_bin = bytearray(512)
-
-    # Index 0: transparent/black
-    struct.pack_into('<H', pal_bin, 0, rgb_to_bgr555(0, 0, 0))
-
-    # Indices 1-15: UI colors
-    for idx, (r, g, b) in UI_PALETTE.items():
-        struct.pack_into('<H', pal_bin, idx * 2, rgb_to_bgr555(r, g, b))
-
-    # Indices 16-255: terrain colors
-    for i, (r, g, b) in enumerate(palette):
-        struct.pack_into('<H', pal_bin, (16 + i) * 2, rgb_to_bgr555(r, g, b))
-
-    pal_path = os.path.join(DATA_DIR, 'terrain_pal.bin')
-    with open(pal_path, 'wb') as f:
-        f.write(pal_bin)
-    print(f"  {pal_path}: {len(pal_bin)} bytes")
-
-    # Build palette lookup array (for indexing tiles)
-    pal_array = np.array(palette, dtype=np.int32)
-
-    # Index each tile
-    print("\nIndexing terrain tiles...")
+    # Index each tile against sprite palette and apply diamond mask
+    print("\nIndexing terrain tiles against sprite palette (with diamond mask)...")
     all_tile_data = bytearray()
 
     for idx in range(NUM_TILES):
@@ -188,21 +196,64 @@ def main():
         indexed = np.zeros(h * w, dtype=np.uint8)
         flat_rgb = tile.reshape(-1, 3).astype(np.int32)
 
-        # Find nearest palette color for each pixel
+        # Find nearest sprite palette color for each pixel
         for i in range(len(flat_rgb)):
             r, g, b = flat_rgb[i]
             diff = pal_array - np.array([r, g, b], dtype=np.int32)
             dists = np.sum(diff * diff, axis=1)
             nearest = np.argmin(dists)
-            indexed[i] = nearest + 16  # offset by 16 for UI palette reservation
+            indexed[i] = valid_pal_indices[nearest]  # map back to actual palette index
+
+        # Apply diamond mask: pixels outside diamond become transparent (0)
+        apply_diamond_mask(indexed)
 
         all_tile_data.extend(bytes(indexed))
         print(f"  Tile {idx}: {w}x{h} = {w * h} bytes")
+
+    # Generate grass variant tiles (appended after the 7 base terrain tiles)
+    print(f"\nGenerating {GRASS_VARIANTS} grass variant tiles...")
+    grass_src = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/terrain/textures/g_grs_00_color.png'
+    if os.path.exists(grass_src):
+        grass_img = Image.open(grass_src).convert('RGB')
+        for vi, crop in enumerate(GRASS_VARIANT_CROPS):
+            variant = np.array(grass_img.crop(crop))
+            if variant.shape != (ISO_TILE_H, ISO_TILE_W, 3):
+                variant = np.array(grass_img.crop(crop).resize((ISO_TILE_W, ISO_TILE_H), Image.NEAREST))
+
+            flat_rgb = variant.reshape(-1, 3).astype(np.int32)
+            indexed = np.zeros(ISO_TILE_W * ISO_TILE_H, dtype=np.uint8)
+            for i in range(len(flat_rgb)):
+                r, g, b = flat_rgb[i]
+                diff = pal_array - np.array([r, g, b], dtype=np.int32)
+                dists = np.sum(diff * diff, axis=1)
+                nearest = np.argmin(dists)
+                indexed[i] = valid_pal_indices[nearest]
+            apply_diamond_mask(indexed)
+            all_tile_data.extend(bytes(indexed))
+            print(f"  Grass variant {vi}: {ISO_TILE_W}x{ISO_TILE_H} = {ISO_TILE_W * ISO_TILE_H} bytes")
+    else:
+        print(f"  WARNING: grass texture not found, duplicating base grass for variants")
+        base_grass = all_tile_data[:ISO_TILE_W * ISO_TILE_H]
+        for vi in range(GRASS_VARIANTS):
+            all_tile_data.extend(base_grass)
+            print(f"  Grass variant {vi}: fallback copy")
 
     tiles_path = os.path.join(DATA_DIR, 'terrain_tiles.bin')
     with open(tiles_path, 'wb') as f:
         f.write(all_tile_data)
     print(f"  {tiles_path}: {len(all_tile_data)} bytes")
+
+    # Generate terrain_pal.bin with UI colors (for runtime overlay at indices 1-15)
+    print("\nGenerating UI palette overlay...")
+    pal_bin = bytearray(512)
+    struct.pack_into('<H', pal_bin, 0, rgb_to_bgr555(0, 0, 0))
+    for idx, (r, g, b) in UI_PALETTE.items():
+        struct.pack_into('<H', pal_bin, idx * 2, rgb_to_bgr555(r, g, b))
+
+    pal_path = os.path.join(DATA_DIR, 'terrain_pal.bin')
+    with open(pal_path, 'wb') as f:
+        f.write(pal_bin)
+    print(f"  {pal_path}: {len(pal_bin)} bytes (UI colors at indices 1-15)")
 
     print(f"\nDone! Total: {len(pal_bin) + len(all_tile_data)} bytes")
 

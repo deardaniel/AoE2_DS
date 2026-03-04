@@ -7,6 +7,8 @@ struct TerrainMap;
 // ---------------------------------------------------------------------------
 // Building
 // ---------------------------------------------------------------------------
+enum { MAX_GARRISON = 10 };
+
 struct Building {
     bool alive;
     u8   owner;
@@ -19,6 +21,8 @@ struct Building {
     u16* spriteGfx;      // OAM gfx pointer
     s8   oamSlot;        // OAM slot (-1 = not visible)
     u8   attackCooldown; // for TC arrows
+    s8   garrison[MAX_GARRISON]; // unit indices garrisoned inside (-1 = empty)
+    u8   garrisonCount;
 };
 
 // ---------------------------------------------------------------------------
@@ -41,3 +45,5 @@ int  building_nearest(int owner, int type, s16 px, s16 py);
 int  building_nearest_dropoff(int owner, int resType, s16 px, s16 py);
 int  building_count(int owner, int type);
 bool building_is_complete(int idx);
+bool building_garrison(int bldgIdx, int unitIdx);
+void building_ungarrison_all(int bldgIdx, TerrainMap& terrain);

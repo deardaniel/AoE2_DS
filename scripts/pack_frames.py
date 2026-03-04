@@ -39,6 +39,8 @@ def main():
     ap.add_argument('--cols', type=int, default=0, help='Columns in sheet (default: auto)')
     ap.add_argument('--limit', type=int, default=0, help='Limit number of frames packed')
     ap.add_argument('--fit', action='store_true', help='Scale frames down to fit cell')
+    ap.add_argument('--scale', type=float, default=0.0,
+                    help='Override uniform scale factor (e.g. 0.45). Overrides --fit.')
     ap.add_argument('--dirs', type=int, default=0,
                     help='Number of directions in SLP (e.g. 5). '
                          'Samples --fpd evenly-spaced frames per direction.')
@@ -94,7 +96,10 @@ def main():
     # Pre-scan all frames to compute a uniform scale factor
     # so all frames stay the same size relative to each other
     uniform_scale = 1.0
-    if args.fit:
+    if args.scale > 0:
+        uniform_scale = args.scale
+        print(f'Using override scale: {uniform_scale:.3f}')
+    elif args.fit:
         max_w = 0
         max_h = 0
         for path in paths:
@@ -117,19 +122,20 @@ def main():
         if uniform_scale < 1.0:
             new_w = max(1, int(img.width * uniform_scale))
             new_h = max(1, int(img.height * uniform_scale))
-            img = img.resize((new_w, new_h), Image.NEAREST)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
             if hx is not None:
                 hx = int(hx * uniform_scale)
                 hy = int(hy * uniform_scale)
 
         if img.width > cell_w or img.height > cell_h:
-            print(
-                f'Frame too large for cell: {os.path.basename(path)} '
-                f'({img.width}x{img.height}) > {cell_w}x{cell_h}. '
-                f'Use --fit or a larger --cell.',
-                file=sys.stderr,
-            )
-            return 2
+            if args.scale <= 0:
+                print(
+                    f'Frame too large for cell: {os.path.basename(path)} '
+                    f'({img.width}x{img.height}) > {cell_w}x{cell_h}. '
+                    f'Use --fit, --scale, or a larger --cell.',
+                    file=sys.stderr,
+                )
+                return 2
 
         col = i % cols
         row = i // cols

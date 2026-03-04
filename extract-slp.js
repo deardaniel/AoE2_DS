@@ -87,7 +87,7 @@ for (let i = start; i < end; i++) {
     console.log(`Frame ${i}: ${frameInfo.width}x${frameInfo.height}`);
 
     // Skip huge frames (likely backgrounds/terrain)
-    if (frameInfo.width > 400 || frameInfo.height > 400) {
+    if (frameInfo.width > 500 || frameInfo.height > 500) {
         console.log(`  Skipping (too large)`);
         continue;
     }

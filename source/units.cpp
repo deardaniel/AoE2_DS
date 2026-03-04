@@ -3,9 +3,42 @@
 #include "buildings.h"
 #include "terrain.h"
 #include "tech.h"
+#include "fog.h"
 #include <string.h>
 
 Unit units[MAX_UNITS];
+
+// ---------------------------------------------------------------------------
+// Tile occupancy grid — unit collision avoidance system
+//
+// Each cell holds the index of the unit occupying that tile, or -1 if empty.
+// Rebuilt at the start of every units_update() frame. Used by:
+//   - unit_step_path(): block movement into occupied friendly tiles
+//   - build_pass_map(): A* routes around stationary units
+//   - buildings.cpp:    spawn/ungarrison onto unoccupied tiles only
+//   - unit_command_gather/build(): prefer unoccupied adjacent tiles
+// ---------------------------------------------------------------------------
+static s8 tileOccupant[MAP_TILES][MAP_TILES];
+
+// Rebuild the occupancy grid from scratch. Only alive, visible units are
+// tracked (dead and garrisoned units don't occupy map space).
+static void rebuild_occupancy() {
+    memset(tileOccupant, -1, sizeof(tileOccupant));
+    for (int i = 0; i < MAX_UNITS; i++) {
+        if (!units[i].alive || units[i].state == USTATE_DEAD || units[i].state == USTATE_GARRISONED) continue;
+        int tx = units[i].x / TILE_PX;
+        int ty = units[i].y / TILE_PX;
+        if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES)
+            tileOccupant[ty][tx] = i;
+    }
+}
+
+// Check whether a map tile is currently occupied by any unit.
+// Used externally by buildings.cpp for spawn/ungarrison placement.
+bool tile_has_unit(int tx, int ty) {
+    if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return false;
+    return tileOccupant[ty][tx] >= 0;
+}
 
 void units_init() {
     memset(units, 0, sizeof(units));
@@ -33,7 +66,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.targetX = px; u.targetY = py;
             u.hp = playerUnitStats[owner][type].hp;
             u.state = USTATE_IDLE;
-            u.direction = DIR_DOWN;
+            u.direction = DIR_S;
             u.animFrame = 0;
             u.animTick = 0;
             u.gatherTick = 0;
@@ -45,6 +78,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.attackBldgTarget = -1;
             u.buildTarget = -1;
             u.attackCooldown = 0;
+            u.waitCounter = 0;
             u.deadTimer = 0;
             u.spriteGfx = NULL;
             u.oamSlot = -1;
@@ -60,7 +94,9 @@ void unit_kill(int idx) {
     if (idx < 0 || idx >= MAX_UNITS) return;
     Unit& u = units[idx];
     u.state = USTATE_DEAD;
-    u.deadTimer = 30; // show death briefly
+    u.deadTimer = 40; // 10 frames × 4 ticks = death animation duration
+    u.animFrame = 0;
+    u.animTick = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,8 +115,20 @@ static s16 openList[MAP_TILES * MAP_TILES]; // encoded as y * MAP_TILES + x
 // Direction offsets (8-directional)
 static const s8 DX8[8] = { 0, 1, 1, 1, 0,-1,-1,-1};
 static const s8 DY8[8] = {-1,-1, 0, 1, 1, 1, 0,-1};
-// Map 8-dir to 4-dir for animation
-static const u8 DIR8_TO_4[8] = { DIR_UP, DIR_RIGHT, DIR_RIGHT, DIR_RIGHT, DIR_DOWN, DIR_LEFT, DIR_LEFT, DIR_LEFT };
+
+// 8-dir path indices map directly to Direction enum (both use N,NE,E,SE,S,SW,W,NW order)
+
+// Convert dx/dy delta to an 8-direction enum value
+static Direction dir_from_delta(int dx, int dy) {
+    // Normalize to -1/0/+1
+    int sx = (dx > 0) ? 1 : (dx < 0) ? -1 : 0;
+    int sy = (dy > 0) ? 1 : (dy < 0) ? -1 : 0;
+    // Look up in DX8/DY8 table
+    for (int d = 0; d < 8; d++) {
+        if (DX8[d] == sx && DY8[d] == sy) return (Direction)d;
+    }
+    return DIR_S; // fallback
+}
 
 static int heuristic(int ax, int ay, int bx, int by) {
     int dx = ax - bx; if (dx < 0) dx = -dx;
@@ -88,8 +136,12 @@ static int heuristic(int ax, int ay, int bx, int by) {
     return (dx > dy) ? dx : dy; // Chebyshev distance
 }
 
-// Build combined passability map: terrain + buildings
-static void build_pass_map(const TerrainMap& terrain) {
+// Build combined passability map for A* pathfinding.
+// Layers: terrain → buildings → stationary units.
+// selfIdx excludes the pathfinding unit from the blocked set so it doesn't
+// block its own starting tile. Moving/scouting units are also excluded
+// since they'll likely clear their tile before the pathing unit arrives.
+static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1) {
     for (int y = 0; y < MAP_TILES; y++)
         for (int x = 0; x < MAP_TILES; x++)
             passMap[y][x] = terrain.passable(x, y);
@@ -108,10 +160,20 @@ static void build_pass_map(const TerrainMap& terrain) {
                     passMap[ty][tx] = false;
             }
     }
+
+    // Mark stationary units as impassable (skip self and moving/scouting units)
+    for (int i = 0; i < MAX_UNITS; i++) {
+        if (i == selfIdx) continue;
+        if (!units[i].alive || units[i].state == USTATE_DEAD || units[i].state == USTATE_GARRISONED) continue;
+        if (units[i].state == USTATE_MOVING || units[i].state == USTATE_SCOUTING) continue;
+        int tx = units[i].x / TILE_PX, ty = units[i].y / TILE_PX;
+        if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES)
+            passMap[ty][tx] = false;
+    }
 }
 
 bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
-                    u8* outDirs, u8& outLen) {
+                    u8* outDirs, u8& outLen, int selfIdx) {
     outLen = 0;
     if (sx == tx && sy == ty) return true;
 
@@ -121,8 +183,8 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
     if (ty < 0) ty = 0;
     if (ty >= MAP_TILES) ty = MAP_TILES - 1;
 
-    // Build combined passability map (terrain + buildings)
-    build_pass_map(terrain);
+    // Build combined passability map (terrain + buildings + stationary units)
+    build_pass_map(terrain, selfIdx);
 
     // Ensure start tile is passable (unit might be on a building tile)
     passMap[sy][sx] = true;
@@ -236,18 +298,61 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
     return false;
 }
 
+// Forward declaration
+static void unit_begin_path(Unit& u, int sx, int sy, int tx, int ty);
+
 // ---------------------------------------------------------------------------
-// Movement along path
+// Nudge: push an idle friendly unit out of the way
+//
+// When a moving unit needs to step into a tile occupied by an idle friendly,
+// the idle unit is given a 1-step path to the nearest empty adjacent tile.
+// This prevents permanent blockages where idle units clog chokepoints.
+// ---------------------------------------------------------------------------
+static void nudge_unit(int idx, int fromTX, int fromTY, const TerrainMap& terrain) {
+    Unit& other = units[idx];
+    int ox = other.x / TILE_PX;
+    int oy = other.y / TILE_PX;
+    // Find nearest empty adjacent tile
+    for (int d = 0; d < 8; d++) {
+        int nx = ox + DX8[d];
+        int ny = oy + DY8[d];
+        if (nx < 0 || nx >= MAP_TILES || ny < 0 || ny >= MAP_TILES) continue;
+        if (!terrain.passable(nx, ny)) continue;
+        if (tileOccupant[ny][nx] >= 0) continue;
+        // Set a 1-step path
+        other.pathDirs[0] = d;
+        other.pathLen = 1;
+        other.pathIdx = 0;
+        other.pathDestTX = nx;
+        other.pathDestTY = ny;
+        other.stepTX = nx;
+        other.stepTY = ny;
+        other.state = USTATE_MOVING;
+        other.waitCounter = 0;
+        return;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Movement along path with collision avoidance
+//
 // Uses pre-computed step target (stepTX, stepTY) to avoid drift from
 // recalculating the target tile each frame based on current position.
+//
+// Collision rules (checked before snapping to next tile):
+//   1. Friendly idle occupant → nudge it away, then wait
+//   2. Friendly moving occupant → wait (it will clear on its own)
+//   3. After 8 frames of waiting → repath around the blocker
+//   4. Enemy occupant → step through (combat resolves overlap)
 // ---------------------------------------------------------------------------
-static void unit_step_path(Unit& u, const TerrainMap& terrain) {
+static void unit_step_path(Unit& u, int selfIdx, const TerrainMap& terrain) {
     if (u.pathIdx >= u.pathLen) {
         // Snap to final destination and stop
         u.x = u.pathDestTX * TILE_PX;
         u.y = u.pathDestTY * TILE_PX;
         u.state = USTATE_IDLE;
         u.pathLen = 0;
+        u.waitCounter = 0;
         return;
     }
 
@@ -260,7 +365,41 @@ static void unit_step_path(Unit& u, const TerrainMap& terrain) {
     int adx = (dx < 0) ? -dx : dx;
     int ady = (dy < 0) ? -dy : dy;
 
+    // Collision check before stepping into next tile
     if (adx <= speed && ady <= speed) {
+        int nextTX = u.stepTX;
+        int nextTY = u.stepTY;
+        if (nextTX >= 0 && nextTX < MAP_TILES && nextTY >= 0 && nextTY < MAP_TILES) {
+            int occupant = tileOccupant[nextTY][nextTX];
+            if (occupant >= 0 && occupant != selfIdx) {
+                Unit& other = units[occupant];
+                if (other.owner == u.owner) {
+                    if (other.state == USTATE_IDLE) {
+                        // Nudge idle unit out of the way
+                        nudge_unit(occupant, nextTX, nextTY, terrain);
+                    }
+                    // Wait for tile to clear
+                    u.waitCounter++;
+                    if (u.waitCounter >= 8) {
+                        // Repath around blocker
+                        u.waitCounter = 0;
+                        int sx = u.x / TILE_PX;
+                        int sy = u.y / TILE_PX;
+                        if (unit_find_path(sx, sy, u.pathDestTX, u.pathDestTY, terrain,
+                                           u.pathDirs, u.pathLen, selfIdx)) {
+                            unit_begin_path(u, sx, sy, u.pathDestTX, u.pathDestTY);
+                        } else {
+                            u.state = USTATE_IDLE;
+                            u.pathLen = 0;
+                        }
+                    }
+                    return; // don't step this frame
+                }
+                // Enemy: step anyway (overlap acceptable in combat)
+            }
+        }
+        u.waitCounter = 0;
+
         // Close enough — snap to tile origin and advance path
         u.x = targetPX;
         u.y = targetPY;
@@ -286,7 +425,7 @@ static void unit_step_path(Unit& u, const TerrainMap& terrain) {
 
     // Direction from current path step
     u8 dirIdx = (u.pathIdx < u.pathLen) ? u.pathIdx : u.pathLen - 1;
-    u.direction = DIR8_TO_4[u.pathDirs[dirIdx]];
+    u.direction = (Direction)u.pathDirs[dirIdx];
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +485,7 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
     int tx = px / TILE_PX;
     int ty = py / TILE_PX;
 
-    if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen)) {
+    if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen, idx)) {
         unit_begin_path(u, sx, sy, tx, ty);
         u.state = USTATE_MOVING;
         u.attackTarget = -1;
@@ -383,17 +522,43 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     else if (tt == TERRAIN_STONE)  { u.carryType = RES_STONE; u.role = VROLE_MINER; }
     else if (tt == TERRAIN_FARM)   { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
 
-    // Find path to adjacent passable tile
+    // Find path to nearest adjacent passable tile of the resource
     int sx = u.x / TILE_PX;
     int sy = u.y / TILE_PX;
 
-    // Try to path to an adjacent tile of the resource
+    // Try adjacent tiles sorted by distance, preferring unoccupied tiles.
+    // The +10000 penalty ensures occupied tiles sort after all unoccupied ones,
+    // so multiple villagers gathering the same resource spread to different tiles.
     bool pathed = false;
+    int adjOrder[8];
+    int adjDist[8];
     for (int d = 0; d < 8; d++) {
+        adjOrder[d] = d;
+        int ax = tileTX + DX8[d];
+        int ay = tileTY + DY8[d];
+        int ddx = ax - sx, ddy = ay - sy;
+        adjDist[d] = ddx * ddx + ddy * ddy;
+        // Penalize occupied tiles so unoccupied ones are preferred
+        if (tile_has_unit(ax, ay)) adjDist[d] += 10000;
+    }
+    // Simple insertion sort by distance
+    for (int i = 1; i < 8; i++) {
+        int key = adjOrder[i], kd = adjDist[i];
+        int j = i - 1;
+        while (j >= 0 && adjDist[j] > kd) {
+            adjOrder[j + 1] = adjOrder[j];
+            adjDist[j + 1] = adjDist[j];
+            j--;
+        }
+        adjOrder[j + 1] = key;
+        adjDist[j + 1] = kd;
+    }
+    for (int i = 0; i < 8; i++) {
+        int d = adjOrder[i];
         int ax = tileTX + DX8[d];
         int ay = tileTY + DY8[d];
         if (terrain.passable(ax, ay)) {
-            if (unit_find_path(sx, sy, ax, ay, terrain, u.pathDirs, u.pathLen)) {
+            if (unit_find_path(sx, sy, ax, ay, terrain, u.pathDirs, u.pathLen, idx)) {
                 unit_begin_path(u, sx, sy, ax, ay);
                 u.state = USTATE_MOVING; // will switch to gathering on arrival
                 pathed = true;
@@ -403,7 +568,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     }
     // If resource tile itself is passable (e.g., farm), go directly
     if (!pathed && terrain.passable(tileTX, tileTY)) {
-        if (unit_find_path(sx, sy, tileTX, tileTY, terrain, u.pathDirs, u.pathLen)) {
+        if (unit_find_path(sx, sy, tileTX, tileTY, terrain, u.pathDirs, u.pathLen, idx)) {
             unit_begin_path(u, sx, sy, tileTX, tileTY);
             u.state = USTATE_MOVING;
         }
@@ -447,19 +612,37 @@ void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
     Building& b = buildings[bldgIdx];
     const BuildingStats& bst = BLDG_STATS[b.type];
 
-    // Path to adjacent tile of building
+    // Path to adjacent tile of building using two-pass approach:
+    // first try unoccupied tiles so multiple builders don't stack,
+    // then fall back to any passable tile if all are occupied.
     int bx = b.x / TILE_PX;
     int by = b.y / TILE_PX;
     int sx = u.x / TILE_PX;
     int sy = u.y / TILE_PX;
 
+    // First pass: prefer unoccupied passable tiles
+    for (int dy = -1; dy <= bst.tileH; dy++) {
+        for (int dx = -1; dx <= bst.tileW; dx++) {
+            if (dx >= 0 && dx < bst.tileW && dy >= 0 && dy < bst.tileH) continue;
+            int tx = bx + dx;
+            int ty = by + dy;
+            if (terrain.passable(tx, ty) && !tile_has_unit(tx, ty)) {
+                if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen, idx)) {
+                    unit_begin_path(u, sx, sy, tx, ty);
+                    u.state = USTATE_MOVING;
+                    return;
+                }
+            }
+        }
+    }
+    // Second pass: any passable tile
     for (int dy = -1; dy <= bst.tileH; dy++) {
         for (int dx = -1; dx <= bst.tileW; dx++) {
             if (dx >= 0 && dx < bst.tileW && dy >= 0 && dy < bst.tileH) continue;
             int tx = bx + dx;
             int ty = by + dy;
             if (terrain.passable(tx, ty)) {
-                if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen)) {
+                if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen, idx)) {
                     unit_begin_path(u, sx, sy, tx, ty);
                     u.state = USTATE_MOVING;
                     return;
@@ -519,7 +702,7 @@ int unit_find_nearest_enemy(int unitIdx) {
     int bestIdx = -1;
 
     for (int i = 0; i < MAX_UNITS; i++) {
-        if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
+        if (!units[i].alive || units[i].state == USTATE_DEAD || units[i].state == USTATE_GARRISONED) continue;
         if (units[i].owner == u.owner) continue;
         int dx = units[i].x - u.x;
         int dy = units[i].y - u.y;
@@ -555,10 +738,7 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
     // Face the resource
     int rdx = u.gatherTX * TILE_PX - u.x;
     int rdy = u.gatherTY * TILE_PX - u.y;
-    if (rdx > 0) u.direction = DIR_RIGHT;
-    else if (rdx < 0) u.direction = DIR_LEFT;
-    else if (rdy > 0) u.direction = DIR_DOWN;
-    else u.direction = DIR_UP;
+    u.direction = dir_from_delta(rdx, rdy);
 
     // Check if resource still exists
     u8 tt = terrain.tileAt(u.gatherTX, u.gatherTY);
@@ -624,7 +804,23 @@ static void unit_update_returning(Unit& u, GameState& gs, TerrainMap& terrain) {
         }
         // Go back to gather
         if (u.gatherTX >= 0 && u.gatherTY >= 0) {
+            u8 savedCarryType = u.carryType;
             unit_command_gather(&u - units, u.gatherTX, u.gatherTY, terrain);
+            // If tile was depleted (command did nothing), find next resource
+            if (u.state == USTATE_RETURNING) {
+                int newTX, newTY;
+                if (savedCarryType < RES_COUNT &&
+                    find_nearest_resource(ux, uy, savedCarryType, terrain, newTX, newTY)) {
+                    unit_command_gather(&u - units, newTX, newTY, terrain);
+                }
+                // If still stuck, go idle
+                if (u.state == USTATE_RETURNING) {
+                    u.state = USTATE_IDLE;
+                    u.gatherTX = -1;
+                    u.gatherTY = -1;
+                    u.role = VROLE_BASE;
+                }
+            }
         } else {
             u.state = USTATE_IDLE;
         }
@@ -647,7 +843,7 @@ static void unit_update_returning(Unit& u, GameState& gs, TerrainMap& terrain) {
                 }
             }
         }
-        if (bestNx >= 0 && unit_find_path(sx, sy, bestNx, bestNy, terrain, u.pathDirs, u.pathLen)) {
+        if (bestNx >= 0 && unit_find_path(sx, sy, bestNx, bestNy, terrain, u.pathDirs, u.pathLen, (int)(&u - units))) {
             unit_begin_path(u, sx, sy, bestNx, bestNy);
             u.state = USTATE_MOVING;
             // Will re-enter RETURNING when path completes
@@ -673,6 +869,36 @@ static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
 
     // Check if already complete
     if (b.buildProgress >= bst.buildTime) {
+        // If building is damaged, repair it (costs wood)
+        if (b.hp < bst.hp) {
+            // Check if adjacent
+            int ux = (u.x + TILE_PX/2) / TILE_PX;
+            int uy = (u.y + TILE_PX/2) / TILE_PX;
+            int bx2 = b.x / TILE_PX;
+            int by2 = b.y / TILE_PX;
+            bool adj = (ux >= bx2 - 1 && ux <= bx2 + bst.tileW &&
+                        uy >= by2 - 1 && uy <= by2 + bst.tileH);
+            if (!adj) {
+                unit_command_build(&u - units, u.buildTarget, terrain);
+                return;
+            }
+            // Face the building
+            int bcx = b.x + (bst.tileW * TILE_PX) / 2;
+            int bcy = b.y + (bst.tileH * TILE_PX) / 2;
+            u.direction = dir_from_delta(bcx - u.x, bcy - u.y);
+            u.role = VROLE_BUILDER;
+            // Repair: restore 1 HP every 2 frames, cost 1 wood per 5 HP
+            if ((gs.frameCount & 1) == 0) {
+                if (gs.players[u.owner].resources[RES_WOOD] > 0) {
+                    b.hp++;
+                    if (b.hp > bst.hp) b.hp = bst.hp;
+                    if ((b.hp % 5) == 0) {
+                        gs.players[u.owner].resources[RES_WOOD]--;
+                    }
+                }
+            }
+            return;
+        }
         u.buildTarget = -1;
         u.state = USTATE_IDLE;
         // If this was a farm, become farmer automatically
@@ -705,10 +931,7 @@ static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
     int bCenterY = b.y + (bst.tileH * TILE_PX) / 2;
     int rdx = bCenterX - u.x;
     int rdy = bCenterY - u.y;
-    if (rdx > 0) u.direction = DIR_RIGHT;
-    else if (rdx < 0) u.direction = DIR_LEFT;
-    else if (rdy > 0) u.direction = DIR_DOWN;
-    else u.direction = DIR_UP;
+    u.direction = dir_from_delta(rdx, rdy);
 
     // Advance build progress (1 point per frame per villager)
     b.buildProgress++;
@@ -743,10 +966,7 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
         }
 
         // Face building
-        if (dx > 0) u.direction = DIR_RIGHT;
-        else if (dx < 0) u.direction = DIR_LEFT;
-        else if (dy > 0) u.direction = DIR_DOWN;
-        else u.direction = DIR_UP;
+        u.direction = dir_from_delta(dx, dy);
 
         if (u.attackCooldown > 0) { u.attackCooldown--; return; }
 
@@ -775,8 +995,15 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
 
     Unit& target = units[u.attackTarget];
     if (!target.alive || target.state == USTATE_DEAD) {
-        u.state = USTATE_IDLE;
         u.attackTarget = -1;
+        // Target already dead — retarget immediately
+        int selfIdx = &u - units;
+        int nextEnemy = unit_find_nearest_enemy(selfIdx);
+        if (nextEnemy >= 0) {
+            u.attackTarget = nextEnemy;
+        } else {
+            u.state = USTATE_IDLE;
+        }
         return;
     }
 
@@ -796,10 +1023,7 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     }
 
     // Face target
-    if (dx > 0) u.direction = DIR_RIGHT;
-    else if (dx < 0) u.direction = DIR_LEFT;
-    else if (dy > 0) u.direction = DIR_DOWN;
-    else u.direction = DIR_UP;
+    u.direction = dir_from_delta(dx, dy);
 
     // Attack cooldown
     if (u.attackCooldown > 0) {
@@ -825,18 +1049,37 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     if (target.hp <= 0) {
         unit_kill(u.attackTarget);
         u.attackTarget = -1;
-        u.state = USTATE_IDLE;
+        // Immediately search for next enemy instead of going idle for a frame
+        int selfIdx = &u - units;
+        int nextEnemy = unit_find_nearest_enemy(selfIdx);
+        if (nextEnemy >= 0) {
+            u.attackTarget = nextEnemy;
+            u.state = USTATE_ATTACKING;
+        } else {
+            u.state = USTATE_IDLE;
+        }
     }
 }
 
 void units_update(GameState& gs, TerrainMap& terrain) {
+    rebuild_occupancy();
+
     for (int i = 0; i < MAX_UNITS; i++) {
         Unit& u = units[i];
         if (!u.alive) continue;
 
+        // Skip garrisoned units — they're inside a building
+        if (u.state == USTATE_GARRISONED) continue;
+
         if (u.state == USTATE_DEAD) {
             if (u.deadTimer > 0) {
                 u.deadTimer--;
+                // Advance death animation (hold last frame)
+                u.animTick++;
+                if (u.animTick >= 3) {
+                    u.animTick = 0;
+                    if (u.animFrame < 9) u.animFrame++;
+                }
             } else {
                 u.alive = false;
                 if (u.spriteGfx) {
@@ -845,15 +1088,27 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                 }
                 u.oamSlot = -1;
                 // Clear stale selection
-                if (gs.selectedUnit == i) gs.selectedUnit = -1;
+                if (gs.unitSelected[i]) {
+                    gs.unitSelected[i] = false;
+                    gs.selectionCount--;
+                    if (gs.selectedUnit == i) {
+                        gs.selectedUnit = -1;
+                        // Find next selected unit as primary
+                        for (int j = 0; j < MAX_UNITS; j++) {
+                            if (gs.unitSelected[j]) { gs.selectedUnit = j; break; }
+                        }
+                    }
+                }
             }
             continue;
         }
 
-        // Animation tick (3 frames = ~20fps walk, 4 frames = ~15fps attack/work)
-        // 10 anim frames × 3 ticks = 30 tick cycle (similar to old 5 frames × 5 ticks = 25)
+        // Animation tick — full original framerate
+        // 10 anim frames per cycle, advancing every 2 ticks (30fps) for movement
+        // and every 3 ticks (20fps) for combat/work actions
         u.animTick++;
-        int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING) ? 3 : 4;
+        int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING ||
+                         u.state == USTATE_SCOUTING) ? 2 : 3;
         if (u.animTick >= animSpeed) {
             u.animTick = 0;
             if (u.state == USTATE_MOVING || u.state == USTATE_ATTACKING ||
@@ -875,10 +1130,38 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                     u.state = USTATE_ATTACKING;
                 }
             }
+            // Villagers: auto-flee from nearby enemy military (3 tile range)
+            if (u.type == UNIT_VILLAGER && u.owner == 0) {
+                int fleeDist = 3 * TILE_PX;
+                for (int e = 0; e < MAX_UNITS; e++) {
+                    if (!units[e].alive || units[e].owner == u.owner) continue;
+                    if (units[e].state == USTATE_DEAD || units[e].state == USTATE_GARRISONED) continue;
+                    if (units[e].type == UNIT_VILLAGER) continue; // don't flee from other villagers
+                    int edx = units[e].x - u.x;
+                    int edy = units[e].y - u.y;
+                    if (edx * edx + edy * edy < fleeDist * fleeDist) {
+                        // Flee to nearest TC
+                        int tc = building_nearest(u.owner, BLDG_TOWN_CENTER, u.x, u.y);
+                        if (tc >= 0) {
+                            unit_command_move(i, buildings[tc].x, buildings[tc].y, terrain);
+                        }
+                        break;
+                    }
+                }
+            }
             break;
 
         case USTATE_MOVING:
-            unit_step_path(u, terrain);
+            unit_step_path(u, i, terrain);
+            // Military units auto-engage enemies while moving
+            if (u.state == USTATE_MOVING && u.type != UNIT_VILLAGER &&
+                u.attackTarget < 0 && u.attackBldgTarget < 0) {
+                int enemy = unit_find_nearest_enemy(i);
+                if (enemy >= 0) {
+                    u.attackTarget = enemy;
+                    u.state = USTATE_ATTACKING;
+                }
+            }
             // If path done, check what we should do next
             if (u.state == USTATE_IDLE) {
                 if (u.buildTarget >= 0 && u.type == UNIT_VILLAGER) {
@@ -907,6 +1190,50 @@ void units_update(GameState& gs, TerrainMap& terrain) {
 
         case USTATE_BUILDING:
             unit_update_building(u, gs, terrain);
+            break;
+
+        case USTATE_SCOUTING:
+            // Auto-scout: move toward unexplored tiles
+            // Only pick a new target when idle (reached previous one)
+            if (u.pathLen == 0) {
+                int utx = (u.x + TILE_PX / 2) / TILE_PX;
+                int uty = (u.y + TILE_PX / 2) / TILE_PX;
+                int bestDist = 999999;
+                int bestTX = -1, bestTY = -1;
+                // Sample every 2nd tile for performance
+                for (int ty = 0; ty < MAP_TILES; ty += 2) {
+                    for (int tx = 0; tx < MAP_TILES; tx += 2) {
+                        if (fogMap.isExplored(u.owner, tx, ty)) continue;
+                        if (terrain.tiles[ty][tx] == TERRAIN_WATER) continue;
+                        int dx = tx - utx;
+                        int dy = ty - uty;
+                        int dist = dx * dx + dy * dy;
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestTX = tx;
+                            bestTY = ty;
+                        }
+                    }
+                }
+                if (bestTX >= 0) {
+                    u.targetX = bestTX * TILE_PX + TILE_PX / 2;
+                    u.targetY = bestTY * TILE_PX + TILE_PX / 2;
+                    int sx = u.x / TILE_PX;
+                    int sy = u.y / TILE_PX;
+                    if (unit_find_path(sx, sy, bestTX, bestTY, terrain, u.pathDirs, u.pathLen, i)) {
+                        unit_begin_path(u, sx, sy, bestTX, bestTY);
+                    }
+                } else {
+                    u.state = USTATE_IDLE; // map fully explored
+                    break;
+                }
+            }
+            // Move along path
+            unit_step_path(u, i, terrain);
+            // Stay in scouting state after reaching target
+            if (u.state == USTATE_IDLE) {
+                u.state = USTATE_SCOUTING;
+            }
             break;
         }
 

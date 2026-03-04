@@ -1,0 +1,2200 @@
+# AoE2 HD SLP Graphics ID Reference (Complete - As of Rise of the Rajas)
+# Format: SLP_ID: description
+# Source: Converted from Complete SLP List spreadsheet
+
+2: Archer
+21: Vanilla Archery Ranges II
+23: Far East Archery Range II
+24: Middle East Archery Range II
+33: Vanilla Archery Ranges III
+35: Far East Archery Range III
+36: Middle East Archery Range III
+50: Relics
+53: Arrow
+57: Relic
+61: Bombard Cannon
+73: Explosion Smoke
+75: Explosion Smoke
+82: Vanilla Blacksmiths II
+83: Shadow of North European Blacksmith II
+84: Shadow of Far East Blacksmith II
+85: Shadow of Middle East Blacksmith II
+90: Shadow of Mediterranean Blacksmith II
+92: Far East Blacksmith II
+93: Middle East Blacksmith II
+94: Vanilla Blacksmiths III
+95: Shadow of North European Blacksmith III
+96: Shadow of Far East Blacksmith III
+97: Shadow of Mediterranean Blacksmith III
+98: Shadow of West European Blacksmith III
+100: Smoke of Far East Blacksmith III
+101: Smoke of Mediterranean Blacksmith III
+102: Smoke of West European Blacksmith III
+104: Far East Blacksmith III
+105: Middle East Blacksmith III
+118: Projectiles
+119: Rocket/Burning Large Arrow
+120: Shadow of 118
+130: Vanilla Barracks II
+132: Far East Barracks II
+133: Middle East Barracks II
+142: Vanilla Barracks III
+144: Far East Barracks III
+145: Middle East Barracks III
+160: Axeman
+163: Note: These graphics seem to be intended to be
+166: different stance of the same unit, though 166
+167: 170 seem to be vastly different from the other
+170: graphics. They are not assigned to any unit I am
+171: Battering Ram
+186: Crossbowman
+199: Cataphract
+202: Cataphract Attacking
+205: Cataphract Dying
+206: Cataphract Idle
+209: Cataphract Decaying
+210: Cataphract Moving
+212: Burning Boulder possibly Trebuchet shot
+215: Chu-Ko-Nu
+218: Chu-Ko-Nu Attacking
+221: Chu-Ko-Nu Dying
+222: Chu-Ko-Nu Idle
+225: Chu-Ko-Nu Decaying
+226: Cliffs
+227: Cliffs
+228: Reverse Cliff tops
+230: Cliff section
+236: Building Sequences
+237: Building Sequence (Small)
+238: Building Sequence (Medium)
+239: Building Sequence (Large)
+241: Building Sequence (Huge)
+243: Building Sequence (Wonder)
+270: Vanilla Monasteries
+272: Shadow of Far East Monastery
+273: Shadow of Middle East Monastery
+276: Shadow of West European Monastery
+278: Shadow of Mediterranean Monastery
+280: Far East Monastery
+281: Middle East Monastery
+294: Vanilla Castles
+296: Shadow of Far East Castle
+297: Shadow of Middle East Castle
+298: Shadow of West European Castle
+302: Shadow of Mediterranean Castle
+304: Far East Castle
+305: Middle East Castle
+320: Cavalry Archer
+336: Deer
+339: The "Attacking" graphic has the same appearance
+342: as the "Idle" graphic, as the deer unit does
+343: not actually attack.
+344: Deer Running
+348: Deer Decaying
+351: Mameluke
+354: Mameluke Attacking
+357: Mameluke Dying
+358: Mameluke Idle
+361: Mameluke Decaying
+362: 4 Flames
+363: 4 Flames (Small)
+364: 4 Flames (Medium)
+374: Dock I
+377: Vanilla Docks II
+379: Shadow of Far East Dock II
+380: Shadow of Middle East Dock II
+385: Shadow of Mediterranean Dock II
+387: Far East Dock II
+388: Middle East Dock II
+389: Vanilla Docks III
+391: Shadow of Far East Dock III
+392: Shadow of Middle East Dock III
+397: Shadow of West European Dock III
+399: Far East Dock III
+400: Middle East Dock III
+409: West European Dock III
+410: "Port" is a euphemism for a beta/alternative dock
+411: graphic. None of them are connected to in-game
+412: units.
+414: West European Port
+416: Burning ball?
+420: Explosion Smoke
+424: Flames
+425: Small Flames
+426: Flame 1
+427: Flame 1 (Unused?)
+428: Medium Flames
+429: Flame 2 (Unused?)
+430: Big Flames
+431: Flame 3 (Unused?)
+432: Large Fire (Unused?)
+435: Medium Flames
+441: Fishing Ship
+444: Fishing Ship/Junk Ship Dying
+446: Fishing Ship Attacking/Idle
+449: Fishing Ship Nets
+495: War Galley
+499: War Galley Dying
+575: Hawk
+576: Shadow of 576
+577: Hawk Gliding
+578: Shadow of 578
+581: Hand Cannoneer
+594: Heavy Swordsman
+597: Heavy Swordsman Attacking
+600: Heavy Swordsman Dying
+601: Heavy Swordsman Idle
+604: Heavy Swordsman Decaying
+607: Elite Skirmisher
+634: Janissary
+637: Janissary Attacking
+640: Janissary Dying
+641: Janissary Idle
+644: [Royal] Janissary Decaying
+653: Junk Ship
+657: Junk Ship Attacking/Idle
+663: Knight
+676: Camel
+689: Longboat
+692: Longboat Attacking
+695: Longboat Dying
+696: Longboat Idle
+699: War Galley (AOE I) (Unused)
+702: Longbowman
+705: Longbowman Attacking
+708: Longbowman Dying
+710: Longbowman Idle
+713: Longbowman Decaying
+716: Mangonel
+730: Vanilla Mills II
+732: Shadow of Far East Mill II
+733: Shadow of Middle East Mill II
+734: This is not a typo. The SLP for the "Shadow of Mediterranean Mill II" is the same as that of the "Shadow of Middle East Mill III."
+736: Animation of Far East Mill II
+737: Animation of Middle East Mill II
+738: Animation of West European Mill II
+740: Base of Far East Mill II
+741: Base of Middle East Mill II
+742: Vanilla Mills III
+744: Shadow of West European Mill II
+745: Shadow of Mediterranean Mill III
+746: Shadow of West European Mill III
+748: Animation of Far East Mill III
+749: Animation of Mediterranean Mill III
+750: Animation of West European Mill III
+752: Base of Far East Mill III
+753: Base of Middle East Mill III
+768: European Monk
+771: Monk Converting
+774: Monk Dying
+775: Monk Idle
+776: Monk Decaying
+779: Monk Healing
+782: Mangudai
+785: Mangudai Attacking
+788: Mangudai Dying
+789: Mangudai Idle
+792: Mangudai Decaying
+795: War Elephant
+798: War Elephant Attacking
+801: War Elephant Dying
+802: War Elephant Idle
+805: War Elephant Decaying
+817: Vanilla Markets III
+819: Far East Market III
+820: Middle East Market III
+849: Cavalier
+867: Spearman
+889: Town Center Parts I
+892: Vanilla Town Center Shadows II
+894: Shadow of Far East Town Center II
+895: Shadow of Middle East Town Center II
+898: Vanilla Town Center Middles II
+900: Only exists for the Middle East Town Center and only in the Feudal Age.
+902: Far East Town Center Middle II
+903: Middle East Town Center Middle II
+904: Vanilla Town Center Shadows III
+906: Shadow of Far East Town Center III
+907: Shadow of Middle East Town Center III
+912: Vanilla Town Center Middles III
+914: Far East Town Center Middle III
+915: Middle East Town Center Middle III
+916: Vanilla Town Center Shadows IV
+918: Shadow of Far East Town Center IV
+919: Shadow of Middle East Town Center IV
+920: Vanilla Town Center Floors IV
+922: Far East Town Center Floor IV
+923: Middle East Town Center Floor IV
+924: Vanilla Town Center Middles IV
+926: Far East Town Center Middle IV
+927: Middle East Town Center Middle IV
+928: Rubble
+929: Rubble (1 x 1)
+930: Rubble (2 x 2)
+931: Rubble (3 x 3)
+932: Rubble (4 x 4)
+933: Actually Burnt Rubble (2 x 2)
+936: Scorpion
+947: Vanilla Siege Workshops
+948: Shadow of North European Siege Workshop
+949: Shadow of Far East Siege Workshop
+950: Shadow of Mediterranean Siege Workshop
+955: Shadow of West European Siege Workshop
+957: Far East Siege Workshop
+958: Middle East Siege Workshop
+971: West European Siege Workshop
+974: Samurai
+977: Samurai Attacking
+980: Samurai Dying
+981: Samurai Idle
+984: Samurai Decaying
+987: Militia
+1006: Vanilla Stables
+1008: Far East Stable II
+1009: Middle East Stable II
+1018: West European Stable II
+1020: Far East Stable III
+1021: Middle East Stable III
+1034: West European Stable III
+1035: Stone Mine
+1038: Man-at-Arms
+1051: Throwing Axeman
+1054: Throwing Axeman Attacking
+1057: Throwing Axeman Dying
+1058: Throwing Axeman Idle
+1061: Throwing Axeman Decaying
+1119: Vanilla Trade Cart
+1134: Trade Workshops (Vanilla &amp; The Forgotten)
+1136: Mediterranean Trade Workshop
+1137: North European Trade Workshop
+1138: Far East Trade Workshop
+1139: Middle East Trade Workshop
+1140: West European Trade Workshop
+1141: Indian Trade Workshop
+1175: Long Swordsman
+1188: Teutonic Knight
+1191: Teutonic Knight fighting
+1194: Teutonic Knight Dying
+1195: Teutonic Knight Idle
+1198: Teutonic Knight Decaying
+1237: Trebuchet
+1241: Trebuchet Attacking
+1244: Trebuchet Dying
+1246: Trebuchet Idle
+1250: Trees
+1251: Shadow of 1251
+1252: Tree A/ Tree TD
+1253: Felled Tree
+1254: Shadow of 1254
+1255: Tree B
+1256: Shadow of 1256
+1257: Tree C
+1258: Shadow of 1258
+1259: Tree D
+1260: Shadow of 1260
+1261: Tree E
+1262: Shadow of 1262
+1263: A dead tree.
+1264: Shadow of 1264
+1265: An autumn tree.
+1266: Shadow of 1266
+1267: Tree H
+1268: Shadow of 1268
+1269: A creepy tree.
+1270: Shadow of 1270
+1271: Tree J
+1272: Shadow of 1272
+1273: Tree K
+1353: Unknown Tree Shadow 1
+1355: Shadow of City Wall
+1356: Vanilla University Shadows &amp; Banners
+1357: Shadow of North European University III
+1358: Shadow of Far East University III
+1359: Shadow of Mediterranean University III
+1360: Shadow of West European University III
+1362: Far East University Banner III
+1363: Mediterranean University Banner III
+1368: West European University Banner III
+1369: Shadow of North European University IV
+1370: Shadow of Far East University IV
+1371: Shadow of Mediterranean University IV
+1372: Shadow of West European University IV
+1374: Far East University Banner IV
+1375: Middle East University Banner IV
+1382: Female Villager
+1385: Female Villager Attacking
+1388: Female Villager Dying
+1389: Female Villager Idle
+1392: Female Villager Decaying
+1398: Female Builder
+1401: Female Builder Dying
+1402: Female Builder Idle
+1405: Female Builder Decaying
+1411: Female Forager
+1414: All these are unused.
+1415: Female Forager Idle
+1418: Female Forager Decaying
+1421: Female Hunter
+1424: Female Hunter Hunting
+1427: Female Hunter Dying
+1428: Female Hunter Idle
+1431: Female Hunter Decaying
+1434: Female Lumberjack
+1437: Female Lumberjack Chopping
+1440: Female Lumberjack Dying
+1441: Female Lumberjack Idle
+1444: Female Lumberjack Decaying
+1450: Female Miner
+1453: Female Miner Dying
+1454: Female Miner Idle
+1457: Female Miner Decaying
+1467: Female Miner Moving
+1473: Male Villager
+1476: Male Villager Attacking
+1479: Male Villager Dying
+1481: Male Villager Idle
+1484: Male Villager Decaying
+1490: Male Builder
+1493: Male Builder Dying
+1495: Male Builder Idle
+1496: Male Builder Decaying
+1499: Male Builder Contructing
+1506: Male Farmer
+1509: Male Farmer Dying
+1511: Male Farmer Idle
+1512: Male Farmer Decaying
+1515: Male Farmer Harvesting
+1518: Male Hunter
+1519: Male Hunter Hunting
+1522: Male Hunter Moving (Meat)
+1525: Male Hunter Dying
+1527: Male Hunter Idle
+1528: Male Hunter Decaying
+1531: Male Hunter Butchering Kill
+1535: Male Hunter Moving
+1536: Male Lumberjack Chopping
+1539: Male Lumberjack Carrying Wood
+1542: Male Lumberjack Dying
+1544: Male Lumberjack Idle
+1545: Male Lumberjack Decaying
+1548: It is unknown how this graphic differs from 1535.
+1552: Male Miner
+1555: Male Miner Moving (Stone)
+1558: Male Miner Dying
+1559: Male Miner Idle
+1560: Male Miner Decaying
+1563: Male Miner Mining
+1592: Woad Raider
+1595: Woad Raider Attacking
+1598: Woad Raider Dying
+1599: Woad Raider Idle
+1602: Woad Raider Decaying
+1629: Wolf
+1632: Wolf Attacking
+1635: Wolf Dying
+1636: Wolf Idle
+1637: Wolf Walking
+1640: Wolf Decaying
+1644: Skirmisher
+1659: Gaia Objects
+1663: Sea Rock 2
+1665: Sea Rock 1
+1681: Capped Ram
+1735: Joan the Maid
+1738: Joan the Maid Attacking
+1741: Joan the Maid Dying
+1742: Joan the Maid Idle
+1745: Joan the Maid Decaying
+1761: Joan the Maid Moving
+1764: European King
+1767: Only unique graphics for the Hun King are supported and ONLY in St. Michael's database.
+1780: "OMTBO" Boat
+1784: I have no clue what this is. It looks like an unused
+1808: "STRBO" Boat
+1812: I have no clue what this is. It is an unused unit that
+1828: resembles a Junk Ship.
+1834: Galleon
+1838: Galleon Dying
+1869: Trireme (Unused)
+1871: Stone Icon
+1874: Female Builder
+1875: Female Forager
+1876: All of these are unused.
+1877: Female Hunter
+1878: Female Hunter Moving (Meat)
+1879: Female Miner
+1880: Female Miner Moving (Stone)
+1883: Female Miner SLPs continue at 2118.
+1884: Female Lumberjack Moving (Wood)
+1885: Female Lumberjack Chopping
+1886: Water Shallow Tiles from AOE I (Unused)
+1900: West European Market Flagpole IV (Unused)
+1905: Fish
+1906: Marlin (Fish)
+1911: Dorado (Fish)
+1912: Salmon (Fish)
+1913: Perch (Fish)
+1918: Vanilla Closed Stone Gates (/)
+1920: Shadow of Closed Far East Stone Gate (/)
+1921: Shadow of Closed Middle East Stone Gate (/)
+1926: Shadow of Closed West European Stone Gate (/)
+1928: Closed Far East Stone Gate (/)
+1929: Closed Middle East Stone Gate (/)
+1930: Vanilla Closed Fortified Gates (/)
+1932: Shadow of Closed Far East Fortified Gate (/)
+1933: Shadow of Closed Middle East Fortified Gate (/)
+1938: Shadow of Closed West European Fortified Gate (/)
+1940: Closed Far East Fortified Gate (/)
+1941: Closed Middle East Fortified Gate (/)
+2079: Scout Calvary
+2090: Vanilla Stone Walls
+2092: Shadow of Far East Stone Wall
+2093: Shadow of Middle East Stone Wall
+2098: Shadow of West European Stone Wall
+2100: Far East Stone Wall
+2101: Middle East Stone Wall
+2102: Vanilla Fortified Walls
+2104: Shadow of Far East Fortified Wall
+2105: Shadow of Middle East Fortified Wall
+2110: Shadow of West European Fortified Wall
+2112: Far East Fortified Wall
+2113: Middle East Fortified Wall
+2116: Various Ship Death SLPs
+2117: Miners (both sexes) carrying gold.
+2218: Male Miner Moving (Gold)
+2223: Vanilla Houses I &amp; II
+2234: Far East House II
+2235: Middle East House II
+2244: Vanilla Houses III
+2246: Far East House III
+2247: Middle East House III
+2261: Green Snow Topped Mountain
+2262: Mountain 1
+2264: Mountain 2
+2275: Vanilla Markets II
+2277: Far East Market II
+2278: Middle East Market II
+2279: West European Market II
+2293: Bamboo &amp; Tree Shadows
+2295: Bamboo Forest Tree
+2296: Bamboo Forest Tree Stump
+2300: Shadow of 4652
+2304: Shadow of 4653
+2308: Shadow of 4654
+2347: Vanilla Opened Stone Gates (/)
+2349: Shadow of Opened Far East Stone Gate (/)
+2350: Shadow of Opened Middle East Stone Gate (/)
+2355: Shadow of Opened West European Stone Gate (/)
+2357: Opened Far East Stone Gate (/)
+2358: Opened Middle East Stone Gate (/)
+2359: Vanilla Opened Fortified Gates (/)
+2361: Shadow of Opened Far East Fortified Gate (/)
+2362: Shadow of Opened Middle East Fortified Gate Open (/)
+2367: Shadow of Opened West European Fortified Gate (/)
+2369: Opened Far East Fortified Gate (/)
+2370: Opened Middle East Fortified Gate (/)
+2383: Vanilla Stone Gate Ends
+2385: Shadow of Far East Stone Gate End
+2386: Shadow of Middle East Stone Gate End
+2387: Shadow of West European Stone Gate End
+2389: Flag of Far East Stone Gate End
+2390: Flag of Middle East Stone Gate End
+2391: Flag of West European Stone Gate End
+2393: Far East Stone Gate End
+2394: Middle East Stone Gate End
+2395: Vanilla Fortified Gate Ends
+2397: Shadow of Far East Fortified Gate End
+2398: Shadow of Middle East Fortified Gate End
+2399: Shadow of West European Fortified Gate End
+2401: Flag of Far East Fortified Gate End
+2402: Flag of Middle East Fortified Gate End
+2403: Flag of West European Fortified Gate End
+2405: Far East Fortified Gate End
+2406: Middle East Fortified Gate End
+2419: Vanilla Closed Stone Gate (\)
+2421: Shadow of Closed Far East Stone Gate (\)
+2422: Shadow of Closed Middle East Stone Gate (\)
+2427: Shadow of Closed West European Stone Gate (\)
+2429: Closed Far East Stone Gate (\)
+2430: Closed Middle East Stone Gate (\)
+2431: Vanilla Closed Fortified Gates (\)
+2433: Shadow of Closed Far East Fortified Gate (\)
+2434: Shadow of Closed Middle East Fortified Gate (\)
+2439: Shadow of Closed West European Fortified Gate (\)
+2441: Closed Far East Fortified Gate (\)
+2442: Closed Middle East Fortified Gate (\)
+2455: Vanilla Opened Stone Gates (\)
+2457: Shadow of Opened Far East Stone Gate (\)
+2458: Shadow of Opened Middle East Stone Gate (\)
+2463: Shadow of Opened West European Stone Gate (\)
+2465: Opened Far East Stone Gate (\)
+2466: Opened Middle East Stone Gate (\)
+2467: Vanilla Opened Fortified Gates (\)
+2469: Shadow of Opened Far East Fortified Gate (\)
+2470: Shadow of Opened Middle East Fortified Gate (\)
+2475: Shadow of Opened West European Fortified Gate (\)
+2477: Opened Far East Fortified Gate (\)
+2478: Opened Middle East Fortified Gate (\)
+2515: Opened West European Fortified Gate (\)
+2517: Beta Mill Shadow
+2519: Gaia Objects
+2520: Flowers 1
+2521: Flowers 2
+2522: Flowers 3
+2523: Paths
+2524: Path 4
+2525: Path 1
+2526: Path 2
+2530: Path 3
+2533: Ruins
+2534: Vanilla Keeps
+2536: Shadow of Far East Keep
+2537: Shadow of Middle East Keep
+2538: Shadow of West European Keep
+2540: Far East Keep
+2541: Middle East Keep
+2542: Vanilla Bombard Towers
+2544: Shadow of Far East Bombard Tower
+2545: Shadow of Middle East Bombard Tower
+2546: Shadow of West European Bombard Tower
+2548: Far East Bombard Tower
+2549: Middle East Bombard Tower
+2554: West European Bombard Tower
+2555: Boar
+2556: Boar Attacking
+2557: Boar Dying
+2558: Boar Idle
+2559: Boar Decaying
+2560: Boar Moving
+2561: Berry Bush
+2568: Female Forager
+2571: Female Forager Dying
+2572: Female Forager Idle
+2573: Female Forager Decaying
+2576: Female Forager Gathering
+2583: Male Forager
+2586: Male Forager Dying
+2588: Male Forager Idle
+2589: Male Forager Decaying
+2592: Male Forager Gathering
+2593: Male Forager Moving
+2596: Spear?
+2606: Good luck guessing this one.
+2652: Vanilla Watch Towers (Building Only)
+2654: Far East Watch Tower
+2655: Middle East Watch Tower
+2656: Vanilla Guard Towers
+2658: Shadow of Far East Guard Tower
+2659: Shadow of Middle East Guard Tower
+2660: Shadow of West European Guard Tower
+2662: Flag (Unused?)
+2666: Far East Guard Tower
+2667: Middle East Guard Tower
+2682: West European Guard Tower
+2683: Gaia Torch
+2698: Arbalest
+2711: Archer (AOE I)
+2714: Archer (AOE I) Attacking
+2717: Archer (AOE I) Dying
+2718: Archer (AOE I) Idle
+2721: Archer (AOE I) Decaying
+2753: Archer (AOE I) Moving
+2762: Heavy Camel
+2787: Halberdier
+2800: Two-Handed Swordsman
+2813: Heavy Scorpion
+2826: Pikeman
+2998: Light Cavalry
+3017: Onager
+3027: Siege Ram
+3072: Paladin
+3085: Champion
+3404: Selection/Queue Markers
+3405: Waypoint Flag
+3406: Move Here Arrows
+3465: Vanilla Town Center Left Wings IV
+3467: Far East Town Center Left Wing IV
+3468: Middle East Town Center Left Wing IV
+3469: West European Town Center Left Wing IV
+3471: Far East Town Center Left Posts IV
+3472: Middle East Town Center Left Posts IV
+3473: Mediterranean Town Center Left Posts IV
+3475: Far East Town Center Left Far Post IV
+3476: Middle East Town Center Left Far Post IV
+3479: Mediterranean Town Center Left Far Post IV
+3481: Mill I
+3492: Vanilla Mining Camps
+3494: Far East Mining Camp
+3495: Middle East Mining Camp
+3504: Vanilla Lumber Camps
+3506: Far East Lumber Camp
+3507: Middle East Lumber Camp
+3508: Vanilla Wonders
+3509: Shadow of Briton &amp; Incan Wonder
+3510: Shadow of Gothic Wonder
+3511: Shadow of Viking Wonder
+3512: Shadow of Japanese Wonder
+3513: Shadow of Celtic Wonder
+3514: Shadow of Mongolian Wonder
+3515: Shadow of Persian Wonder
+3516: Shadow of Frankish Wonder
+3517: Shadow of Saracen Wonder
+3518: Shadow of Turkish Wonder
+3519: Shadow of Teutonic Wonder
+3520: Shadow of Byzantine Wonder
+3534: Shadow of Chinese Wonder
+3535: Briton Wonder
+3536: Gothic Wonder
+3537: Vikings Wonder
+3538: Japanese Wonder
+3539: Celtic Wonder
+3540: Mongolian Wonder
+3541: Persian Wonder
+3542: Frankish Wonder
+3543: Saracen Wonder
+3544: Turkish Wonder
+3545: Teutonic Wonder
+3546: Byzantine Wonder
+3547: Chinese Wonder
+3548: Arrow or Spear?
+3549: Water Splash
+3553: Siege Onager
+3565: Fisherwoman
+3567: Fisherwoman Moving (Fish)
+3568: Fisherwoman Dying
+3569: Fisherwoman Idle
+3570: Fisherwoman Casting Net
+3573: Fisherman
+3574: Fisherman Dying
+3575: Fisherman Idle
+3576: Fisherman Casting Net
+3577: The Fisherman SLPs continue at 3980.
+3580: Flags
+3583: A blue flag.
+3586: A white flag with a blue outline.
+3589: A white flag with a blue outline and multiple blue Fleur-de-Lise.
+3592: A white flag with two poles and one blue Fleur-de-Lise.
+3593: A white flag with a blue outline with two poles.
+3594: Town Center Left Wing I
+3597: Vanilla Town Center Left Wings II
+3599: Far East Town Center Left Wing II
+3600: Middle East Town Center Left Wing II
+3601: West European Town Center Left Wing II
+3603: Far East Town Center Left Posts II
+3604: Middle East Town Center Left Posts II
+3605: Mediterranean Town Center Left Posts II
+3607: Far East Town Center Far Left Post II
+3608: Middle East Town Center Far Left Post II
+3609: Vanilla Town Center Left Wings III
+3611: Far East Town Center Left Wing III
+3612: Middle East Town Center Left Wing III
+3613: West European Town Center Left Wing III
+3615: Far East Town Center Left Posts III
+3616: Middle East Town Center Left Posts III
+3617: West European Town Center Left Posts III
+3619: Far East Town Center Far Left Post III
+3620: Middle East Town Center Far Left Post III
+3626: Sheep
+3629: Sheep Dying
+3631: Sheep Idle
+3634: Sheep Decaying
+3635: Sheep Moving
+3677: Female Shepherd
+3678: Female Shepherd Butchering Sheep
+3679: Female Shepherd Dying
+3681: Female Shepherd Idle
+3682: Male Shepherd
+3683: Male Shepherd Butchering Livestock
+3684: Male Shepherd Dying
+3686: Male Shepherd Idle
+3688: Vanilla Bridges A &amp; B
+3690: Bridge (/) Right End ("Bridge A--Top")
+3692: Bridge (/) Middle ("Bridge A--Middle")
+3694: Bridge (/) Left End ("Bridge A--Bottom")
+3696: Bridge (\) Left End ("Bridge B--Top")
+3698: Bridge (\) Middle ("Bridge B--Middle")
+3702: Vanilla Stone Gate Construction (/)
+3704: Shadow of Far East Stone Gate Construction (/)
+3705: Shadow of Middle East Stone Gate Construction (/)
+3706: Shadow of West European Stone Gate Construction (/)
+3708: Far East Stone Gate Construction (/)
+3709: Middle East Stone Gate Construction (/)
+3710: Vanilla Fortified Gate Construction (/)
+3712: Shadow of Far East Fortified Gate Construction (/)
+3713: Shadow of Middle East Fortified Gate Construction (/)
+3714: Shadow of West European Fortified Gate Construction (/)
+3716: Far East Fortified Gate Construction (/)
+3717: Middle East Fortified Gate Construction (/)
+3718: Vanilla Stone Gate Construction (\)
+3720: Shadow of Far East Stone Gate Construction (\)
+3721: Shadow of Middle East Stone Gate Construction (\)
+3722: Shadow of West European Stone Gate Construction (\)
+3724: Far East Stone Gate Construction (\)
+3725: Middle East Stone Gate Construction (\)
+3726: Vanilla Fortified Gate Construction (\)
+3728: Shadow of Far East Fortified Gate Construction (\)
+3729: Shadow of Middle East Fortified Gate Construction (\)
+3730: Shadow of West European Fortified Gate Construction (\)
+3732: Far East Fortified Gate Construction (\)
+3733: Middle East Fortified Gate Construction (\)
+3734: Pavilion
+3735: Large Pavilion
+3736: Small Pavilion (Right Door)
+3737: Small Pavilion (Left Door)
+3738: Vanilla Stone Wall Construction
+3740: Shadow of Far East Stone Wall Construction
+3741: Shadow of Middle East Stone Wall Construction
+3742: Shadow of West European Stone Wall Construction
+3744: Far East Stone Wall Construction
+3745: Middle East Stone Wall Construction
+3746: Vanilla Fortified Wall Construction
+3748: Shadow of Far East Fortified Wall Construction
+3749: Shadow of Middle East Fortified Wall Construction
+3750: Shadow of West European Fortified Wall Construction
+3752: Far East Fortified Wall Construction
+3753: Middle East Fortified Wall Construction
+3754: West European Fortified Wall Construction
+3757: Heavy Calvary Archer
+3770: Frankish Paladin
+3773: Frankish Paladin Attacking
+3776: Frankish Paladin Dying
+3777: Frankish Paladin Idle
+3780: Frankish Paladin Decaying
+3783: Joan of Arc (Calvary)
+3786: Joan of Arc (Cavalry) Attacking
+3789: Joan of Arc (Cavalry) Dying
+3790: Joan of Arc (Cavalry) Idle
+3793: Joan of Arc (Cavalry) Decaying
+3794: Vanilla Markets IV
+3796: Far East Market IV
+3797: Middle East Market IV
+3798: Missiles
+3799: Burning Missile?
+3800: Arrow
+3801: Shadow of 3799.
+3802: Throwing Axe
+3803: Shadow of 3801.
+3804: Catapult Boulder
+3807: Shadow of 3803.
+3811: Catapult Boulder Shadow (Same as 3803?)
+3812: Large Burning Arrow
+3813: Arrow or Rocket?
+3814: Shadow of 3811 &amp; 3812
+3815: Burning Catapult Boulder
+3816: Smoke Ball
+3818: Shadow of 3814 &amp; 3815
+3819: Unknown Shadow Dot?
+3820: Burning Spear
+3821: Spear
+3824: European Monk (Relic)
+3827: Monk (Relic) Disappearing? (Unused)
+3831: Monk (Relic) Idle
+3832: Vanilla Universities
+3834: Far East University III
+3835: Middle East University III
+3836: West European University III
+3838: Far East University IV
+3839: Middle East University IV
+3840: Misc. Farmer &amp; Shepherd Graphics
+3841: Female Farmer Sowing
+3842: Female Shepherd Herding
+3843: Male Farmer Sowing
+3846: Knight Hero (Unused)
+3849: Knight Hero Attacking
+3852: Knight Hero Dying
+3853: Knight Hero Idle
+3856: Knight Hero Decaying
+3885: Knight Hero Moving
+3888: Same as 3846.
+3891: Same as 3849.
+3892: Same as 3852.
+3895: Same as 3853.
+3924: Black Knight Hero (Unused)
+3927: Black Knight Hero Attacking
+3930: Black Knight Hero Dying
+3931: Black Knight Hero Idle
+3934: Black Knight Hero Decaying
+3963: Knight Hero (Unused… Yet again.)
+3966: Same as 3846.
+3969: Same as 3849.
+3970: Same as 3852.
+3973: Same as 3853.
+3974: Same as 3856.
+3975: Smoke Puff
+3976: Splash?
+3977: Unknown 135 Frame Sequence
+3978: Smoke or Splash
+3979: Decaying Female Villager?
+3980: Decaying Male Villager?
+3982: Fisherman Moving (Fish)
+3983: Mosque
+3984: Fireball
+3986: Wrecked Fishing Trap
+3987: Smoke Puff or Splash?
+3991: Vanilla Closed Stone Gates (-)
+3993: Shadow of Closed Far East Stone Gate (-)
+3994: Shadow of Closed Middle East Stone Gate (-)
+3999: Shadow of Closed West European Stone Gate (-)
+4001: Closed Far East Stone Gate (-)
+4002: Closed Middle East Stone Gate (-)
+4003: Vanilla Closed Fortified Gates (-)
+4005: Shadow of Closed Far East Fortified Gate (-)
+4006: Shadow of Closed Middle East Fortified Gate (-)
+4011: Shadow of Closed West European Fortified Gate (-)
+4013: Closed Far East Fortified Gate (-)
+4014: Closed Middle East Fortified Gate (-)
+4015: Vanilla Opened Stone Gates (-)
+4017: Shadow of Opened Far East Stone Gate (-)
+4018: Shadow of Opened Middle East Stone Gate (-)
+4023: Shadow of Opened West European Stone Gate (-)
+4025: Opened Far East Stone Gate (-)
+4026: Opened Middle East Stone Gate (-)
+4027: Vanilla Opened Fortified Gates (-)
+4029: Shadow of Opened Far East Fortified Gate (-)
+4030: Shadow of Opened Middle East Fortified Gate (-)
+4035: Shadow of Opened West European Fortified Gate (-)
+4037: Opened Far East Fortified Gate (-)
+4038: Opened Middle East Fortified Gate (-)
+4063: Vanilla Stone Gate Construction (-)
+4065: Shadow of Far East Stone Gate Construction (-)
+4066: Shadow of Middle East Stone Gate Construction (-)
+4067: Shadow of West European Stone Gate Construction (-)
+4069: Far East Stone Gate Construction (-)
+4070: Middle East Stone Gate Construction (-)
+4071: Vanilla Fortified Gate Construction (-)
+4073: Shadow of Far East Fortified Gate Construction (-)
+4074: Shadow of Middle East Fortified Gate Construction (-)
+4075: Shadow of West European Fortified Gate Construction (-)
+4077: Far East Fortified Gate Construction (-)
+4078: Middle East Fortified Gate Construction (-)
+4079: Vanilla Closed Stone Gates (|)
+4081: Shadow of Closed Far East Stone Gate (|)
+4082: Shadow of Closed Middle East Stone Gate (|)
+4087: Shadow of Closed West European Stone Gate (|)
+4089: Closed Far East Stone Gate (|)
+4090: Closed Middle East Stone Gate (|)
+4091: Vanilla Closed Fortified Gates (|)
+4093: Shadow of Closed Far East Fortified Gate (|)
+4094: Shadow of Closed Middle East Fortified Gate (|)
+4099: Shadow of Closed West European Fortified Gate (|)
+4101: Closed Far East Fortified Gate (|)
+4102: Closed Middle East Fortified Gate (|)
+4103: Vanilla Opened Stone Gates (|)
+4105: Shadow of Opened Far East Stone Gate (|)
+4106: Shadow of Opened Middle East Stone Gate (|)
+4111: Shadow of Opened West European Stone Gate (|)
+4113: Opened Far East Stone Gate (|)
+4114: Opened Middle East Stone Gate (|)
+4115: Vanilla Opened Fortified Gates (|)
+4117: Shadow of Opened Far East Fortified Gate (|)
+4118: Shadow of Opened Middle East Fortified Gate (|)
+4123: Shadow of Opened West European Fortified Gate (|)
+4125: Opened Far East Fortified Gate (|)
+4126: Opened Middle East Fortified Gate (|)
+4151: Vanilla Stone Gate Construction (|)
+4153: Shadow of Far East Stone Gate Construction (|)
+4154: Shadow of Middle East Stone Gate Construction (|)
+4155: Shadow of West European Stone Gate Construction (|)
+4157: Far East Stone Gate Construction (|)
+4158: Middle East Stone Gate Construction (|)
+4159: Vanilla Fortified Gate Construction (|)
+4161: Shadow of Far East Fortified Gate Construction (|)
+4162: Shadow of Middle East Fortified Gate Construction (|)
+4163: Shadow of West European Fortified Gate Construction (|)
+4165: Far East Fortified Gate Construction (|)
+4166: Middle East Fortified Gate Construction (|)
+4168: West European Fortified Gate Construction (|)
+4169: Vanilla 25% Damaged Stone Walls
+4171: 25% Damaged Far East Stone Wall
+4172: 25% Damaged Middle East Stone Wall
+4173: Vanilla 25% Damaged Fortified Walls
+4175: 25% Damaged Far East Fortified Wall
+4176: 25% Damaged Middle East Fortified Wall
+4177: Vanilla 50% Damaged Stone Walls
+4179: 50% Damaged Far East Stone Wall
+4180: 50% Damaged Middle East Stone Wall
+4181: Vanilla 50% Damaged Fortified Walls
+4183: 50% Damaged Far East Fortified Wall
+4184: 50% Damaged Middle East Fortified Wall
+4185: Vanilla 75% Damaged Stone Walls
+4187: 75% Damaged Far East Stone Wall
+4188: 75% Damaged Middle East Stone Wall
+4189: Vanilla 75% Damaged Fortified Walls
+4191: 75% Damaged Far East Fortified Wall
+4192: 75% Damaged Middle East Fortified Wall
+4193: 75% Damaged West European Fortified Wall
+4194: Single Fire Ball
+4195: Boat Hulls &amp; Sails
+4196: Lion Head Sail Sequence (Unused)
+4224: Galleon Hull
+4226: Far East Sail A
+4227: Middle East Sail A
+4228: West European Sail A
+4230: Far East Sail B
+4231: Middle East Sail B
+4232: West European Sail B
+4234: Far East Sail C
+4235: Middle East Sail C
+4236: West European Sail C
+4238: Far East Sail D
+4239: Middle East Sail D
+4240: West European Sail D
+4242: Far East Sail E
+4243: Middle East Sail E
+4244: West European Sail E
+4245: [Elite] Cannon Galleon Hull
+4246: North European Sail Sequences
+4247: Far East Sail Sequences
+4248: Middle East Sail Sequences
+4253: West European Sail Sequences
+4254: Heavy Demolition Ship Hull
+4255: Trade Cog Hull
+4256: Fire Ship Hull
+4267: War Galley Hull
+4268: Dome of the Rock
+4273: Knight Hero (Ffs, assign this poor
+4274: bastard to an actual unit)
+4275: Knight Hero Dying
+4276: Knight Hero Idle
+4277: Knight Hero Decaying
+4278: Knight Hero Moving
+4279: Piece of the True Cross
+4280: Identical to 4278 (Unused?)
+4281: Knight Hero (of the redundancy
+4282: department)
+4283: Same as 4274
+4284: Same as 4275
+4285: Same as 4276
+4296: Vanilla Boat Sails &amp; Hulls
+4297: Far East Ship Sail Sequence
+4298: Middle East Ship Sail Sequence
+4299: West European Ship Sail Sequence
+4300: Demolition Ship Hull
+4301: Galley Hull
+4303: Far East Sail G
+4304: Middle East Sail G
+4305: West European Sail G
+4307: Far East Sail H
+4308: Middle East Sail H
+4309: West European Sail H
+4311: Far East Sail I
+4312: Middle East Sail I
+4313: West European Sail I
+4315: Far East Sail J
+4316: Middle East Sail J
+4317: West European Sail J
+4319: Far East Sail K
+4320: Middle East Sail K
+4321: West European Sail K
+4323: Far East Sail L
+4324: Middle East Sail L
+4325: West European Sail L
+4327: Far East Sail M
+4328: Middle East Sail M
+4330: West European Sail M
+4331: Outpost
+4336: Transportation Ship's Hull
+4338: Shadow of [Elite] Cannon Galleon
+4347: Heavy Demolition Ship Exploding.
+4348: Vanilla Shadows of Watch Tower
+4349: Shadow of 2652
+4350: Shadow of 2653
+4351: Shadow of 2654
+4356: Shadow of 2655
+4358: Flag
+4368: Shadow of 4330.
+4369: Water Outline of Heavy Demolition Ship
+4370: Large Pyramid
+4373: Elite Berserk
+4376: Elite Berserk Attacking
+4379: Elite Berserk Dying
+4383: Elite Berserk Idle
+4386: Berserk
+4389: Berserk Attacking
+4392: Berserk Dying
+4393: Berserk Idle
+4396: [Elite] Berserk Decaying
+4397: Berserk Moving
+4410: Horned Black Knight Hero (Unused)
+4413: Horned Black Knight Hero Attacking
+4416: Horned Black Knight Hero Dying
+4417: Horned Black Knight Hero Idle
+4420: Horned Black Knight Hero Decaying
+4474: Gaia Objects
+4476: Cactus
+4477: Skeleton
+4478: Unknown 135 frame animated sequence
+4479: Crater
+4480: Gold Mine (Unused?)
+4481: Nine Bands
+4482: Rugs
+4486: Stone Mine (Unused?)
+4487: Trade Cart graphics continue at 4607.
+4488: Shipwreck (/)
+4489: Yurts
+4490: Yurt A (Large, thatched roof)
+4491: Yurt B (Left door, thatched roof)
+4492: Yurt C (Logs outside, thatched roof)
+4493: Yurt D ( Right door, thatched roof)
+4494: Yurt E (No door, canvas roof)
+4495: Yurt F (Right door, canvas roof)
+4496: Yurt G (Left door, canvas roof)
+4497: Petard
+4498: Petard Idle
+4499: The next Petard stance is at 4605.
+4500: Ice
+4501: Small Ball?
+4502: Shadow of Trade Cog Hull
+4503: Shadow of Heavy Demolition Ship
+4508: Shadow of Fire Ship Hull
+4509: Shadow of War Galley Hull
+4510: Shadow of Fast Fire Ship Hull
+4512: Shadow of Longboat Attacking (689)
+4513: Shadow of Longboat Idle (695)
+4514: Shadow of Longboat Moving (699)
+4515: Shadow of Demolition Ship
+4516: Shadow of [Fire] Galley Hull
+4517: Shadow of Galleon Hull
+4518: Shadow of Transport Ship Hull
+4520: These seagulls fly around the Dock.
+4521: Smoke of Blacksmiths
+4522: Garrison Flag
+4523: Same as 4358?
+4537: Huskarl
+4538: Huskarl Attacking
+4539: Huskarl Dying
+4540: Huskarl Idle
+4541: Huskarl Decaying
+4572: Huskarl Moving
+4573: Packed Trebuchet Dying
+4574: Tree
+4575: Bottom Part of Forest Trees
+4577: Top Part of Forest Trees
+4578: Bottom Part of Palm Trees
+4580: Top Part of Palm Trees
+4581: Bottom Part of Pine Trees
+4583: Top Part of Pine Trees
+4584: Throwing Scimitar (Mameluke Ammo)
+4585: Bamboo Stump
+4586: Fish Trap Construction
+4587: Vanilla Broken Bridges A &amp; B
+4588: Broken Bridge (/) Middle Section ("Bridge A--Cracked")
+4589: Broken Bridge (/) Left End ("Bridge A--Broken Top")
+4590: Broken Bridge (/) Right End ("Bridge A--Broken Bottom")
+4591: Broken Bridge (\) Middle Section ("Bridge B--Cracked")
+4592: Broken Bridge (\) Left End ("Bridge B--Broken Top")
+4594: Broken Bridge (\) Right End ("Bridge B--Broken Bottom")
+4595: A tan mountain.
+4597: Mountain 4
+4598: Sail
+4600: Far East Sail F
+4601: Middle East Sail F
+4602: West European Sail F
+4605: Female Forager Moving (Unused?)
+4606: Petard Attacking/Dying (Basically an Explosion)
+4607: Trade Cart (Full)
+4610: Town Center Right Wings I
+4613: Vanilla Town Center Right Wings II
+4615: Far East Town Center Right Wing II
+4616: Middle East Town Center Right Wing II
+4617: West European Town Center Right Wing II
+4619: Far East Town Center Right Posts II
+4620: Middle East Town Center Right Posts II
+4621: Mediterranean Town Center Right Posts II
+4623: Far East Town Center Far Right Post II
+4624: Middle East Town Center Far Right Post II
+4625: Vanilla Town Center Right Wings III
+4627: Far East Town Center Right Wing III
+4628: Middle East Town Center Right Wing III
+4629: West European Town Center Right Wing III
+4631: Far East Town Center Right Posts III
+4632: Middle East Town Center Right Posts III
+4633: West European Town Center Right Posts III
+4635: Far East Town Center Far Right Post III
+4636: Middle East Town Center Far Right Post III
+4637: Vanilla Town Center Right Wings IV
+4639: Far East Town Center Right Wing IV
+4640: Middle East Town Center Right Wing IV
+4641: West European Town Center Right Wing IV
+4643: Far East Town Center Right Posts IV
+4644: Middle East Town Center Right Posts IV
+4645: Mediterranean Town Center Right Posts IV
+4647: Far East Town Center Far Right Post IV
+4648: Middle East Town Center Far Right Post IV
+4649: Mediterranean Town Center Far Right Post IV
+4652: Male Shepherd Decaying
+4653: Oak Forest Tree
+4654: Palm Forest Tree
+4655: Pine Forest Tree
+4656: Splash of Water
+4657: Shadows of 25% Damaged Stone Walls
+4659: Shadow of 25% Damaged Far East Stone Wall
+4660: Shadow of 25% Damaged Middle East Stone Wall
+4661: Shadows of 25% Damaged Fortified Walls
+4663: Shadow of 25% Damaged Far East Fortified Wall
+4664: Shadow of 25% Damaged Middle East Fortified Wall
+4665: Shadows of 50% Damaged Stone Walls
+4667: Shadow of 50% Damaged Far East Stone Wall
+4668: Shadow of 50% Damaged Middle East Stone Wall
+4669: Shadows of 50% Damaged Fortified Walls
+4671: Shadow of 50% Damaged Far East Fortified Wall
+4672: Shadow of 50% Damaged Middle East Fortified Wall
+4673: Shadow of 75% Damaged Stone Walls
+4675: Shadow of 75% Damaged Far East Stone Wall
+4676: Shadow of 75% Damaged Middle East Stone Wall
+4677: Shadow of 75% Damaged Fortified Walls
+4679: Shadow of 75% Damaged Far East Fortified Wall
+4680: Shadow of 75% Damaged Middle East Fortified Wall
+4681: Shadow of 75% Damaged West European Fortified Wall
+4682: VDML
+4684: Shadow of 4684
+4685: The Accursed Tower/ Tower of Flies
+4699: Snow Patch
+4700: Snow Patch 1
+4701: Snow Patch 2
+4702: Snow Patch 3
+4703: Snow Patch 4
+4704: Snow Patch 5
+4705: Snow Patch 6
+4710: Snow Patch 7
+4716: Conquistador
+4719: Conquistador Attacking
+4722: Conquistador Dying
+4723: Conquistador Idle
+4726: Conquistador Decaying
+4727: Trees
+4728: Shadow of 4728
+4729: Jungle Tree
+4730: Footprints in snow
+4731: Shadow of 4731
+4812: Wonders (Conquerors)
+4813: Shadow of Spanish Wonder
+4814: Shadow of Hun Wonder
+4818: Shadow of Mayan Wonder
+4819: Spanish Wonder
+4820: Hun Wonder
+4823: Snow Patch (Cont.'d)
+4824: Snow Patch 8
+4825: Snow Patch 9
+4826: Eagle Scout
+4827: Eagle Scout Attacking
+4828: Eagle Scout Dying
+4829: Eagle Scout Idle
+4830: Eagle Scout Decaying
+4831: Jaguar
+4832: Jaguar Attacking
+4833: Jaguar Dying
+4834: Jaguar Idle
+4835: Jaguar Decaying
+4836: Horse
+4837: Horse Dying
+4838: Horse Idle
+4839: Horse Decaying
+4853: Hussar
+4854: Hussar Attacking
+4855: Hussar Dying
+4856: Hussar Idle
+4857: Hussar Decaying
+4858: Jaguar Warrior
+4859: Jaguar Warrior Attacking
+4860: Jaguar Warrior Dying
+4861: Jaguar Warrior Idle
+4862: Jaguar Warrior Decaying
+4865: Missionary
+4866: Missionary Converting
+4867: Missionary Dying
+4868: Missionary Idle
+4869: Missionary Decaying
+4870: Missionary Healing
+4871: Plumed Archer
+4872: Plumed Archer Attacking
+4873: Plumed Archer Dying
+4874: Plumed Archer Idle
+4875: Plumed Archer Decaying
+4876: Unused Gates (/)
+4878: Shadow of (4878)
+4879: Closed Gate (/)
+4881: Shadow of 4881.
+4882: Palisade Gate Ends
+4885: Unused Gates
+4886: Shadow of 4886.
+4887: Gate Construction (/)
+4889: Shadow of 4889.
+4890: Closed Gate (\)
+4892: Shadow of 4892.
+4893: Opened Gate (\)
+4894: Shadow of 4894.
+4895: Gate Construction (\)
+4897: Shadow of 4897.
+4898: Closed Gate (-)
+4900: Shadow of 4900.
+4901: Opened Gate (-)
+4902: Shadow of 4902.
+4903: Gate Construction (-)
+4905: Shadow of 4905.
+4906: Closed Gate (|)
+4908: Shadow of 4908.
+4909: Opened Gate (|)
+4910: Shadow of 4910.
+4911: Sea Tower &amp; Sea Walls
+4912: Shadow of Sea Tower
+4913: Sea Tower
+4914: Shadow of Sea Wall
+4915: Flag of Sea Wall
+4916: Tarkan
+4917: Tarkan Attacking
+4918: Tarkan Dying
+4919: Tarkan Idle
+4920: Tarkan Decaying
+4921: Aztec Wonder
+4923: Shadow of Aztec Wonder
+4926: Amerindian Archery Range
+4930: Amerindian Blacksmith
+4931: Shadow of Amerindian Blacksmith II
+4933: Shadow of Amerindian Blacksmith III
+4935: Amerindian Sails 1
+4944: Amerindian Barracks
+4951: Amerindian Monastery &amp; Castle
+4953: This is the shadow of SLP 15153.
+4957: Amerindian Docks
+4964: Identical in appearance to 409.
+4965: Closed Amerindian Gate (/)
+4971: Opened Amerindian Gate (/)
+4977: Amerindian Gate End
+4983: Amerindian Gate Construction (/)
+4987: Closed Amerindian Gate (\)
+4993: Opened Amerindian Gate (\)
+4999: Amerindian Gate Construction (\)
+5003: Closed Amerindian Gates (-)
+5009: Opened Amerindian Gates (-)
+5015: Amerindian Gate Construction (-)
+5019: Closed Amerindian Gates (|)
+5025: Opened Amerindian Gates (|)
+5031: Amerindian Gate Construction (|)
+5038: Amerindian Houses
+5042: Parakeet
+5043: Shadow of 5043
+5044: Parakeet Gliding
+5045: Shadow of 5045
+5046: Amerindian Mill
+5055: Shadow of Mill Rope Stays (Possibly Unused)
+5058: Amerindian Markets
+5065: Amerindian Town Center II
+5074: Amerindian Town Center III
+5083: Amerindian Town Center IV
+5085: Not sure if used.
+5092: Amerindian Sails 2
+5101: Amerindian Siege Workshop
+5110: Amerindian Stables (The Conquerors Only)
+5113: As of the Forgotten this SLP is replaced by 6448, which better matches the architecture style.
+5116: As of the Forgotten this SLP is replaced by 6418, which better matches the architecture style.
+5117: Amerindian Universities
+5118: Shadow of Amerindian University III
+5121: Shadow of Amerindian University IV
+5123: Amerindian Walls
+5128: Amerindian Wall Construction
+5132: Amerindian Towers
+5137: Flag (Unused)
+5140: Flag (Unused?)
+5142: As of the Forgotten this SLP is replaced by 6434.
+5143: Flag (Unused?)
+5144: 25% Damaged Amerindian Walls
+5148: 50% Damaged Amerindian Walls
+5152: 75% Damaged Amerindian Walls
+5164: Turkey
+5165: Turkey Running
+5166: Turkey Idle
+5167: Turkey Decaying
+5168: Turtle Ship Shadows/Dying Graphic
+5175: Shadow of 5218
+5176: Turtle Ship Dying
+5182: Shadow of 5219
+5204: War Wagon (Horse)
+5207: War Wagon Attacking (Horses)
+5210: War Wagon Dying
+5211: War Wagon Idle (Horses)
+5214: War Wagon Decaying
+5215: Korean Wonder
+5217: Shadow of Korean Wonder
+5218: Turtle Ship
+5219: Turtle Ship Attacking
+5220: Turtle Ship Idle
+5238: War Wagon (Carriage)
+5239: War Wagon Attacking (Carriage)
+5240: War Wagon Idle (Carriage)
+5241: War Wagon Moving (Carriage)
+5242: ES Flag
+5284: Amerindian Monk
+5285: Amerindian Monk Converting
+5286: Amerindian Monk Dying
+5287: Amerindian Monk Idle
+5288: Amerindian Monk Decaying
+5289: Amerindian Monk Healing
+5290: Amerindian Monk Moving
+5291: Amerindian Monk Idle (Relic)
+5292: Amerindian Monk Moving (Relic)
+5293: Roman Ruins
+5294: Old Stone Head
+5295: Broken Cart
+5296: Flower Bed
+5297: Furious the Monkey Boy
+5298: Furious Attacking
+5299: Furious Dying
+5300: Furious Idle
+5301: Furious Decaying
+5302: Furious Moving
+5303: Shadow of 5303
+5305: Amerindian Trade Cart
+5927: Siege Tower (The Forgotten [Currently Unused])
+5929: Siege Tower Attacking (Base)
+5932: 5929 is blank as it can no longer attack as of "African Kingdoms."
+5935: Siege Tower Dying
+5936: Siege Tower Idle
+5937: Siege Tower Decaying
+5939: Siege Tower Moving (Base)
+6000: Genoese Crossbowman
+6001: Genoese Crossbowman Idle
+6002: Genoese Crossbowman Moving
+6003: Genoese Crossbowman Attacking
+6004: Italian Wonder
+6005: Shadow of Italian Wonder
+6006: Italian Wonder
+6010: Mediterranean Buildings III &amp; IV
+6025: This is NO "Mediterranean University Banner IV" SLP, hidden or otherwise.
+6027: Gate End (Unused?)
+6036: Mediterranean Town Center III &amp; IV
+6038: Unused Town Center Shadow
+6058: Unused Town Center Middle
+6060: Unused Town Center Left Posts
+6061: Unused Town Center Far Left Post
+6063: Unused Town Center Right Posts
+6064: Mediterranean Buildings &amp; Town Center II
+6081: Shadow of Amphitheatre
+6082: Amphitheatre
+6100: Magyar Huszar
+6101: Magyar Huszar Idle
+6102: Magyar Huszar Moving
+6103: Magyar Huszar Attacking
+6104: Magyar Huszar Decaying
+6106: Magyar Wonder
+6107: Magyar Wonder
+6200: Elephant Archer
+6201: Elephant Archer Attacking
+6202: Elephant Archer Dying
+6203: Elephant Archer Idle
+6204: Elephant Archer Decaying
+6205: Indian Wonder
+6206: Indian Wonder
+6215: Wonders (African Kingdoms)
+6216: Portuguese Wonder
+6225: Shadow of Portuguese Wonder
+6226: Ethiopian Wonder
+6235: Shadow of Ethiopian Wonder
+6236: Malian Wonder
+6245: Shadow of Malian Wonder
+6246: Berber Wonder
+6247: Shadow of Berber Wonder
+6249: Appears to be blank.
+6250: Palace
+6255: Wonders (Rise of the Rajas)
+6256: Burmese Wonder
+6265: Shadow of Burmese Wonder
+6266: Khmer Wonder
+6275: Shadow of Khmer Wonder
+6276: Malay Wonder
+6285: Shadow of Malay Wonder
+6286: Vietnamese Wonder
+6400: Kamayuk
+6401: Kamayuk Idle
+6402: Kamayuk Moving
+6403: Kamayuk Attacking
+6404: Kamayuk Decaying
+6406: Incan Wonder
+6418: Unbuildable Amerindian Buildings
+6800: Boyar
+6801: Boyar Idle
+6802: Boyar Moving
+6803: Boyar Attacking
+6804: Boyar Decaying
+6805: Slavic Wonder
+6806: Slavic Wonder
+6900: Shadow of Slavic Wonder
+6901: Quimper Cathedral
+6965: Closed Mediterranean Gates (/)
+6971: Opened Mediterranean Gates (/)
+6977: Mediterranean Gate Ends
+6983: Mediterranean Gate Construction (/)
+6987: Closed Mediterranean Gate (\)
+6993: Opened Mediterranean Gate (\)
+6999: Mediterranean Gate Construction (\)
+7003: Closed Mediterranean Gate (-)
+7009: Opened Mediterranean Gate (-)
+7015: Mediterranean Gate Construction (-)
+7019: Closed Mediterranean Gate (|)
+7025: Opened Mediterranean Gate (|)
+7031: Mediterranean Gate Construction (|)
+7123: Mediterranean Walls
+7128: Mediterranean Wall Construction
+7144: 25% Damaged Mediterranean Walls
+7148: 50% Damaged Mediterranean Walls
+7152: 75% Damaged Mediterranean Walls
+7160: Roman Scenario Objects
+7170: Arch of Constantine
+7172: Shadow of 7172
+7300: Aqueducts
+7836: Wild Camel
+7837: Wild Camel Dying
+7838: Wild Camel Idle
+7839: Wild Camel Decaying
+8000: Heavy Pikeman
+8001: Heavy Pikeman Idle
+8002: Heavy Pikeman Moving
+8003: Heavy Pikeman Attacking
+8004: Heavy Pikeman Decaying
+8010: Eastern Swordsman
+8011: Eastern Swordsman Idle
+8012: Eastern Swordsman Moving
+8013: Eastern Swordsman Attacking
+8014: Eastern Swordsman Decaying
+8020: Royal Janissary
+8021: The Decaying SLP for the Royal Janissary is "641," the same as the trainable Janissary.
+8022: Royal Janissary Moving
+8024: Royal Janissary Attacking
+8030: Imperial Camel
+8031: Imperial Camel Idle
+8032: Imperial Camel Moving
+8033: Imperial Camel Attacking
+8034: Imperial Camel Decaying
+8040: Condottiero
+8041: Condottiero Idle
+8042: Condottiero Moving
+8043: Condottiero Attacking
+8044: Condottiero Decaying
+8050: Centurion
+8051: Centurion Idle
+8052: Centurion Moving
+8053: Centurion Attacking
+8054: Centurion Decaying
+8060: Legionary
+8061: Legionary Idle
+8062: Legionary Moving
+8063: Legionary Attacking
+8064: Legionary Decaying
+8070: Legionary Dying
+8072: Fortified Palisade Wall
+8073: Fortress
+8074: Shadow of Fortress
+8076: Dolphin
+8078: Loot
+8080: Nordic Swordsman
+8081: Nordic Swordsman Idle
+8082: Nordic Swordsman Moving
+8083: Nordic Swordsman Attacking
+8084: Nordic Swordsman Decaying
+8090: Tiger (Unused)
+8091: Tiger Idle
+8092: Tiger Running
+8093: Tiger Attacking
+8094: Tiger Decaying
+8100: Flamethrower
+8101: Flamethrower Idle
+8102: Flamethrower Moving
+8103: Flamethrower Attacking
+8104: Flamethrower Decaying
+8110: Eagle Warrior
+8111: Eagle Warrior Idle
+8112: Eagle Warrior Moving
+8113: Eagle Warrior Attacking
+8114: Eagle Warrior Decaying
+8120: Elite Eagle Warrior
+8121: Elite Eagle Warrior Idle
+8122: Elite Eagle Warrior Moving
+8123: Elite Eagle Warrior Attacking
+8124: Elite Eagle Warrior Decaying
+8130: Elite Eagle Warrior Dying
+8131: Poenari Castle
+8140: Bear
+8141: Bear Idle
+8142: Bear Walking
+8143: Bear Attacking
+8144: Bear Decaying
+8145: Bear Dying
+8150: Wooden Bridges A &amp; B (The Forgotten)
+8151: Wooden Bridge (/) Left End ("Wooden Bridge A--Top")
+8152: Shadow of 8150
+8153: Wooden Bridge (/) Middle ("Wooden Bridge A--Middle")
+8154: Shadow of 8152
+8155: Wooden Bridge (/) Right End ("Wooden Bridge A--Bottom")
+8160: Shadow of 8154
+8161: Wooden Bridge (\) Left End ("Wooden Bridge B--Top")
+8162: Shadow of 8160
+8163: Wooden Bridge (\) Middle ("Wooden Bridge B--Middle")
+8164: Shadow of 8162
+8165: Wooden (\) Right End ("Wooden Bridge B--Bottom")
+8170: Shadow of 8165
+8180: Cow
+8181: Cow Idle
+8183: Cow Moving
+8184: Cow Decaying
+8190: Vulture
+8191: Shadow of 8191
+8192: Vulture Gliding
+8193: Shadow of 8193
+8200: Slinger
+8201: Slinger Idle
+8202: Slinger Moving
+8203: Slinger Attacking
+8204: Slinger Decaying
+8300: Gaia
+8301: Bush
+8303: Shadow of 8300
+8309: Bonfire
+8310: Black Tile
+8312: Rain
+8314: Flag F
+8316: Impaled Corpse
+8318: Quarry
+8320: Lumber
+8322: Goods
+8324: Rock 2
+8330: Llama
+8331: Llama Idle
+8333: Llama Moving
+8334: Llama Decaying
+8340: Penguin
+8341: Penguin Idle
+8342: Penguin Moving
+8343: Penguin Attacking
+8344: Penguin Decaying
+8345: Penguin Dying
+8350: Imam
+8351: Imam Idle
+8352: Imam Moving
+8353: Imam Healing
+8354: Imam Decaying
+8355: Imam Dying
+8356: Imam Converting
+8357: Imam (Relic) Idle
+8360: Donkey
+8361: Donkey Idle
+8363: Donkey Moving
+8364: Donkey Decaying
+8370: Donkey Dying
+8380: Amazon Archer
+8381: Amazon Archer Idle
+8382: Amazon Archer Moving
+8383: Amazon Archer Attacking
+8384: Amazon Archer Decaying
+8390: Amazon Warrior
+8391: Amazon Warrior Idle
+8392: Amazon Warrior Moving
+8393: Amazon Warrior Attacking
+8394: Amazon Warrior Decaying
+8400: Palisade Gate Construction
+8401: Palisade Gate Construction (/)
+8402: Palisade Gate Construction (\)
+8403: Palisade Gate Construction (-)
+8404: Palisade Gate
+8420: Queen
+8421: Queen Idle
+8423: Queen Moving
+8424: Queen Decaying
+8430: Chand Bhai
+8431: Chand Bhai Idle
+8432: Chand Bhai Moving
+8433: Chand Bhai Convert/Healing
+8434: Chand Bhai Decaying
+8436: Chand Bhai Dying
+8437: Chand Bhai (Relic) Idle
+8440: Chand Bhai (Relic) Moving
+8450: Dragon Ship
+8451: Dragon Ship Idle
+8452: Dragon Ship Moving
+8460: Alfred the Alpaca
+8461: Alfred Idle
+8462: Alfred Moving
+8463: Alfred Attacking
+8464: Alfred Decaying
+8470: Wild Elephant
+8471: Wild Elephant Idle
+8472: Wild Elephant Walking
+8473: Wild Elephant Attacking
+8474: Wild Elephant Decaying
+8475: Wild Elephant Dying
+8477: Wild Elephant Running
+8480: Relic Cart
+8481: Relic Cart Idle
+8482: Relic Cart Moving (Cart)
+8490: Middle Eastern King
+8491: Only unique graphics for the Byzantine King are supported and ONLY in St. Michael's database.
+8493: Middle Eastern King Attacking (Unused)
+8500: Organ Gun
+8501: Organ Gun Idle
+8502: Organ Gun Moving
+8503: Organ Gun Attacking
+8504: Organ Gun Decaying
+8510: Zebra
+8511: Zebra Idle
+8513: Zebra Walking
+8514: Zebra Decaying
+8515: Zebra Dying
+8520: Camel Archer
+8521: Camel Archer Idle
+8522: Camel Archer Moving
+8523: Camel Archer Attacking
+8524: Camel Archer Decaying
+8530: Priest
+8531: Priest Idle
+8532: Priest Moving
+8533: Priest Converting
+8534: Priest Decaying
+8535: Priest Dying
+8536: Priest Healing
+8537: Priest (Relic) Idle
+8540: Genitour
+8541: Genitour Idle
+8542: Genitour Moving
+8543: Genitour Attacking
+8544: Genitour Decaying
+8545: Genitour Dying
+8550: Stork
+8551: Shadow of 8551
+8552: Stork Gliding
+8553: Shadow of 8553
+8560: Lion
+8561: Lion Idle
+8562: Lion Walking
+8563: Lion Attacking
+8564: Lion Decaying
+8565: Lion Dying
+8570: Shotel Warrior
+8571: Shotel Warrior Idle
+8572: Shotel Warrior Moving
+8573: Shotel Warrior Attacking
+8574: Shotel Warrior Decaying
+8580: Gbeto
+8581: Gbeto Idle 1
+8582: Gbeto Moving
+8583: Gbeto Attacking
+8584: Gbeto Decaying
+8585: Gbeto Dying
+8586: Gbeto Idle 2
+8587: Gbeto Knife
+8590: Caravel
+8591: Caravel Attacking
+8592: Shadow of 8590
+8593: Caravel Idle
+8594: Shadow of 8592
+8595: Caravel Moving
+8600: Crocodile
+8601: Crocodile Idle
+8602: Crocodile Walking
+8603: Crocodile Attacking
+8604: Crocodile Decaying
+8605: Crocodile Dying
+8610: Ostrich
+8611: Ostrich Idle
+8612: Ostrich Walking
+8613: Ostrich Attacking (Unused)
+8614: Ostrich Decaying
+8615: Ostrich Dying
+8620: Gaia Objects
+8621: Savannah Grass Patch
+8622: A tan mountain with a green base.
+8623: A mountain with a green base, brown middle, and a white peak.
+8624: Similar to 8622, but stouter.
+8625: Similar to 8622, but right leaning.
+8626: Similar to 8624 in shape, but snow covered.
+8627: Similar to 8623 in shape, but snow covered.
+8630: Snow Mountain 3
+8631: Rock Formation 1
+8632: Rock Formation 2
+8635: Trees
+8636: Dragon Tree
+8637: Shadow of 8635
+8638: Baobab Tree
+8639: Shadow of 8637
+8640: Baobab Stump
+8641: Bushes
+8642: Bush 2
+8643: Shadow of 8641
+8644: A bush covered with snow.
+8645: Shadow of 8643
+8650: Goat
+8651: Goat Idle
+8653: Goat Moving
+8654: Goat Decaying
+8660: Goat Dying
+8661: Fence
+8662: Acacia Tree
+8663: Shadow of 8661
+8670: Huts
+8671: Hut (Small building. Door on left)
+8672: Hut (Small building. Door on right)
+8673: Hut (Small building. Door in center with blue cloth)
+8674: Hut (Small building. Door on right with blue cloth)
+8675: Hut (Small building. Door on right with blue cloth in center)
+8676: Hut (Small building. Door in center)
+8677: Hut (Big building. Door to right)
+8678: Storage
+8679: Granary
+8680: Barracade (Unused)
+8681: Stelae
+8682: Stelae A (A very tall stelae.)
+8683: Shadow of 8681
+8684: Stelae B (A pillar like stelae with a rounded top.)
+8685: Shadow of 8683
+8686: Stelae C (An obelisk like stelae.)
+8687: Shadow of 8686
+8690: Tents (The African Kingdoms)
+8691: Tent A (A big tent)
+8692: Tent B (Right opening)
+8693: Tent C (Far left opening)
+8694: Tent D (Left opening)
+8695: Sea Fortification
+8696: Shadow of African Sea Fortification
+8701: Fire Galley Hull
+8702: Demolition Raft
+8703: Demolition Raft Hull
+8704: Shadow of Demolition Raft Hull
+8705: Barracade
+8706: Barracade A (-)
+8707: Barracade B (/)
+8708: Barracade C (|)
+8710: Siege Tower
+8711: Siege Tower Idle
+8712: Siege Tower Moving
+8713: Siege Tower Attacking (Unused)
+8714: Siege Tower Decaying
+8720: Falcon
+8721: Shadow of 8721
+8722: Falcon Gliding
+8723: Shadow of 8723
+8730: Amerindian King
+8731: Amerindian King Idle
+8733: Amerindian King Moving
+8734: Amerindian King Decaying
+8740: Far East King
+8741: Far East King Idle
+8743: Far East King Moving
+8744: Far East King Decaying
+8750: Dagnajan
+8751: Dagnajan Idle
+8752: Dagnajan Moving
+8753: Dagnajan Attacking
+8754: Dagnajan Decaying
+8760: Gidajan
+8761: Gidajan Idle
+8762: Gidajan Moving
+8763: Gidajan Attacking
+8764: Gidajan Decaying
+8770: African King
+8771: African King Idle
+8773: African King Moving
+8774: African King Decaying
+8780: Ballista Elephant
+8781: Ballista Elephant Idle
+8782: Ballista Elephant Moving
+8783: Ballista Elephant Attacking
+8784: Ballista Elephant Decaying
+8790: Karambit Warrior
+8791: Karambit Warrior Idle
+8792: Karambit Warrior Moving
+8793: Karambit Warrior Attacking
+8794: Karambit Warrior Decaying
+8795: Karambit Warrior Dying
+8800: Arambai
+8801: Arambai Idle
+8802: Arambai Moving
+8803: Arambai Attacking
+8804: Arambai Decaying
+8810: Rattan Archer
+8811: Rattan Archer Idle
+8812: Rattan Archer Moving
+8813: Rattan Archer Attacking
+8814: Rattan Archer Decaying
+8820: Battle Elephant
+8821: Battle Elephant Idle
+8822: Battle Elephant Moving
+8823: Battle Elephant Attacking
+8824: Battle Elephant Decaying
+8830: Komodo Dragon
+8831: Komodo Dragon Idle
+8832: Komodo Dragon Walking
+8833: Komodo Dragon Attacking
+8834: Komodo Dragon Decaying
+8835: Komodo Dragon Dying
+8840: Tiger
+8841: Tiger Idle
+8842: Tiger Walking
+8843: Tiger Attacking
+8844: Tiger Decaying
+8845: Tiger Dying
+8850: Rhinoceros
+8851: Rhinoceros Idle
+8852: Rhinoceros Walking
+8853: Rhinoceros Attacking
+8854: Rhinoceros Decaying
+8855: Rhinoceros Dying
+8860: Rhinoceros Running
+8870: Water Buffalo
+8871: Water Buffalo Idle
+8873: Water Buffalo Moving
+8874: Water Buffalo Decaying
+8880: Trees &amp; Gaia Objects
+8881: Mangrove Tree
+8882: Shadow of 8880
+8883: Rainforest Tree
+8884: Shadow of 8882
+8885: Rock (Beach)
+8886: Shadow of 8884
+8888: Flags
+8890: Flag G (A blue flag with a white rim and a white circle in the middle.)
+8892: Flag H (Similar to 8888, but with a lotus pattern in the middle.)
+8894: Flag I (A thin blue flag with a white rim and four squares with elephants in them.)
+8900: Imperial Skirmisher
+8901: Imperial Skirmisher Idle
+8902: Imperial Skirmisher Moving
+8903: Imperial Skirmisher Attacking
+8904: Imperial Skirmisher Decaying
+8910: Arrow (Dart-like)
+8912: Shadow of 8910 &amp; 8912
+8914: Arrow Shadow (Unused?)
+8920: Sunda Royal Fighter
+8921: Sunda Royal Fighter Idle
+8922: Sunda Royal Fighter Moving
+8923: Sunda Royal Fighter Attacking
+8924: Sunda Royal Fighter Decaying
+8930: Buddha Statues
+8932: Buddha Statue A (Large Buddha statue with twin lion-dog statues.)
+8934: Buddha Statue B (Similar to 8930, but with a Torii Gate.)
+8936: Buddha Statue C (A small, sitting, golden Buddha statue.)
+8940: Gaia Objects
+8941: Fern Patch
+8942: Shadow of 8940
+8943: Trowulan Gate
+8946: Shadow of 8942
+8950: Gajah Mada
+8951: Gajah Mada Idle
+8952: Gajah Mada Moving
+8953: Gajah Mada Attacking
+8954: Gajah Mada Decaying
+8960: Elite Battle Elephant
+8961: Elite Battle Elephant Idle 1
+8962: Elite Battle Elephant Moving
+8963: Elite Battle Elephant Attacking 1
+8964: Elite Battle Elephant Decaying
+8965: Elite Battle Elephant Dying
+8966: Elite Battle Elephant Idle 2
+8970: Elite Battle Elephant Attacking 2 (Unused?)
+8980: Army Tent
+8981: Army Tent 1 (Large tent with left entrance.)
+8982: Army Tent 2 (Large tent with right entrance.)
+8983: Army Tent 3 (Small tent with right entrance.)
+8984: Army Tent 4 (Small tent with left entrance.)
+8990: Pagodas
+8991: Pagoda 1 (Tall pagoda with no entrance.)
+8992: Shadow of 8990
+8993: Pagoda 2 (Medium sized pagoda with a right entrance.)
+8994: Shadow of 8992
+8995: Pagoda 3 (Tiny pagoda.)
+9000: Bridges C &amp; D (Rajas)
+9001: Bridge (/) Right End ("Bridge C--Top")
+9002: Bridge (/) Middle ("Bridge C--Middle")
+9003: Bridge (/) Left End ("Bridge C--Bottom")
+9004: Bridge (/) Right End ("Bridge C--Broken Top")
+9005: Bridge (/) Middle ("Bridge C--Cracked")
+9010: Bridge (/) Left End ("Bridge C--Broken Bottom")
+9011: Bridge (\) Right End ("Bridge D--Top")
+9012: Bridge (\) Middle ("Bridge D--Middle")
+9013: Bridge (\) Left End ("Bridge D--Bottom")
+9014: Bridge (\) Right End ("Bridge D--Broken Top")
+9015: Bridge (\) Middle ("Bridge D--Cracked")
+9020: Raja Scenario Editor Buildings
+9021: Sanchi Stupa
+9025: Shadow of Sanchi Stupa
+9026: Was the Indian Wonder in "The Forgotten" until the Rajas.
+9030: Unused WTF Things
+9031: A hidden unit: A cat riding a shark… Won't be a cheat unit until Age of Empires II: DE. Not even
+9034: accessable in the Editor.
+9035: Was… there originally going to be a Scenario of the 1346 Siege of Caffa? :0
+9040: South-East Asian King
+9041: Only unique graphics for the Vietnamese King are supported and ONLY in St. Michael's database.
+14135: Mediterranean Boat Sails
+15126: East European Archery Range &amp; Blacksmith
+15131: Shadow of East European Blacksmith II
+15133: Shadow of East European Blacksmith III
+15135: East European Sails 1
+15144: East European Barracks, Monastery, Castle, &amp; Docks
+15154: The shadow of this SLP is SLP 4951. This is also the shadow of SLP 4953.
+15165: Closed East European Gate (/)
+15171: Opened East European Gate (/)
+15177: East European Gate End
+15183: East European Gate Construction (/)
+15187: Closed East European Gate (\)
+15193: Opened East European Gate (\)
+15199: East European Gate Construction (\)
+15203: Closed East European Gates (-)
+15209: Opened East European Gates (-)
+15215: East European Gate Construction (-)
+15219: Closed East European Gates (|)
+15225: Opened East European Gates (|)
+15231: East European Gate Construction (|)
+15238: East European Houses
+15246: East European Mills
+15258: East European Markets
+15265: East European Town Center II
+15274: East European Town Center III
+15283: East European Town Center IV
+15285: A blank graphic.
+15292: East European Sails 2
+15301: East European Siege Workshop, Lumber Camp,
+15303: &amp; Stables
+15317: East European Universities
+15318: Shadow of East European University III
+15319: Blank graphic.
+15321: Shadow of East European University IV
+15323: East European Walls
+15328: East European Wall Construction
+15332: East European Towers
+15344: 25% Damaged East European Walls
+15348: 50% Damaged East European Walls
+15352: 75% Damaged East European Walls
+16126: Indian Archery Ranges &amp; Blacksmiths
+16129: Indian Archery Range II
+16130: Indian Archery Range III
+16131: Shadow of Indian Blacksmith II
+16132: Indian Blacksmith II
+16133: Shadow of Indian Blacksmith III
+16134: Smoke of Indian Blacksmith III
+16135: Indian Sails 1
+16136: Indian Sail A
+16137: Indian Sail B
+16138: Indian Sail C
+16139: Indian Sail D
+16144: Indian Barracks, Monastery, Castle, Docks
+16147: Indian Barracks II
+16152: Indian Barracks III
+16153: Shadow of Indian Monastery
+16154: Indian Monastery
+16156: Shadow of Indian Castle
+16157: Indian Castle
+16158: Shadow of Indian Dock II
+16159: Indian Dock II
+16160: Shadow of Indian Dock III
+16165: Closed Indian Gate (/)
+16167: Shadow of Closed Indian Stone Gate (/)
+16168: Closed Indian Stone Gate (/)
+16170: Shadow of Closed Indian Fortified Gate (/)
+16171: Opened Indian Gate (/)
+16173: Shadow of Opened Indian Stone Gate (/)
+16174: Opened Indian Stone Gate (/)
+16176: Shadow of Opened Indian Fortified Gate (/)
+16177: Indian Gate End
+16178: Shadow of Indian Stone Gate End
+16179: Flag of Indian Stone Gate End
+16180: Indian Stone Gate End
+16181: Shadow of Indian Fortified Gate End
+16182: Flag of Indian Fortified Gate End
+16183: Indian Gate Construction (/)
+16184: Shadow of Indian Stone Gate Construction (/)
+16185: Indian Stone Gate Construction (/)
+16186: Shadow of Indian Fortified Gate Construction (/)
+16187: Closed Indian Gate (\)
+16189: Shadow of Closed Indian Stone Gate (\)
+16190: Closed Indian Stone Gate (\)
+16192: Shadow of Closed Indian Fortified Gate (\)
+16193: Opened Indian Gate (\)
+16195: Shadow of Opened Indian Stone Gate (\)
+16196: Opened Indian Stone Gate (\)
+16198: Shadow of Opened Indian Fortified Gate (\)
+16199: Indian Gate Construction (\)
+16200: Shadow of Indian Stone Gate Construction (\)
+16201: Indian Stone Gate Construction (\)
+16202: Shadow of Indian Fortified Gate Construction (\)
+16203: Closed Indian Gate (-)
+16205: Shadow of Closed Indian Stone Gate (-)
+16206: Closed Indian Stone Gate (-)
+16208: Shadow of Closed Indian Fortified Gate (-)
+16209: Opened Indian Gate (-)
+16211: Shadow of Opened Indian Stone Gate (-)
+16212: Opened Indian Stone Gate (-)
+16214: Shadow of Opened Indian Fortified Gate (-)
+16215: Indian Gate Construction (-)
+16216: Shadow of Indian Stone Gate Construction (-)
+16217: Indian Stone Gate Construction (-)
+16218: Shadow of Indian Fortified Gate Construction (-)
+16219: Closed Indian Gate (|)
+16221: Shadow of Closed Indian Stone Gate (|)
+16222: Closed Indian Stone Gate (|)
+16224: Shadow of Closed Indian Fortified Gate (|)
+16225: Opened Indian Gate (|)
+16227: Shadow of Opened Indian Stone Gate (|)
+16228: Opened Indian Stone Gate (|)
+16230: Shadow of Opened Indian Fortified Gate (|)
+16231: Indian Gate Construction (|)
+16232: Shadow of Indian Stone Gate Construction (|)
+16233: Indian Stone Gate Construction (|)
+16234: Shadow of Indian Fortified Gate Construction (|)
+16238: Indian Houses
+16241: Indian House II
+16246: Indian Mills
+16247: Shadow of Indian Mill II
+16248: Animation of Indian Mill II
+16249: Base of Indian Mill II
+16250: Shadow of Indian Mill III
+16251: Animation of Indian Mill III
+16254: Base of Indian Mill III
+16255: Indian Mining Camp
+16258: Indian Markets
+16261: Indian Market II
+16262: Indian Market III
+16265: Indian Town Center II
+16267: Shadow of Indian Town Center II
+16268: Indian Town Center Left Wing II
+16269: Indian Town Center Left Posts II
+16270: Indian Town Center Far Left Posts II
+16271: Indian Town Center Right Wing II
+16272: Indian Town Center Right Posts II
+16273: Indian Town Center Far Right Posts II
+16274: Indian Town Center III
+16276: Shadow of Indian Town Center III
+16277: Indian Town Center Left Wing III
+16278: Indian Town Center Left Posts III
+16279: Indian Town Center Far Left Post III
+16280: Indian Town Center Right Wing III
+16281: Indian Town Center Right Posts III
+16282: Indian Town Center Far Right Post III
+16283: Indian Town Center IV
+16284: Shadow of Indian Town Center IV
+16285: Indian Town Center Floor IV
+16286: Indian Town Center Left Wing IV
+16287: Indian Town Center Left Posts IV
+16288: Indian Town Center Far Left Post IV
+16289: Indian Town Center Right Wing IV
+16290: Indian Town Center Right Posts IV
+16291: Indian Town Center Far Right Post IV
+16292: Indian Sails 2
+16293: Indian Sail F
+16294: Indian Sail G
+16295: Indian Sail H
+16296: Indian Sail I
+16297: Indian Sail J
+16298: Indian Sail K
+16299: Indian Sail L
+16303: Indian Siege Workshop, Lumber Camp, &amp; Stables
+16306: Indian Siege Workshop
+16310: Indian Lumber Camp
+16313: Indian Stable II
+16317: Indian Universities
+16318: Shadow of Indian University III
+16319: A blank graphic.
+16320: Indian University III
+16321: Shadow of Indian University IV
+16322: A blank graphic.
+16323: Indian Walls
+16324: Shadow of Indian Stone Wall
+16325: Indian Stone Wall
+16326: Shadow of Indian Fortified Wall
+16328: Indian Wall Construction
+16329: Shadow of Indian Stone Wall Construction
+16330: Indian Stone Wall Construction
+16331: Shadow of Indian Fortified Wall Construction
+16332: Indian Towers
+16334: Shadow of Indian Watch Tower
+16335: Indian Watch Tower
+16337: Shadow of Indian Guard Tower
+16338: Indian Guard Tower
+16340: Shadow of Indian Keep
+16341: Indian Keep
+16343: Shadow of Indian Bombard Tower
+16344: 25% Damaged Indian Walls
+16345: Shadow of 25% Damaged Indian Stone Wall
+16346: 25% Damaged Indian Stone Wall
+16347: Shadow of 25% Damaged Indian Fortified Wall
+16348: 50% Damaged Indian Walls
+16349: Shadow of 50% Damaged Indian Stone Wall
+16350: 50% Damaged Indian Stone Wall
+16351: Shadow of 50% Damaged Indian Fortified Wall
+16352: 75% Damaged Indian Walls
+16353: Shadow of 75% Damaged Indian Stone Wall
+16354: 75% Damaged Indian Stone Wall
+16355: Shadow of 75% Damaged Indian Fortified Wall
+17126: African Archery Ranges &amp; Blacksmiths
+17131: Shadow of African Blacksmith II
+17133: Shadow of African Blacksmith III
+17135: African Sails 1
+17144: African Barracks, Monastery, Castle, &amp; Docks
+17165: Closed African Gates (/)
+17171: Opened African Gates (/)
+17177: African Gate Ends
+17183: African Gate Construction (/)
+17187: Closed African Gates (\)
+17193: Opened African Gates (\)
+17199: African Gate Construction (\)
+17203: Closed African Gates (-)
+17209: Opened African Gates (-)
+17215: African Gate Construction (-)
+17219: Closed African Gates (|)
+17225: Opened African Gates (|)
+17231: African Gate Construction (|)
+17238: African Houses
+17246: African Mills
+17247: A blank graphic.
+17258: African Markets
+17265: African Town Center II
+17274: African Town Center III
+17283: African Town Center IV
+17285: A blank graphic.
+17292: African Sails 2
+17317: African Universities
+17318: Shadow of African University III
+17319: A blank graphic.
+17321: Shadow of African University IV
+17322: A blank graphic.
+17323: African Walls
+17328: African Wall Construction
+17332: African Towers
+17344: 25% Damaged African Walls
+17348: 50% Damaged African Walls
+17352: 75% Damaged African Walls
+18126: Southeast Asian Archery Ranges &amp; Blacksmiths
+18131: Shadow of Southeast Asian Blacksmith II
+18133: Shadow of Southeast Asian Blacksmith III
+18135: Southeast Asian Sails 1
+18144: Southeast Asian Barracks, Monastery, Castle, &amp; Docks
+18165: Closed Southeast Asian Gates (/)
+18171: Opened Southeast Asian Gates (/)
+18177: Southeast Asian Gate Ends
+18183: Southeast Asian Gate Construction (/)
+18187: Closed Southeast Asian Gates (\)
+18193: Opened Southeast Asian Gates (\)
+18199: Southeast Asian Gate Construction (\)
+18203: Closed Southeast Asian Gates (-)
+18209: Opened Southeast Asian Gates (-)
+18215: Southeast Asian Gate Construction (-)
+18219: Closed Southeast Asian Gates (|)
+18225: Opened Southeast Asian Gates (|)
+18231: Southeast Asian Gate Construction (|)
+18238: Southeast Asian Houses
+18246: Southeast Asian Mills
+18247: A blank graphic.
+18250: A blank graphic.
+18258: Southeast Asian Markets
+18265: Southeast Asian Town Center II
+18274: Southeast Asian Town Center III
+18283: Southeast Asian Town Center IV
+18292: Southeast Asian Sails 2
+18301: Southeast Asian Siege Workshop, Lumber Camp,
+18303: &amp; Stables
+18317: Southeast Asian Universities
+18318: Shadow of Southeast Asian University III
+18319: A blank graphic.
+18321: Shadow of Southeast Asian University IV
+18322: A blank graphic.
+18323: Southeast Asian Walls
+18328: Southeast Asian Wall Construction
+18332: Southeast Asian Towers
+18344: 25% Damaged Southeast Asian Walls
+18348: 50% Damaged Southeast Asian Walls
+18352: 75% Damaged Southeast Asian Walls

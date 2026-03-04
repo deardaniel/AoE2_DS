@@ -3,23 +3,291 @@
 #include "units.h"
 #include "buildings.h"
 #include "terrain.h"
+#include "iso.h"
 #include "tech.h"
 
 // Build menu layout on bottom screen (bottom strip)
 enum { BUILD_MENU_Y = 176, BUILD_MENU_H = 16, BUILD_MENU_ITEM_W = 32 };
 
+// Drag threshold in pixels — beyond this, touch becomes a drag-select
+enum { DRAG_THRESHOLD = 8 };
+
+// ---------------------------------------------------------------------------
+// Process a single tap at screen position (called on touch release if not drag)
+// ---------------------------------------------------------------------------
+static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int screenY) {
+    // Build menu check (bottom strip)
+    if (gs.buildMenuOpen && screenY >= BUILD_MENU_Y) {
+        int slot = screenX / BUILD_MENU_ITEM_W;
+        if (slot < BLDG_TYPE_COUNT) {
+            if (gs.players[0].age >= BLDG_STATS[slot].ageReq) {
+                gs.inputMode = 1;
+                gs.placeBldgType = slot;
+                gs.buildMenuOpen = false;
+            }
+        }
+        return;
+    }
+
+    // Convert screen coords to tile coords via isometric projection
+    int tileX, tileY;
+    screenToTile(screenX, screenY, gs.camX, gs.camY, tileX, tileY);
+    int mapX = tileX * TILE_PX + TILE_PX / 2;
+    int mapY = tileY * TILE_PX + TILE_PX / 2;
+
+    if (gs.inputMode == 1) {
+        // Placing building mode
+        int result = building_place(gs.placeBldgType, 0, tileX, tileY, gs, terrain);
+        if (result >= 0) {
+            gs.inputMode = 0;
+            // Send all selected villagers to build
+            bool sentBuilder = false;
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (gs.unitSelected[i] && units[i].alive && units[i].type == UNIT_VILLAGER) {
+                    unit_command_build(i, result, terrain);
+                    sentBuilder = true;
+                }
+            }
+            if (!sentBuilder) {
+                game_clear_selection(gs);
+                gs.selectedBldg = result;
+            }
+        }
+        return;
+    }
+
+    // Check if tapped on own unit (screen-space bounding box)
+    int tappedUnit = -1;
+    for (int i = 0; i < MAX_UNITS; i++) {
+        if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
+        if (units[i].owner != 0) continue;
+        int uIsoX, uIsoY;
+        worldToIso(units[i].x, units[i].y, uIsoX, uIsoY);
+        int usx = uIsoX - gs.camX;
+        int usy = uIsoY - gs.camY - (32 - ISO_TILE_H);
+        if (screenX >= usx && screenX < usx + 32 &&
+            screenY >= usy && screenY < usy + 32) {
+            tappedUnit = i;
+            break;
+        }
+    }
+
+    if (tappedUnit >= 0) {
+        // Double-tap: if tapping already-selected unit, select all visible of same type
+        if (gs.unitSelected[tappedUnit]) {
+            u8 targetType = units[tappedUnit].type;
+            game_clear_selection(gs);
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
+                if (units[i].owner != 0 || units[i].type != targetType) continue;
+                // Check if on screen
+                int uIsoX2, uIsoY2;
+                worldToIso(units[i].x, units[i].y, uIsoX2, uIsoY2);
+                int sx2 = uIsoX2 - gs.camX;
+                int sy2 = uIsoY2 - gs.camY;
+                if (sx2 >= -32 && sx2 < SCREEN_W + 32 && sy2 >= -32 && sy2 < SCREEN_H + 32) {
+                    game_add_to_selection(gs, i);
+                }
+            }
+        } else {
+            game_select_unit(gs, tappedUnit);
+        }
+        return;
+    }
+
+    // Check if tapped on own building
+    int tappedBldg = building_at_tile(tileX, tileY);
+    if (tappedBldg >= 0 && buildings[tappedBldg].owner == 0) {
+        // If villagers selected and building incomplete or damaged, send all to build/repair
+        if (gs.selectionCount > 0 &&
+            (!building_is_complete(tappedBldg) ||
+             buildings[tappedBldg].hp < BLDG_STATS[buildings[tappedBldg].type].hp)) {
+            bool sentBuilder = false;
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (!gs.unitSelected[i]) continue;
+                if (units[i].alive && units[i].type == UNIT_VILLAGER) {
+                    unit_command_build(i, tappedBldg, terrain);
+                    sentBuilder = true;
+                }
+            }
+            if (sentBuilder) return;
+        }
+        // If units selected and tapping on TC, garrison them
+        if (gs.selectionCount > 0 && buildings[tappedBldg].type == BLDG_TOWN_CENTER &&
+            building_is_complete(tappedBldg)) {
+            bool garrisoned = false;
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (!gs.unitSelected[i] || !units[i].alive) continue;
+                if (building_garrison(tappedBldg, i)) {
+                    garrisoned = true;
+                }
+            }
+            if (garrisoned) {
+                game_clear_selection(gs);
+                gs.selectedBldg = tappedBldg;
+                return;
+            }
+        }
+        game_clear_selection(gs);
+        gs.selectedBldg = tappedBldg;
+        return;
+    }
+
+    // Check if tapped on enemy unit (attack command)
+    int enemyUnit = -1;
+    for (int i = 0; i < MAX_UNITS; i++) {
+        if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
+        if (units[i].owner == 0) continue;
+        int uIsoX, uIsoY;
+        worldToIso(units[i].x, units[i].y, uIsoX, uIsoY);
+        int usx = uIsoX - gs.camX;
+        int usy = uIsoY - gs.camY - (32 - ISO_TILE_H);
+        if (screenX >= usx && screenX < usx + 32 &&
+            screenY >= usy && screenY < usy + 32) {
+            enemyUnit = i;
+            break;
+        }
+    }
+    if (enemyUnit >= 0 && gs.selectionCount > 0) {
+        for (int i = 0; i < MAX_UNITS; i++) {
+            if (gs.unitSelected[i] && units[i].alive)
+                unit_command_attack(i, enemyUnit);
+        }
+        return;
+    }
+
+    // Check if tapped on enemy building (attack command)
+    if (tappedBldg >= 0 && buildings[tappedBldg].owner != 0 && gs.selectionCount > 0) {
+        for (int i = 0; i < MAX_UNITS; i++) {
+            if (gs.unitSelected[i] && units[i].alive)
+                unit_command_attack_building(i, tappedBldg);
+        }
+        return;
+    }
+
+    // Check if tapped on resource tile (gather command for selected villagers)
+    if (gs.selectionCount > 0) {
+        u8 tt = terrain.tileAt(tileX, tileY);
+        if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE || tt == TERRAIN_FARM) {
+            bool sentGatherer = false;
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (!gs.unitSelected[i]) continue;
+                if (units[i].alive && units[i].type == UNIT_VILLAGER) {
+                    unit_command_gather(i, tileX, tileY, terrain);
+                    sentGatherer = true;
+                }
+            }
+            if (sentGatherer) return;
+        }
+    }
+
+    // Check if tapped on resource tile without selection — show info
+    {
+        u8 tt = terrain.tileAt(tileX, tileY);
+        if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE || tt == TERRAIN_FARM) {
+            game_clear_selection(gs);
+            gs.selectedTileX = tileX;
+            gs.selectedTileY = tileY;
+            return;
+        }
+    }
+
+    // Default: move selected units with formation spreading.
+    // Instead of sending all units to the same tile (causing stacking),
+    // assign each unit a unique destination in a spiral pattern around
+    // the tap point: center tile first, then ring-1 (8 tiles), ring-2 (16).
+    // Impassable or already-assigned offsets are skipped.
+    if (gs.selectionCount > 0) {
+        gs.selectedTileX = -1;
+        gs.selectedTileY = -1;
+
+        int centerTX = mapX / TILE_PX;
+        int centerTY = mapY / TILE_PX;
+
+        // Build spiral offset table: center, then ring-1, ring-2
+        static const int MAX_OFFSETS = 25; // 1 + 8 + 16
+        int offX[MAX_OFFSETS], offY[MAX_OFFSETS];
+        int numOffsets = 0;
+        offX[numOffsets] = 0; offY[numOffsets] = 0; numOffsets++;
+        for (int r = 1; r <= 2 && numOffsets < MAX_OFFSETS; r++) {
+            for (int dy = -r; dy <= r && numOffsets < MAX_OFFSETS; dy++) {
+                for (int dx = -r; dx <= r && numOffsets < MAX_OFFSETS; dx++) {
+                    if (dx == 0 && dy == 0) continue;
+                    // Only tiles on this ring (not inner rings)
+                    int adx = dx < 0 ? -dx : dx;
+                    int ady = dy < 0 ? -dy : dy;
+                    if (adx < r && ady < r) continue;
+                    offX[numOffsets] = dx;
+                    offY[numOffsets] = dy;
+                    numOffsets++;
+                }
+            }
+        }
+
+        // Mark which offsets are already assigned
+        bool assigned[MAX_OFFSETS];
+        memset(assigned, 0, sizeof(assigned));
+
+        int offsetIdx = 0;
+        for (int i = 0; i < MAX_UNITS; i++) {
+            if (!gs.unitSelected[i] || !units[i].alive) continue;
+
+            // Find next available offset tile
+            int destTX = centerTX, destTY = centerTY;
+            for (int o = offsetIdx; o < numOffsets; o++) {
+                int tx = centerTX + offX[o];
+                int ty = centerTY + offY[o];
+                if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES &&
+                    terrain.passable(tx, ty) && !assigned[o]) {
+                    destTX = tx;
+                    destTY = ty;
+                    assigned[o] = true;
+                    offsetIdx = o + 1;
+                    break;
+                }
+            }
+
+            unit_command_move(i, destTX * TILE_PX + TILE_PX / 2,
+                              destTY * TILE_PX + TILE_PX / 2, terrain);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Process drag-select: select all own units within the screen-space box
+// ---------------------------------------------------------------------------
+static void process_drag_select(GameState& gs, int x0, int y0, int x1, int y1) {
+    // Normalize box
+    if (x0 > x1) { int t = x0; x0 = x1; x1 = t; }
+    if (y0 > y1) { int t = y0; y0 = y1; y1 = t; }
+
+    // Select all own units in the box
+    game_clear_selection(gs);
+    for (int i = 0; i < MAX_UNITS; i++) {
+        if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
+        if (units[i].owner != 0) continue;
+        int uIsoX, uIsoY;
+        worldToIso(units[i].x, units[i].y, uIsoX, uIsoY);
+        int usx = uIsoX - gs.camX + 16; // center of 32px sprite
+        int usy = uIsoY - gs.camY;       // feet position
+        if (usx >= x0 && usx <= x1 && usy >= y0 && usy <= y1) {
+            game_add_to_selection(gs, i);
+        }
+    }
+}
+
 void input_update(GameState& gs, TerrainMap& terrain) {
     scanKeys();
     int keys = keysHeld();
     int keysPressed = keysDown();
+    int keysReleased = keysUp();
 
     touchPosition touch;
     touchRead(&touch);
     bool touchDown = (keys & KEY_TOUCH) != 0;
     bool touchPressed = (keysPressed & KEY_TOUCH) != 0;
-    (void)touchDown;
+    bool touchReleased = (keysReleased & KEY_TOUCH) != 0;
 
-    // START = pause (not implemented beyond exit for now)
     // SELECT = toggle follow cam
     if (keysPressed & KEY_SELECT) gs.followCam = !gs.followCam;
 
@@ -37,38 +305,44 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         int start = (gs.selectedUnit >= 0) ? gs.selectedUnit + 1 : 0;
         int vil = unit_find_idle_villager(0, start);
         if (vil >= 0) {
-            gs.selectedUnit = vil;
-            gs.selectedBldg = -1;
+            game_select_unit(gs, vil);
             gs.followCam = true;
         }
     }
     if (keysPressed & KEY_R) {
-        // Cycle backwards (just find any idle)
         int vil = unit_find_idle_villager(0, 0);
         if (vil >= 0) {
-            gs.selectedUnit = vil;
-            gs.selectedBldg = -1;
+            game_select_unit(gs, vil);
             gs.followCam = true;
         }
     }
 
-    // A: select all military units (toggle)
+    // A: ungarrison TC if selected and has garrison, else select first military unit
     if (keysPressed & KEY_A) {
-        // Select first military unit
-        for (int i = 0; i < MAX_UNITS; i++) {
-            if (units[i].alive && units[i].owner == 0 && units[i].type != UNIT_VILLAGER &&
-                units[i].state != USTATE_DEAD) {
-                gs.selectedUnit = i;
-                gs.selectedBldg = -1;
-                break;
+        if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
+            buildings[gs.selectedBldg].type == BLDG_TOWN_CENTER &&
+            buildings[gs.selectedBldg].garrisonCount > 0) {
+            building_ungarrison_all(gs.selectedBldg, terrain);
+        } else {
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (units[i].alive && units[i].owner == 0 && units[i].type != UNIT_VILLAGER &&
+                    units[i].state != USTATE_DEAD && units[i].state != USTATE_GARRISONED) {
+                    game_select_unit(gs, i);
+                    break;
+                }
             }
         }
     }
 
-    // B: cancel current action
+    // B: cancel current action, or cancel building training
     if (keysPressed & KEY_B) {
-        gs.inputMode = 0;
-        gs.buildMenuOpen = false;
+        if (gs.inputMode != 0 || gs.buildMenuOpen) {
+            gs.inputMode = 0;
+            gs.buildMenuOpen = false;
+        } else if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
+                   buildings[gs.selectedBldg].trainQueue[0] >= 0) {
+            building_cancel_train(gs.selectedBldg, gs);
+        }
     }
 
     // X: toggle build menu
@@ -81,140 +355,75 @@ void input_update(GameState& gs, TerrainMap& terrain) {
     if (keysPressed & KEY_Y) {
         int tc = building_nearest(0, BLDG_TOWN_CENTER, 0, 0);
         if (tc >= 0) {
-            gs.camX = buildings[tc].x - SCREEN_W / 2;
-            gs.camY = buildings[tc].y - SCREEN_H / 2;
+            int isoX, isoY;
+            worldToIso(buildings[tc].x, buildings[tc].y, isoX, isoY);
+            gs.camX = isoX - SCREEN_W / 2;
+            gs.camY = isoY - SCREEN_H / 2;
             gs.followCam = false;
         }
     }
 
-    // Touch input
-    if (touchPressed && gs.phase == PHASE_PLAYING) {
-        int screenX = touch.px;
-        int screenY = touch.py;
-
-        // Build menu check (bottom strip)
-        if (gs.buildMenuOpen && screenY >= BUILD_MENU_Y) {
-            int slot = screenX / BUILD_MENU_ITEM_W;
-            if (slot < BLDG_TYPE_COUNT) {
-                // Check if player can build this
-                if (gs.players[0].age >= BLDG_STATS[slot].ageReq) {
-                    gs.inputMode = 1; // placing building
-                    gs.placeBldgType = slot;
-                    gs.buildMenuOpen = false;
-                }
+    // --- Touch state machine ---
+    if (gs.phase == PHASE_PLAYING) {
+        if (touchPressed) {
+            // Touch just started — record start position
+            gs.touchActive = true;
+            gs.isDragging = false;
+            gs.dragStartX = touch.px;
+            gs.dragStartY = touch.py;
+            gs.dragEndX = touch.px;
+            gs.dragEndY = touch.py;
+        } else if (touchDown && gs.touchActive) {
+            // Touch held — update end position and check for drag
+            gs.dragEndX = touch.px;
+            gs.dragEndY = touch.py;
+            int dx = gs.dragEndX - gs.dragStartX;
+            int dy = gs.dragEndY - gs.dragStartY;
+            if (dx < 0) dx = -dx;
+            if (dy < 0) dy = -dy;
+            if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+                gs.isDragging = true;
             }
-            return;
-        }
-
-        // Convert screen coords to map coords
-        int mapX = screenX + gs.camX;
-        int mapY = screenY + gs.camY;
-
-        if (gs.inputMode == 1) {
-            // Placing building mode
-            int tileX = mapX / TILE_PX;
-            int tileY = mapY / TILE_PX;
-
-            int savedVil = gs.selectedUnit;
-            int result = building_place(gs.placeBldgType, 0, tileX, tileY, gs, terrain);
-            if (result >= 0) {
-                gs.inputMode = 0;
-                // Send villager to build the building
-                if (savedVil >= 0 && units[savedVil].alive &&
-                    units[savedVil].type == UNIT_VILLAGER) {
-                    gs.selectedUnit = savedVil;
-                    gs.selectedBldg = -1;
-                    unit_command_build(savedVil, result, terrain);
-                } else {
-                    gs.selectedBldg = result;
-                    gs.selectedUnit = -1;
-                }
+        } else if (touchReleased && gs.touchActive) {
+            // Touch released — process action
+            gs.touchActive = false;
+            if (gs.isDragging) {
+                process_drag_select(gs, gs.dragStartX, gs.dragStartY,
+                                    gs.dragEndX, gs.dragEndY);
+            } else {
+                process_tap(gs, terrain, gs.dragStartX, gs.dragStartY);
             }
-            return;
+            gs.isDragging = false;
+        } else if (!touchDown) {
+            gs.touchActive = false;
+            gs.isDragging = false;
         }
+    }
 
-        // Normal touch: select unit, building, or issue command
-        // Check if tapped on own unit
-        int tappedUnit = -1;
+    // Auto-show build menu when any selected unit is a villager
+    if (gs.inputMode == 0) {
+        bool villagerSelected = false;
         for (int i = 0; i < MAX_UNITS; i++) {
-            if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
-            if (units[i].owner != 0) continue;
-            int dx = mapX - units[i].x;
-            int dy = mapY - units[i].y;
-            if (dx >= 0 && dx < TILE_PX && dy >= 0 && dy < TILE_PX) {
-                tappedUnit = i;
+            if (gs.unitSelected[i] && units[i].alive &&
+                units[i].owner == 0 && units[i].type == UNIT_VILLAGER) {
+                villagerSelected = true;
                 break;
             }
         }
-
-        if (tappedUnit >= 0) {
-            gs.selectedUnit = tappedUnit;
-            gs.selectedBldg = -1;
-            return;
-        }
-
-        // Check if tapped on own building
-        int tileX = mapX / TILE_PX;
-        int tileY = mapY / TILE_PX;
-        int tappedBldg = building_at_tile(tileX, tileY);
-        if (tappedBldg >= 0 && buildings[tappedBldg].owner == 0) {
-            // If villager selected and building incomplete, send to build
-            if (gs.selectedUnit >= 0 && units[gs.selectedUnit].type == UNIT_VILLAGER &&
-                !building_is_complete(tappedBldg)) {
-                unit_command_build(gs.selectedUnit, tappedBldg, terrain);
-                return;
-            }
-            gs.selectedBldg = tappedBldg;
-            gs.selectedUnit = -1;
-            return;
-        }
-
-        // Check if tapped on enemy unit (attack command)
-        int enemyUnit = unit_at_pixel(mapX, mapY, 0); // ignore player 0
-        if (enemyUnit >= 0 && gs.selectedUnit >= 0) {
-            unit_command_attack(gs.selectedUnit, enemyUnit);
-            return;
-        }
-
-        // Check if tapped on enemy building (attack command)
-        if (tappedBldg >= 0 && buildings[tappedBldg].owner != 0 && gs.selectedUnit >= 0) {
-            unit_command_attack_building(gs.selectedUnit, tappedBldg);
-            return;
-        }
-
-        // Check if tapped on resource tile (gather command for villager)
-        if (gs.selectedUnit >= 0 && units[gs.selectedUnit].type == UNIT_VILLAGER) {
-            u8 tt = terrain.tileAt(tileX, tileY);
-            if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE || tt == TERRAIN_FARM) {
-                unit_command_gather(gs.selectedUnit, tileX, tileY, terrain);
-                return;
-            }
-        }
-
-        // Default: move command
-        if (gs.selectedUnit >= 0) {
-            unit_command_move(gs.selectedUnit, mapX, mapY, terrain);
-        }
-    }
-
-    // Auto-show build menu when villager selected, hide when not
-    if (gs.inputMode == 0) {
-        bool villagerSelected = (gs.selectedUnit >= 0 &&
-                                 units[gs.selectedUnit].alive &&
-                                 units[gs.selectedUnit].owner == 0 &&
-                                 units[gs.selectedUnit].type == UNIT_VILLAGER);
         gs.buildMenuOpen = villagerSelected;
     }
 
-    // Follow camera on selected unit
+    // Follow camera on selected unit (use iso position)
     if (gs.followCam && gs.selectedUnit >= 0 && units[gs.selectedUnit].alive) {
-        gs.camX = units[gs.selectedUnit].x - SCREEN_W / 2;
-        gs.camY = units[gs.selectedUnit].y - SCREEN_H / 2;
+        int isoX, isoY;
+        worldToIso(units[gs.selectedUnit].x, units[gs.selectedUnit].y, isoX, isoY);
+        gs.camX = isoX - SCREEN_W / 2;
+        gs.camY = isoY - SCREEN_H / 2;
     }
 
-    // Clamp camera
+    // Clamp camera to isometric map bounds
     if (gs.camX < 0) gs.camX = 0;
     if (gs.camY < 0) gs.camY = 0;
-    if (gs.camX > MAP_PX - SCREEN_W) gs.camX = MAP_PX - SCREEN_W;
-    if (gs.camY > MAP_PX - SCREEN_H) gs.camY = MAP_PX - SCREEN_H;
+    if (gs.camX > ISO_MAP_W - SCREEN_W) gs.camX = ISO_MAP_W - SCREEN_W;
+    if (gs.camY > ISO_MAP_H - SCREEN_H) gs.camY = ISO_MAP_H - SCREEN_H;
 }

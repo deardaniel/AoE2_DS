@@ -1,4 +1,5 @@
 #include "terrain.h"
+#include "iso.h"
 #include <string.h>
 
 // ---------------------------------------------------------------------------
@@ -8,8 +9,16 @@ extern const u8 terrain_pal_bin[];
 extern const u32 terrain_pal_bin_size;
 extern const u8 terrain_tiles_bin[];
 extern const u32 terrain_tiles_bin_size;
+extern const u8 sprite_pal_bin[];
+extern const u32 sprite_pal_bin_size;
 
-u8 tileGfxCache[TERRAIN_COUNT][TILE_PX * TILE_PX];
+// Resource object sprites (32x32 each, single frame)
+extern const u8 spr_tree_bin[];
+extern const u8 spr_gold_mine_bin[];
+extern const u8 spr_stone_mine_bin[];
+
+u8 tileGfxCache[TERRAIN_COUNT][ISO_TILE_W * ISO_TILE_H];
+u8 grassVariantCache[GRASS_VARIANTS][ISO_TILE_W * ISO_TILE_H];
 
 // Simple pseudo-random number generator
 static u32 rngState;
@@ -27,23 +36,48 @@ static int rngRange(int lo, int hi) {
 // Initialize palette from preprocessed terrain data
 // ---------------------------------------------------------------------------
 void terrain_initPalette() {
-    // Load the shared terrain palette into BG_PALETTE_SUB
-    // This includes UI colors at indices 0-15 and terrain colors at 16-255
-    dmaCopy(terrain_pal_bin, BG_PALETTE_SUB, 512);
+    // Load sprite palette as the BG palette — both terrain tiles and software-rendered
+    // sprites use BG_PALETTE_SUB, so they must share the same palette.
+    // Terrain tiles are indexed against sprite palette colors at indices 16-255.
+    dmaCopy(sprite_pal_bin, BG_PALETTE_SUB, 512);
 
-    // Note: SPRITE_PALETTE_SUB is loaded from HD sprite data in render_init()
+    // Override indices 0-15 with UI colors (for fog overlay, build menu, HP bars, etc.)
+    // terrain_pal_bin has the correct UI colors at indices 0-15
+    for (int i = 0; i < 16; i++) {
+        u16 val = terrain_pal_bin[i * 2] | (terrain_pal_bin[i * 2 + 1] << 8);
+        BG_PALETTE_SUB[i] = val;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Init tile graphics cache from preprocessed binary data
 // ---------------------------------------------------------------------------
 void TerrainMap::initTileGfx() {
-    // terrain_tiles_bin contains 7 terrain tiles × 16×16 bytes = 1792 bytes
-    // Each tile is TILE_PX * TILE_PX = 256 bytes of palette-indexed pixels
+    // terrain_tiles_bin contains:
+    //   7 base terrain tiles × 512 bytes = 3584 bytes
+    //   4 grass variant tiles × 512 bytes = 2048 bytes
+    // Total: 5632 bytes
+    int tileSize = ISO_TILE_W * ISO_TILE_H;
     for (int t = 0; t < TERRAIN_COUNT; t++) {
         memcpy(tileGfxCache[t],
-               &terrain_tiles_bin[t * TILE_PX * TILE_PX],
-               TILE_PX * TILE_PX);
+               &terrain_tiles_bin[t * tileSize],
+               tileSize);
+    }
+    // Load grass variants (stored after the 7 base tiles)
+    for (int v = 0; v < GRASS_VARIANTS; v++) {
+        memcpy(grassVariantCache[v],
+               &terrain_tiles_bin[(TERRAIN_COUNT + v) * tileSize],
+               tileSize);
+    }
+}
+
+// Get resource sprite data for a terrain type (NULL if none)
+const u8* terrain_get_resource_sprite(u8 ttype) {
+    switch (ttype) {
+    case TERRAIN_FOREST: return spr_tree_bin;
+    case TERRAIN_GOLD:   return spr_gold_mine_bin;
+    case TERRAIN_STONE:  return spr_stone_mine_bin;
+    default: return NULL;
     }
 }
 
@@ -91,13 +125,13 @@ void TerrainMap::generate(u32 seed) {
         }
     }
 
-    // Clear starting areas (opposite corners) — guaranteed grass
-    for (int dy = 0; dy < 6; dy++) {
-        for (int dx = 0; dx < 6; dx++) {
+    // Clear starting areas (opposite corners) — guaranteed grass for 4x4 TC + buffer
+    for (int dy = 0; dy < 8; dy++) {
+        for (int dx = 0; dx < 8; dx++) {
             // Player 0: top-left area
             tiles[1 + dy][1 + dx] = TERRAIN_GRASS;
             // Player 1: bottom-right area
-            tiles[MAP_TILES - 7 + dy][MAP_TILES - 7 + dx] = TERRAIN_GRASS;
+            tiles[MAP_TILES - 9 + dy][MAP_TILES - 9 + dx] = TERRAIN_GRASS;
         }
     }
 
@@ -184,44 +218,92 @@ void TerrainMap::generate(u32 seed) {
 // Render visible portion of map into 256x192 VRAM bitmap
 // ---------------------------------------------------------------------------
 void TerrainMap::renderViewport(u8* vram, int camX, int camY) const {
-    // Determine visible tile range
-    int startTX = camX / TILE_PX;
-    int startTY = camY / TILE_PX;
-    int offX = camX % TILE_PX; // pixel offset within first tile
-    int offY = camY % TILE_PX;
+    // Clear buffer to black (off-map areas will show as black)
+    memset(vram, PAL_BLACK, SCREEN_W * SCREEN_H);
 
-    // We need enough tiles to cover screen + partial edges
-    int tilesW = (SCREEN_W / TILE_PX) + 2;
-    int tilesH = (SCREEN_H / TILE_PX) + 2;
+    // Determine visible tile range by converting screen corners to tile coords
+    int minTX, minTY, maxTX, maxTY;
+    int tmpTX, tmpTY;
 
-    for (int ty = 0; ty < tilesH; ty++) {
-        for (int tx = 0; tx < tilesW; tx++) {
-            int mapTX = startTX + tx;
-            int mapTY = startTY + ty;
+    // Check all 4 corners of screen with margin for tile overhang
+    screenToTile(0, 0, camX, camY, minTX, minTY);
+    maxTX = minTX; maxTY = minTY;
 
-            // Screen destination for this tile
-            int dstX = tx * TILE_PX - offX;
-            int dstY = ty * TILE_PX - offY;
+    screenToTile(SCREEN_W, 0, camX, camY, tmpTX, tmpTY);
+    if (tmpTX < minTX) minTX = tmpTX;
+    if (tmpTX > maxTX) maxTX = tmpTX;
+    if (tmpTY < minTY) minTY = tmpTY;
+    if (tmpTY > maxTY) maxTY = tmpTY;
 
-            // Get tile type (out of bounds = water)
-            u8 ttype = TERRAIN_WATER;
-            if (mapTX >= 0 && mapTX < MAP_TILES && mapTY >= 0 && mapTY < MAP_TILES) {
-                ttype = tiles[mapTY][mapTX];
+    screenToTile(0, SCREEN_H, camX, camY, tmpTX, tmpTY);
+    if (tmpTX < minTX) minTX = tmpTX;
+    if (tmpTX > maxTX) maxTX = tmpTX;
+    if (tmpTY < minTY) minTY = tmpTY;
+    if (tmpTY > maxTY) maxTY = tmpTY;
+
+    screenToTile(SCREEN_W, SCREEN_H, camX, camY, tmpTX, tmpTY);
+    if (tmpTX < minTX) minTX = tmpTX;
+    if (tmpTX > maxTX) maxTX = tmpTX;
+    if (tmpTY < minTY) minTY = tmpTY;
+    if (tmpTY > maxTY) maxTY = tmpTY;
+
+    // Expand range by 1 tile on each side for partial tiles
+    minTX -= 1; minTY -= 1;
+    maxTX += 1; maxTY += 1;
+
+    // Iterate tiles in depth order (sum = tx + ty, lower sum = further back)
+    int minSum = minTX + minTY;
+    int maxSum = maxTX + maxTY;
+
+    for (int sum = minSum; sum <= maxSum; sum++) {
+        for (int tx = minTX; tx <= maxTX; tx++) {
+            int ty = sum - tx;
+            if (ty < minTY || ty > maxTY) continue;
+
+            // Get tile type (out of bounds = skip, drawn as black background)
+            if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
+            u8 ttype = tiles[ty][tx];
+
+            // For grass tiles, select a variant based on tile position
+            // Uses a simple hash to pick deterministically
+            const u8* src;
+            if (ttype == TERRAIN_GRASS) {
+                int variant = ((tx * 7) ^ (ty * 13) ^ (tx + ty)) & (GRASS_VARIANTS - 1);
+                src = grassVariantCache[variant];
+            } else {
+                src = tileGfxCache[ttype];
             }
 
-            const u8* src = tileGfxCache[ttype];
+            // Compute screen position of this tile's top-left corner
+            int isoX, isoY;
+            tileToIso(tx, ty, isoX, isoY);
+            int dstX = isoX - camX;
+            int dstY = isoY - camY;
 
-            // Copy tile pixels, clipping to screen
-            for (int py = 0; py < TILE_PX; py++) {
+            // Quick bounds check (tile is 32x16)
+            if (dstX + ISO_TILE_W <= 0 || dstX >= SCREEN_W) continue;
+            if (dstY + ISO_TILE_H <= 0 || dstY >= SCREEN_H) continue;
+
+            // Draw diamond pixels using mask table
+            for (int py = 0; py < ISO_TILE_H; py++) {
                 int screenY = dstY + py;
                 if (screenY < 0 || screenY >= SCREEN_H) continue;
 
-                for (int px = 0; px < TILE_PX; px++) {
-                    int screenX = dstX + px;
-                    if (screenX < 0 || screenX >= SCREEN_W) continue;
+                int xs = ISO_DIAMOND_XSTART[py];
+                int xe = ISO_DIAMOND_XEND[py];
 
-                    vram[screenY * 256 + screenX] = src[py * TILE_PX + px];
-                }
+                // Clip to screen horizontally
+                int drawXs = dstX + xs;
+                int drawXe = dstX + xe;
+                int srcStart = xs;
+                if (drawXs < 0) { srcStart -= drawXs; drawXs = 0; }
+                if (drawXe > SCREEN_W) drawXe = SCREEN_W;
+                if (drawXs >= drawXe) continue;
+
+                int span = drawXe - drawXs;
+                memcpy(&vram[screenY * 256 + drawXs],
+                       &src[py * ISO_TILE_W + srcStart],
+                       span);
             }
         }
     }

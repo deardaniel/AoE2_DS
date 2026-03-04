@@ -3,8 +3,11 @@
 #include "units.h"
 #include "buildings.h"
 #include "terrain.h"
+#include "res_icons.h"
+#include "iso.h"
 #include "fog.h"
 #include "tech.h"
+#include "font.h"
 #include <stdio.h>
 
 // Access tech-modified stats
@@ -17,9 +20,94 @@ static PrintConsole topConsole;
 static u16* minimapVram = NULL;
 static int minimapBg = -1;
 
-// Minimap dimensions: 4px per tile = 128x128
-enum { MINIMAP_SCALE = 4, MINIMAP_SIZE = MAP_TILES * MINIMAP_SCALE }; // 128x128
-enum { MINIMAP_X = 0, MINIMAP_Y = 0 };
+// Minimap dimensions: isometric diamond view
+// Uses per-pixel reverse iso projection to map minimap pixels to tiles
+// X scale = 2px, Y scale = 1px to match the 2:1 isometric tile ratio (32×16)
+enum { MINIMAP_SX = 2, MINIMAP_SY = 1 };
+enum { MINIMAP_W = (MAP_TILES * 2 - 1) * MINIMAP_SX + 2,  // ~126px
+       MINIMAP_H = (MAP_TILES * 2 - 1) * MINIMAP_SY + 2 }; // ~63px
+enum { STATUS_BAR_H = 16 };
+enum { MINIMAP_X = 0, MINIMAP_Y = STATUS_BAR_H };
+
+static void ui_blit_icon(int dx, int dy, const u16* icon) {
+    if (!minimapVram) return;
+    for (int y = 0; y < 8; y++) {
+        int sy = dy + y;
+        if (sy < 0 || sy >= 192) continue;
+        for (int x = 0; x < 8; x++) {
+            int sx = dx + x;
+            if (sx < 0 || sx >= 256) continue;
+            u16 px = icon[y * 8 + x];
+            if (px != 0) minimapVram[sy * 256 + sx] = px;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Status bar drawing using AoE2 bitmap font
+// ---------------------------------------------------------------------------
+static void ui_draw_status_bar(const GameState& gs) {
+    if (!minimapVram) return;
+    const Player& p = gs.players[0];
+
+    u16 bgColor = RGB15(3, 2, 1) | BIT(15);
+    for (int y = 0; y < STATUS_BAR_H; y++)
+        for (int x = 0; x < 256; x++)
+            minimapVram[y * 256 + x] = bgColor;
+
+    u16 white  = RGB15(31, 31, 31) | BIT(15);
+    u16 gray   = RGB15(16, 16, 16) | BIT(15);
+
+    int x = 2, y = 1;
+
+    // Food: icon + number
+    ui_blit_icon(x, y, icon_food); x += 10;
+    x = font_draw_num_16(minimapVram, 256, 192, x, y, p.resources[RES_FOOD], white, gameFont); x += 5;
+
+    // Wood: icon + number
+    ui_blit_icon(x, y, icon_wood); x += 10;
+    x = font_draw_num_16(minimapVram, 256, 192, x, y, p.resources[RES_WOOD], white, gameFont); x += 5;
+
+    // Gold: icon + number
+    ui_blit_icon(x, y, icon_gold); x += 10;
+    x = font_draw_num_16(minimapVram, 256, 192, x, y, p.resources[RES_GOLD], white, gameFont); x += 5;
+
+    // Stone: icon + number
+    ui_blit_icon(x, y, icon_stone); x += 10;
+    x = font_draw_num_16(minimapVram, 256, 192, x, y, p.resources[RES_STONE], white, gameFont); x += 7;
+
+    // Population: icon + count/cap
+    ui_blit_icon(x, y, icon_pop); x += 10;
+    x = font_draw_num_16(minimapVram, 256, 192, x, y, p.popCount, white, gameFont);
+    x = font_draw_str_16(minimapVram, 256, 192, x, y, "/", gray, gameFont);
+    x = font_draw_num_16(minimapVram, 256, 192, x, y, p.popCap, white, gameFont);
+
+    // Idle villager count (yellow warning if any)
+    int idleVils = 0;
+    for (int i = 0; i < MAX_UNITS; i++) {
+        if (units[i].alive && units[i].owner == 0 &&
+            units[i].type == UNIT_VILLAGER && units[i].state == USTATE_IDLE)
+            idleVils++;
+    }
+    if (idleVils > 0) {
+        x += 5;
+        u16 yellow = RGB15(31, 28, 4) | BIT(15);
+        x = font_draw_str_16(minimapVram, 256, 192, x, y, "!", yellow, gameFont);
+        x = font_draw_num_16(minimapVram, 256, 192, x, y, idleVils, yellow, gameFont);
+    }
+
+    // Age indicator (right-aligned)
+    static const char* AGE_SHORT[] = { "I", "II", "III", "IV" };
+    u16 gold = RGB15(31, 24, 0) | BIT(15);
+    int ageW = font_string_width(gameFont, AGE_SHORT[p.age]);
+    font_draw_str_16(minimapVram, 256, 192, 254 - ageW, y, AGE_SHORT[p.age], gold, gameFont);
+}
+
+// Convert tile coords to minimap pixel coords (isometric projection)
+static inline void tileToMinimap(int tx, int ty, int& mx, int& my) {
+    mx = MINIMAP_X + (tx - ty + MAP_TILES - 1) * MINIMAP_SX;
+    my = MINIMAP_Y + (tx + ty) * MINIMAP_SY;
+}
 
 // Minimap colors (RGB15)
 static u16 terrainMiniColors[TERRAIN_COUNT] = {
@@ -54,7 +142,15 @@ void ui_init() {
 static void ui_draw_minimap(const GameState& gs, const TerrainMap& terrain) {
     if (!minimapVram) return;
 
-    // Draw terrain
+    // Clear minimap area to black (start at MINIMAP_Y to preserve status bar)
+    u16 black = RGB15(0, 0, 0) | BIT(15);
+    for (int my = MINIMAP_Y; my < MINIMAP_Y + MINIMAP_H && my < 192; my++) {
+        for (int mx = 0; mx < MINIMAP_W && mx < 256; mx++) {
+            minimapVram[my * 256 + mx] = black;
+        }
+    }
+
+    // Draw terrain as isometric diamond — iterate tiles and fill minimap pixels
     for (int ty = 0; ty < MAP_TILES; ty++) {
         for (int tx = 0; tx < MAP_TILES; tx++) {
             u8 ttype = terrain.tileAt(tx, ty);
@@ -62,28 +158,30 @@ static void ui_draw_minimap(const GameState& gs, const TerrainMap& terrain) {
 
             u16 color;
             if (fogState == FOG_UNEXPLORED) {
-                color = RGB15(0, 0, 0);
+                continue; // leave as black
             } else {
                 color = terrainMiniColors[ttype];
                 if (fogState == FOG_EXPLORED) {
-                    // Darken for explored-but-not-visible
                     int r = (color & 0x1F) >> 1;
                     int g = ((color >> 5) & 0x1F) >> 1;
                     int b = ((color >> 10) & 0x1F) >> 1;
                     color = RGB15(r, g, b);
                 }
             }
-            // Set bit 15 for DS 16-bit bitmap display
             color |= BIT(15);
 
-            // Fill minimap pixels
-            for (int dy = 0; dy < MINIMAP_SCALE; dy++) {
-                for (int dx = 0; dx < MINIMAP_SCALE; dx++) {
-                    int mx = MINIMAP_X + tx * MINIMAP_SCALE + dx;
-                    int my = MINIMAP_Y + ty * MINIMAP_SCALE + dy;
-                    if (mx < 256 && my < 192) {
-                        minimapVram[my * 256 + mx] = color;
-                    }
+            // Map tile to minimap position and fill a small diamond
+            int mx, my;
+            tileToMinimap(tx, ty, mx, my);
+
+            // Draw a small diamond matching the iso aspect ratio (2px wide × 1px tall)
+            for (int dy = 0; dy < MINIMAP_SY * 2; dy++) {
+                int py = my + dy;
+                if (py < 0 || py >= 192) continue;
+                for (int dx = 0; dx < MINIMAP_SX * 2; dx++) {
+                    int px = mx + dx;
+                    if (px < 0 || px >= 256) continue;
+                    minimapVram[py * 256 + px] = color;
                 }
             }
         }
@@ -91,27 +189,30 @@ static void ui_draw_minimap(const GameState& gs, const TerrainMap& terrain) {
 
     // Draw units on minimap
     for (int i = 0; i < MAX_UNITS; i++) {
-        if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
+        if (!units[i].alive || units[i].state == USTATE_DEAD || units[i].state == USTATE_GARRISONED) continue;
         int tx = (units[i].x + TILE_PX/2) / TILE_PX;
         int ty = (units[i].y + TILE_PX/2) / TILE_PX;
 
-        // Only show if visible to player 0
         if (units[i].owner != 0 && !fogMap.isVisible(0, tx, ty)) continue;
 
         u16 dotColor = (units[i].owner == 0) ? RGB15(4, 8, 31) : RGB15(31, 4, 4);
         dotColor |= BIT(15);
 
-        int mx = MINIMAP_X + tx * MINIMAP_SCALE + 1;
-        int my = MINIMAP_Y + ty * MINIMAP_SCALE + 1;
-        if (mx >= 0 && mx < 255 && my >= 0 && my < 191) {
-            minimapVram[my * 256 + mx] = dotColor;
-            minimapVram[my * 256 + mx + 1] = dotColor;
-            minimapVram[(my+1) * 256 + mx] = dotColor;
-            minimapVram[(my+1) * 256 + mx + 1] = dotColor;
+        int mx, my;
+        tileToMinimap(tx, ty, mx, my);
+        // Draw 2x2 dot
+        for (int dy = 0; dy < 2; dy++) {
+            for (int dx = 0; dx < 2; dx++) {
+                int px = mx + dx + 1;
+                int py = my + dy + 1;
+                if (px >= 0 && px < 256 && py >= 0 && py < 192) {
+                    minimapVram[py * 256 + px] = dotColor;
+                }
+            }
         }
     }
 
-    // Draw buildings on minimap (larger dots)
+    // Draw buildings on minimap
     for (int i = 0; i < MAX_BUILDINGS; i++) {
         if (!buildings[i].alive) continue;
         int tx = buildings[i].x / TILE_PX;
@@ -121,37 +222,61 @@ static void ui_draw_minimap(const GameState& gs, const TerrainMap& terrain) {
 
         u16 dotColor = (buildings[i].owner == 0) ? RGB15(4, 8, 31) : RGB15(31, 4, 4);
         dotColor |= BIT(15);
-        int bw = BLDG_STATS[buildings[i].type].tileW * MINIMAP_SCALE;
-        int bh = BLDG_STATS[buildings[i].type].tileH * MINIMAP_SCALE;
 
-        for (int dy = 0; dy < bh; dy++) {
-            for (int dx = 0; dx < bw; dx++) {
-                int mx = MINIMAP_X + tx * MINIMAP_SCALE + dx;
-                int my = MINIMAP_Y + ty * MINIMAP_SCALE + dy;
-                if (mx >= 0 && mx < 256 && my >= 0 && my < 192) {
-                    minimapVram[my * 256 + mx] = dotColor;
+        int tileW = BLDG_STATS[buildings[i].type].tileW;
+        int tileH = BLDG_STATS[buildings[i].type].tileH;
+
+        // Fill all tiles of the building
+        for (int bty = 0; bty < tileH; bty++) {
+            for (int btx = 0; btx < tileW; btx++) {
+                int mx, my;
+                tileToMinimap(tx + btx, ty + bty, mx, my);
+                for (int dy = 0; dy < MINIMAP_SY * 2; dy++) {
+                    for (int dx = 0; dx < MINIMAP_SX * 2; dx++) {
+                        int px = mx + dx;
+                        int py = my + dy;
+                        if (px >= 0 && px < 256 && py >= 0 && py < 192) {
+                            minimapVram[py * 256 + px] = dotColor;
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Draw camera viewport rectangle
-    int vx1 = MINIMAP_X + (gs.camX * MINIMAP_SCALE) / TILE_PX;
-    int vy1 = MINIMAP_Y + (gs.camY * MINIMAP_SCALE) / TILE_PX;
-    int vx2 = vx1 + (SCREEN_W * MINIMAP_SCALE) / TILE_PX;
-    int vy2 = vy1 + (SCREEN_H * MINIMAP_SCALE) / TILE_PX;
+    // Draw camera viewport outline as rectangle matching the screen
+    // Screen corners map to tile coords, then to minimap coords — forms a rectangle
+    int cTX[4], cTY[4];
+    screenToTile(0, 0, gs.camX, gs.camY, cTX[0], cTY[0]);
+    screenToTile(SCREEN_W, 0, gs.camX, gs.camY, cTX[1], cTY[1]);
+    screenToTile(SCREEN_W, SCREEN_H, gs.camX, gs.camY, cTX[2], cTY[2]);
+    screenToTile(0, SCREEN_H, gs.camX, gs.camY, cTX[3], cTY[3]);
+
+    int cmx[4], cmy[4];
+    for (int c = 0; c < 4; c++) {
+        tileToMinimap(cTX[c], cTY[c], cmx[c], cmy[c]);
+        cmx[c] += MINIMAP_SX;
+        cmy[c] += MINIMAP_SY;
+    }
+
     u16 white = RGB15(31, 31, 31) | BIT(15);
 
-    for (int x = vx1; x <= vx2; x++) {
-        if (x >= 0 && x < 256) {
-            if (vy1 >= 0 && vy1 < 192) minimapVram[vy1 * 256 + x] = white;
-            if (vy2 >= 0 && vy2 < 192) minimapVram[vy2 * 256 + x] = white;
-        }
-    }
-    for (int y = vy1; y <= vy2; y++) {
-        if (y >= 0 && y < 192) {
-            if (vx1 >= 0 && vx1 < 256) minimapVram[y * 256 + vx1] = white;
-            if (vx2 >= 0 && vx2 < 256) minimapVram[y * 256 + vx2] = white;
+    // Draw lines between the 4 diamond vertices (Bresenham)
+    for (int edge = 0; edge < 4; edge++) {
+        int x0 = cmx[edge], y0 = cmy[edge];
+        int x1 = cmx[(edge + 1) % 4], y1 = cmy[(edge + 1) % 4];
+        int dx = x1 - x0, dy = y1 - y0;
+        int sx = (dx > 0) ? 1 : -1, sy = (dy > 0) ? 1 : -1;
+        dx = dx * sx; dy = dy * sy;
+        int err = dx - dy;
+        while (true) {
+            if (x0 >= 0 && x0 < 256 && y0 >= 0 && y0 < 192) {
+                minimapVram[y0 * 256 + x0] = white;
+            }
+            if (x0 == x1 && y0 == y1) break;
+            int e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x0 += sx; }
+            if (e2 < dx)  { err += dx; y0 += sy; }
         }
     }
 }
@@ -161,6 +286,7 @@ void ui_update(const GameState& gs, const TerrainMap& terrain) {
 
     // Draw minimap (only every 4th frame for performance)
     if ((gs.frameCount & 3) == 0) {
+        ui_draw_status_bar(gs);
         ui_draw_minimap(gs, terrain);
     }
 
@@ -170,30 +296,43 @@ void ui_update(const GameState& gs, const TerrainMap& terrain) {
 
     const Player& p0 = gs.players[0];
 
-    // Resource bar (line 0-1, positioned right of minimap)
-    iprintf("\x1b[0;17H F:%d", p0.resources[RES_FOOD]);
-    iprintf("\x1b[1;17H W:%d", p0.resources[RES_WOOD]);
-    iprintf("\x1b[2;17H G:%d", p0.resources[RES_GOLD]);
-    iprintf("\x1b[3;17H S:%d", p0.resources[RES_STONE]);
-
-    // Age and pop
-    iprintf("\x1b[5;17H %s", AGE_NAMES[p0.age]);
-    iprintf("\x1b[6;17H Pop:%d/%d", p0.popCount, p0.popCap);
-
-    // Age progress
+    // Age progress (only shown when advancing)
     if (p0.ageProgress >= 0) {
         int nextAge = p0.age + 1;
         if (nextAge < AGE_COUNT) {
             int pct = (p0.ageProgress * 100) / AGE_RESEARCH_TIME[nextAge];
-            iprintf("\x1b[7;17H Age Up:%d%%", pct);
+            iprintf("\x1b[0;17HAge Up:%d%%", pct);
         }
     }
 
     // Selected unit info (below minimap area)
-    if (gs.selectedUnit >= 0 && gs.selectedUnit < MAX_UNITS && units[gs.selectedUnit].alive) {
+    if (gs.selectionCount > 1) {
+        // Multi-selection: show count summary
+        int vilCount = 0, milCount = 0;
+        for (int i = 0; i < MAX_UNITS; i++) {
+            if (!gs.unitSelected[i] || !units[i].alive) continue;
+            if (units[i].type == UNIT_VILLAGER) vilCount++;
+            else milCount++;
+        }
+        iprintf("\x1b[17;0H %d units selected", gs.selectionCount);
+        if (vilCount > 0) iprintf("\x1b[18;0H  Villagers: %d", vilCount);
+        if (milCount > 0) iprintf("\x1b[19;0H  Military: %d", milCount);
+    } else if (gs.selectedUnit >= 0 && gs.selectedUnit < MAX_UNITS && units[gs.selectedUnit].alive) {
         const Unit& u = units[gs.selectedUnit];
         const UnitStats& st = playerUnitStats[u.owner][u.type];
-        iprintf("\x1b[17;0H %s", UNIT_NAMES[u.type]);
+        // Unit name + state
+        const char* stateStr = "";
+        switch (u.state) {
+        case USTATE_IDLE:      stateStr = "Idle"; break;
+        case USTATE_MOVING:    stateStr = "Moving"; break;
+        case USTATE_GATHERING: stateStr = "Gathering"; break;
+        case USTATE_RETURNING: stateStr = "Returning"; break;
+        case USTATE_BUILDING:  stateStr = "Building"; break;
+        case USTATE_ATTACKING: stateStr = "Fighting"; break;
+        case USTATE_SCOUTING:  stateStr = "Scouting"; break;
+        default: break;
+        }
+        iprintf("\x1b[17;0H %s - %s", UNIT_NAMES[u.type], stateStr);
         iprintf("\x1b[18;0H HP:%d/%d ATK:%d ARM:%d", u.hp, st.hp, st.attack, st.armor);
         iprintf("\x1b[19;0H RNG:%d SPD:%d", st.range, st.speed);
         if (u.carryAmount > 0) {
@@ -206,6 +345,9 @@ void ui_update(const GameState& gs, const TerrainMap& terrain) {
         const Building& b = buildings[gs.selectedBldg];
         const BuildingStats& st = BLDG_STATS[b.type];
         iprintf("\x1b[17;0H %s", BLDG_NAMES[b.type]);
+        if (b.garrisonCount > 0) {
+            iprintf(" [%d inside]", b.garrisonCount);
+        }
         iprintf("\x1b[18;0H HP:%d/%d", b.hp, st.hp);
 
         if (b.buildProgress < st.buildTime) {
@@ -216,6 +358,12 @@ void ui_update(const GameState& gs, const TerrainMap& terrain) {
                 int pct = (b.trainProgress * 100) / UNIT_STATS[(u8)b.trainQueue[0]].trainTime;
                 iprintf("\x1b[19;0H Train %s:%d%%",
                         UNIT_NAMES[(u8)b.trainQueue[0]], pct);
+                // Show queued units
+                if (b.trainQueue[1] >= 0) {
+                    iprintf("\x1b[20;0H Queue: %s", UNIT_NAMES[(u8)b.trainQueue[1]]);
+                    if (b.trainQueue[2] >= 0)
+                        iprintf(", %s", UNIT_NAMES[(u8)b.trainQueue[2]]);
+                }
             } else {
                 iprintf("\x1b[19;0H [Idle]");
             }
@@ -254,6 +402,23 @@ void ui_update(const GameState& gs, const TerrainMap& terrain) {
                 line++;
             }
         }
+    } else if (gs.selectedTileX >= 0 && gs.selectedTileX < MAP_TILES &&
+               gs.selectedTileY >= 0 && gs.selectedTileY < MAP_TILES) {
+        u8 tt = terrain.tileAt(gs.selectedTileX, gs.selectedTileY);
+        int amt = terrain.resourceAmt[gs.selectedTileY][gs.selectedTileX];
+        const char* tileName = "Grass";
+        const char* resName = "";
+        switch (tt) {
+        case TERRAIN_FOREST: tileName = "Forest"; resName = "Wood"; break;
+        case TERRAIN_GOLD:   tileName = "Gold Mine"; resName = "Gold"; break;
+        case TERRAIN_STONE:  tileName = "Stone Mine"; resName = "Stone"; break;
+        case TERRAIN_FARM:   tileName = "Farm"; resName = "Food"; break;
+        default: break;
+        }
+        iprintf("\x1b[17;0H %s", tileName);
+        if (amt > 0) {
+            iprintf("\x1b[18;0H %s: %d", resName, amt);
+        }
     }
 
     // Game phase overlay
@@ -270,7 +435,31 @@ void ui_update(const GameState& gs, const TerrainMap& terrain) {
         iprintf("\x1b[23;0H [Build Menu Open]");
     } else if (gs.inputMode == 1) {
         iprintf("\x1b[23;0H Place: %s", BLDG_NAMES[gs.placeBldgType]);
+    } else if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
+               buildings[gs.selectedBldg].type == BLDG_TOWN_CENTER &&
+               buildings[gs.selectedBldg].garrisonCount > 0) {
+        iprintf("\x1b[23;0H A:Ungarrison START:Train");
     } else {
         iprintf("\x1b[23;0H X:Build L/R:Vil B:Cancel");
+    }
+
+    // Score comparison (right side, next to minimap)
+    if (gs.phase == PHASE_PLAYING) {
+        int scores[NUM_PLAYERS] = {0, 0};
+        for (int p = 0; p < NUM_PLAYERS; p++) {
+            for (int r = 0; r < RES_COUNT; r++)
+                scores[p] += gs.players[p].resources[r];
+            scores[p] += gs.players[p].age * 500;
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (units[i].alive && units[i].owner == p && units[i].state != USTATE_DEAD)
+                    scores[p] += 50;
+            }
+            for (int i = 0; i < MAX_BUILDINGS; i++) {
+                if (buildings[i].alive && buildings[i].owner == p)
+                    scores[p] += 100;
+            }
+        }
+        iprintf("\x1b[5;17HYou:%d", scores[0]);
+        iprintf("\x1b[6;17H AI:%d", scores[1]);
     }
 }

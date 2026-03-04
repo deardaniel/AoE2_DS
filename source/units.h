@@ -27,6 +27,7 @@ struct Unit {
     s8   attackBldgTarget;   // building index being attacked (-1 = none)
     s8   buildTarget;        // building index being constructed (-1 = none)
     u8   attackCooldown;
+    u8   waitCounter;        // frames waiting for blocked tile during movement
     u8   deadTimer;          // countdown after death before removal
     u16* spriteGfx;          // OAM gfx pointer (NULL if not allocated)
     s8   oamSlot;            // OAM slot index (-1 = not visible)
@@ -62,6 +63,12 @@ int  unit_count_type(int owner, int type);
 int  unit_find_idle_villager(int owner, int startFrom = 0);
 int  unit_find_nearest_enemy(int unitIdx);
 
-// A* pathfinding on tile grid
+// A* pathfinding on tile grid.
+// selfIdx: index of the pathfinding unit (excluded from the passability map
+// so it doesn't block its own start tile). Pass -1 for external callers.
 bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
-                    u8* outDirs, u8& outLen);
+                    u8* outDirs, u8& outLen, int selfIdx = -1);
+
+// Tile occupancy — check if a tile is occupied by any alive, visible unit.
+// Backed by tileOccupant grid rebuilt each frame in units_update().
+bool tile_has_unit(int tx, int ty);

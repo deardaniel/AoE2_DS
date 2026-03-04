@@ -20,12 +20,20 @@ void game_init(GameState& gs) {
     gs.followCam = false;
     gs.selectedUnit = -1;
     gs.selectedBldg = -1;
+    gs.selectionCount = 0;
+    for (int i = 0; i < MAX_UNITS; i++) gs.unitSelected[i] = false;
     gs.phase = PHASE_PLAYING;
     gs.frameCount = 0;
     gs.inputMode = 0;
     gs.placeBldgType = 0;
     gs.buildMenuOpen = false;
     gs.buildMenuPage = 0;
+    gs.selectedTileX = -1;
+    gs.selectedTileY = -1;
+    gs.touchActive = false;
+    gs.isDragging = false;
+    gs.dragStartX = gs.dragStartY = 0;
+    gs.dragEndX = gs.dragEndY = 0;
 }
 
 bool game_can_afford(const GameState& gs, int player, const int cost[RES_COUNT]) {
@@ -102,8 +110,32 @@ void game_update(GameState& gs) {
         }
     }
 
-    // Win/lose check every 60 frames
-    if ((gs.frameCount % 60) == 0) {
-        game_check_win_lose(gs);
+    // Win/lose check every frame
+    game_check_win_lose(gs);
+}
+
+void game_clear_selection(GameState& gs) {
+    gs.selectedUnit = -1;
+    gs.selectedBldg = -1;
+    gs.selectedTileX = -1;
+    gs.selectedTileY = -1;
+    gs.selectionCount = 0;
+    for (int i = 0; i < MAX_UNITS; i++) gs.unitSelected[i] = false;
+}
+
+void game_select_unit(GameState& gs, int unitIdx) {
+    game_clear_selection(gs);
+    if (unitIdx >= 0 && unitIdx < MAX_UNITS) {
+        gs.selectedUnit = unitIdx;
+        gs.unitSelected[unitIdx] = true;
+        gs.selectionCount = 1;
     }
+}
+
+void game_add_to_selection(GameState& gs, int unitIdx) {
+    if (unitIdx < 0 || unitIdx >= MAX_UNITS) return;
+    if (gs.unitSelected[unitIdx]) return; // already selected
+    gs.unitSelected[unitIdx] = true;
+    gs.selectionCount++;
+    if (gs.selectedUnit < 0) gs.selectedUnit = unitIdx;
 }

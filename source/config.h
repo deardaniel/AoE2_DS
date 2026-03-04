@@ -7,6 +7,14 @@
 enum { MAP_TILES = 32, TILE_PX = 16, MAP_PX = MAP_TILES * TILE_PX }; // 512x512
 enum { SCREEN_W = 256, SCREEN_H = 192 };
 
+// Isometric tile dimensions (2:1 diamond shape)
+enum { ISO_TILE_W = 32, ISO_TILE_H = 16 };
+enum { ISO_MAP_W = MAP_TILES * ISO_TILE_W,   // 1024
+       ISO_MAP_H = MAP_TILES * ISO_TILE_H };  // 512
+
+// Grass tile variants for visual variety
+enum { GRASS_VARIANTS = 4 };
+
 // ---------------------------------------------------------------------------
 // Pool sizes
 // ---------------------------------------------------------------------------
@@ -47,7 +55,8 @@ enum UnitTypeId {
     UNIT_ARCHER    = 2,
     UNIT_KNIGHT    = 3,
     UNIT_SPEARMAN  = 4,
-    UNIT_TYPE_COUNT = 5
+    UNIT_SCOUT     = 5,
+    UNIT_TYPE_COUNT = 6
 };
 
 // ---------------------------------------------------------------------------
@@ -75,7 +84,9 @@ enum UnitState {
     USTATE_RETURNING  = 3,
     USTATE_ATTACKING  = 4,
     USTATE_BUILDING   = 5,
-    USTATE_DEAD       = 6
+    USTATE_DEAD       = 6,
+    USTATE_SCOUTING   = 7,
+    USTATE_GARRISONED = 8
 };
 
 // ---------------------------------------------------------------------------
@@ -91,9 +102,19 @@ enum VillagerRole {
 };
 
 // ---------------------------------------------------------------------------
-// Directions
+// Directions (8 directions for proper isometric sprite mapping)
 // ---------------------------------------------------------------------------
-enum Direction { DIR_UP = 0, DIR_RIGHT = 1, DIR_DOWN = 2, DIR_LEFT = 3, DIR_COUNT = 4 };
+enum Direction {
+    DIR_N  = 0,   // -ty          (upper-right on screen)
+    DIR_NE = 1,   // +tx, -ty     (right on screen)
+    DIR_E  = 2,   // +tx          (lower-right on screen)
+    DIR_SE = 3,   // +tx, +ty     (down on screen)
+    DIR_S  = 4,   // +ty          (lower-left on screen)
+    DIR_SW = 5,   // -tx, +ty     (left on screen)
+    DIR_W  = 6,   // -tx          (upper-left on screen)
+    DIR_NW = 7,   // -tx, -ty     (up on screen)
+    DIR_COUNT = 8
+};
 
 // ---------------------------------------------------------------------------
 // Unit stat table
@@ -138,6 +159,7 @@ static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
     /* ARCHER    */ {  30,  4,  0,  4,  1,  6, 2100, {  0, 25, 45,  0}, AGE_FEUDAL, BLDG_ARCHERY_RANGE },
     /* KNIGHT    */ { 100, 10,  2,  1,  2,  4, 1800, { 60,  0, 75,  0}, AGE_CASTLE, BLDG_STABLE },
     /* SPEARMAN  */ {  45,  3,  0,  1,  1,  4, 1320, { 35, 25,  0,  0}, AGE_FEUDAL, BLDG_BARRACKS },
+    /* SCOUT     */ {  45,  5,  0,  1,  2,  6,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_STABLE },
 };
 
 // ---------------------------------------------------------------------------
@@ -148,7 +170,7 @@ static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
 // - Build times in frames at 60fps
 //                                      hp  build   F    W    G    S   age  pop  tw th
 static const BuildingStats BLDG_STATS[BLDG_TYPE_COUNT] = {
-    /* TOWN_CENTER   */ { 600, 600, {  0, 275,  0, 100}, AGE_DARK,    5,  3, 3 },
+    /* TOWN_CENTER   */ { 600, 600, {  0, 275,  0, 100}, AGE_DARK,    5,  4, 4 },
     /* HOUSE         */ { 150, 150, {  0,  25,  0,   0}, AGE_DARK,    5,  1, 1 },
     /* BARRACKS      */ { 350, 300, {  0, 175,  0,   0}, AGE_DARK,    0,  2, 2 },
     /* ARCHERY_RANGE */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  2, 2 },
@@ -179,7 +201,7 @@ static const int AGE_RESEARCH_TIME[AGE_COUNT] = {
 // Name strings
 // ---------------------------------------------------------------------------
 static const char* const UNIT_NAMES[UNIT_TYPE_COUNT] = {
-    "Villager", "Militia", "Archer", "Knight", "Spearman"
+    "Villager", "Militia", "Archer", "Knight", "Spearman", "Scout"
 };
 
 static const char* const BLDG_NAMES[BLDG_TYPE_COUNT] = {

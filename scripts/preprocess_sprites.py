@@ -5,9 +5,10 @@ Creates a shared 256-color palette and indexed binary sprite data for all
 unit and building sprites. Output goes to data/ directory.
 
 Palette layout (NDS BGR555, 256 entries x 2 bytes = 512 bytes):
-  Index 0:     Transparent
-  Index 1-248: Shared colors from all sprites (including blue player colors)
-  Index 249-255: Red player color variants (for player 2 remapping)
+  Index 0:      Transparent
+  Index 1-15:   Reserved for UI colors (set at runtime by terrain_initPalette)
+  Index 16-N:   Shared colors from all sprites (including blue player colors)
+  Index N+1...: Red player color variants (for player 2 remapping)
 
 Also generates a 256-byte remap table for player 2 color swapping at runtime.
 """
@@ -28,35 +29,61 @@ UNIT_SHEETS = [
     ('spr_villager_walk',    'villager_walk.png'),
     ('spr_villager_attack',  'villager_attack.png'),
     ('spr_villager_f',       'villager_f.png'),
+    ('spr_villager_carry',   'villager_carry.png'),
     ('spr_lumberjack',       'lumberjack.png'),
     ('spr_lumberjack_walk',  'lumberjack_walk.png'),
     ('spr_lumberjack_chop',  'lumberjack_chop.png'),
+    ('spr_lumberjack_carry', 'lumberjack_carry.png'),
     ('spr_miner',            'miner.png'),
     ('spr_miner_walk',       'miner_walk.png'),
+    ('spr_miner_carry',      'miner_carry.png'),
     ('spr_builder',          'builder.png'),
     ('spr_builder_walk',     'builder_walk.png'),
     ('spr_farmer',           'farmer.png'),
     ('spr_farmer_walk',      'farmer_walk.png'),
+    ('spr_farmer_carry',     'farmer_carry.png'),
     ('spr_militia',          'militia.png'),
+    ('spr_militia_walk',     'militia_walk.png'),
     ('spr_militia_fight',    'militia_fight.png'),
+    ('spr_militia_die',      'militia_die.png'),
     ('spr_archer',           'archer.png'),
+    ('spr_archer_walk',      'archer_walk.png'),
     ('spr_archer_fire',      'archer_fire.png'),
+    ('spr_archer_die',       'archer_die.png'),
     ('spr_knight',           'knight.png'),
+    ('spr_knight_walk',      'knight_walk.png'),
     ('spr_knight_fight',     'knight_fight.png'),
+    ('spr_knight_die',       'knight_die.png'),
     ('spr_spearman',         'spearman.png'),
+    ('spr_spearman_walk',    'spearman_walk.png'),
     ('spr_spearman_fight',   'spearman_fight.png'),
+    ('spr_spearman_die',     'spearman_die.png'),
+    ('spr_scout',            'scout.png'),
+    ('spr_scout_walk',       'scout_walk.png'),
+    ('spr_scout_die',        'scout_die.png'),
+    ('spr_villager_die',     'villager_die.png'),
 ]
 
 # Building sprites: (output_name, filename, target_w, target_h)
-# Source PNGs are 64x64 (or 64x192 for house), scaled to game tile size
+# Isometric building sizes based on tile footprint:
+#   footprint_w = (tileW + tileH) * 16, footprint_h = (tileW + tileH) * 8
+#   sprite_h = footprint_h + 16 (above-ground height)
 BUILDING_SPRITES = [
-    ('spr_town_center',   'town_center.png',   32, 32),  # 2x2 tiles
-    ('spr_house',         'house.png',          16, 16),  # 1x1 tile
-    ('spr_barracks',      'barracks.png',       32, 32),  # 2x2 tiles
-    ('spr_archery_range', 'archery_range.png',  32, 32),  # 2x2 tiles
-    ('spr_stable',        'stable.png',         32, 32),  # 2x2 tiles
-    ('spr_mining_camp',   'mining_camp.png',    16, 16),  # 1x1 tile
-    ('spr_lumber_camp',   'lumber_camp.png',    16, 16),  # 1x1 tile
+    ('spr_town_center',   'town_center.png',  128, 96),  # 4x4 tiles: 128x64 foot + 32 above
+    ('spr_house',         'house.png',          32, 32),  # 1x1 tile:  32x16 foot + 16 above
+    ('spr_barracks',      'barracks.png',       64, 48),  # 2x2 tiles: 64x32 foot + 16 above
+    ('spr_archery_range', 'archery_range.png',  64, 48),  # 2x2 tiles: 64x32 foot + 16 above
+    ('spr_stable',        'stable.png',         64, 48),  # 2x2 tiles: 64x32 foot + 16 above
+    ('spr_mining_camp',   'mining_camp.png',    32, 32),  # 1x1 tile:  32x16 foot + 16 above
+    ('spr_lumber_camp',   'lumber_camp.png',    32, 32),  # 1x1 tile:  32x16 foot + 16 above
+]
+
+# Resource object sprites: (output_name, filename)
+# Single-frame 32x32 sprites for resource tile overlays
+RESOURCE_SPRITES = [
+    ('spr_tree',       'tree.png'),
+    ('spr_gold_mine',  'gold_mine.png'),
+    ('spr_stone_mine', 'stone_mine.png'),
 ]
 
 
@@ -70,11 +97,44 @@ def load_rgba(filename):
     return np.array(img)
 
 
+def find_player_colors(all_rgba_images):
+    """Find blue player-color pixels across all sprites.
+
+    AoE2 player 1 (blue) colors are saturated blues used for team indicators.
+    Only match clearly saturated player blues, not every vaguely-blue pixel.
+    Returns list of (R, G, B) tuples to force into the palette.
+    """
+    player_colors = set()
+    for img_data in all_rgba_images:
+        mask = img_data[:, :, 3] > 128
+        rgb = img_data[mask][:, :3]
+        for r, g, b in rgb:
+            r, g, b = int(r), int(g), int(b)
+            # Saturated player blues: high blue, very low red, blue dominates
+            if b > 120 and r < 80 and g < 120 and (b - r) > 80:
+                player_colors.add((r, g, b))
+    return sorted(player_colors, key=lambda c: c[2])
+
+
 def build_shared_palette(all_rgba_images, max_colors=248):
     """Build a shared quantized palette from all sprite images.
 
     Returns list of (R, G, B) tuples, length <= max_colors.
+    Reserves the 8 AoE2 player 1 colors (from 50500.bina indices 16-23)
+    at the START of the palette to ensure correct player color handling.
     """
+    # AoE2 player 1 blue colors (50500.bina palette indices 16-23)
+    PLAYER_COLORS = [
+        (0, 0, 82),       # very dark blue
+        (0, 21, 130),      # dark blue
+        (19, 49, 161),     # medium blue
+        (48, 93, 182),     # medium-light blue
+        (74, 121, 208),    # light blue
+        (110, 166, 235),   # sky blue
+        (151, 206, 255),   # very light blue
+        (205, 250, 255),   # near white cyan
+    ]
+
     # Collect all opaque pixels into one flat array
     pixel_lists = []
     for img_data in all_rgba_images:
@@ -86,8 +146,13 @@ def build_shared_palette(all_rgba_images, max_colors=248):
     unique_colors = np.unique(all_pixels.reshape(-1, 3), axis=0)
     print(f"  {len(all_pixels)} opaque pixels, {len(unique_colors)} unique colors")
 
-    if len(unique_colors) <= max_colors:
-        return [tuple(c) for c in unique_colors]
+    # Reserve player colors, quantize rest with reduced budget
+    reserved = set(PLAYER_COLORS)
+    quant_budget = max_colors - len(PLAYER_COLORS)
+
+    if len(unique_colors) <= quant_budget:
+        palette = list(PLAYER_COLORS) + [tuple(c) for c in unique_colors if tuple(c) not in reserved]
+        return palette
 
     # Create a composite image with all unique colors for PIL quantization
     n = len(unique_colors)
@@ -98,33 +163,44 @@ def build_shared_palette(all_rgba_images, max_colors=248):
     for i, (r, g, b) in enumerate(unique_colors):
         pixels[i % w, i // w] = (int(r), int(g), int(b))
 
-    quantized = composite.quantize(colors=max_colors, method=Image.Quantize.MEDIANCUT)
+    quantized = composite.quantize(colors=quant_budget, method=Image.Quantize.MEDIANCUT)
     pal_flat = quantized.getpalette()
 
-    palette = []
-    for i in range(max_colors):
-        palette.append((pal_flat[i * 3], pal_flat[i * 3 + 1], pal_flat[i * 3 + 2]))
+    quant_colors = []
+    for i in range(quant_budget):
+        quant_colors.append((pal_flat[i * 3], pal_flat[i * 3 + 1], pal_flat[i * 3 + 2]))
 
-    # Remove duplicate colors
-    seen = set()
-    deduped = []
-    for c in palette:
+    # Build final palette: player colors first, then quantized (no duplicates)
+    palette = list(PLAYER_COLORS)
+    seen = set(PLAYER_COLORS)
+    for c in quant_colors:
         if c not in seen:
             seen.add(c)
-            deduped.append(c)
-    return deduped
+            palette.append(c)
+
+    return palette
 
 
 def index_rgba_image(img_data, palette_array, target_size=None):
     """Convert RGBA image to indexed format using the shared palette.
 
     Returns (indexed_bytes, width, height).
-    Index 0 = transparent, 1-N = palette color.
+    Index 0 = transparent, 16-N = palette color (1-15 reserved for UI).
     """
     if target_size:
+        tw, th = target_size
         img = Image.fromarray(img_data)
-        img = img.resize(target_size, Image.NEAREST)
-        img_data = np.array(img)
+        # Scale proportionally to fit within target, center in canvas
+        scale = min(tw / img.width, th / img.height)
+        new_w = int(img.width * scale)
+        new_h = int(img.height * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        # Place on transparent canvas (centered)
+        result = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
+        ox = (tw - new_w) // 2
+        oy = (th - new_h) // 2  # center vertically
+        result.paste(img, (ox, oy))
+        img_data = np.array(result)
 
     h, w = img_data.shape[:2]
     alpha = img_data[:, :, 3].reshape(-1)
@@ -150,8 +226,8 @@ def index_rgba_image(img_data, palette_array, target_size=None):
             dists = np.sum(diff * diff, axis=2)
             nearest = np.argmin(dists, axis=1).astype(np.uint8)
 
-            # +1 to reserve index 0 for transparent
-            indexed[opaque_indices[start:end]] = nearest + 1
+            # +16 to reserve indices 0-15 (0=transparent, 1-15=UI colors)
+            indexed[opaque_indices[start:end]] = nearest + 16
 
     return bytes(indexed), w, h
 
@@ -159,20 +235,11 @@ def index_rgba_image(img_data, palette_array, target_size=None):
 def find_blue_player_indices(palette):
     """Find palette entries that correspond to blue player colors.
 
-    AoE2 player 1 colors are shades of blue used for unit/building accents.
-    Returns list of palette indices (0-based, before +1 offset).
+    The first 8 entries in the palette are the reserved AoE2 player 1 colors
+    (from 50500.bina indices 16-23). Returns those indices directly.
     """
-    blues = []
-    for i, (r, g, b) in enumerate(palette):
-        # Blue-dominant: B channel is significantly higher than R and G
-        if b > 80 and b > r + 20 and b > g + 20:
-            blues.append((i, r, g, b))
-
-    # Sort by blue intensity (darkest to brightest)
-    blues.sort(key=lambda x: x[3])
-
-    # Take up to 7 shades (we have 7 slots: indices 249-255)
-    return [idx for idx, r, g, b in blues[:7]]
+    # Player colors are reserved at palette indices 0-7 by build_shared_palette()
+    return list(range(8))
 
 
 def rgb_to_bgr555(r, g, b):
@@ -206,12 +273,38 @@ def main():
         data = load_rgba(filename)
         if data is None:
             continue
-        # Crop to first 64x64 frame if multi-frame (e.g., house.png is 64x192)
-        if data.shape[0] > 64:
-            data = data[:64, :64]
+        # Crop to first frame if multi-frame sprite sheet (height > width)
+        # e.g., house.png is 64x192 (3 stacked frames), take first 64x64
+        if data.shape[0] > data.shape[1]:
+            frame_h = data.shape[1]  # assume square frames
+            data = data[:frame_h, :frame_h]
         building_data[name] = (data, tw, th)
         all_images.append(data)
         print(f"  {filename}: {data.shape[1]}x{data.shape[0]} -> {tw}x{th}")
+
+    resource_data = {}
+    for name, filename in RESOURCE_SPRITES:
+        data = load_rgba(filename)
+        if data is None:
+            continue
+        resource_data[name] = data
+        all_images.append(data)
+        print(f"  {filename}: {data.shape[1]}x{data.shape[0]}")
+
+    # Load terrain texture samples so greens/blues are represented in palette
+    # Use large samples (256x256) to give terrain colors proper weight
+    TERRAIN_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/terrain/textures'
+    terrain_files = ['g_grs_00_color.png', 'g_for_00_color.png', 'g_wtr_00_color.png',
+                     'g_rd1_00_color.png', 'g_des_00_color.png']
+    for tf in terrain_files:
+        tp = os.path.join(TERRAIN_DIR, tf)
+        if os.path.exists(tp):
+            timg = Image.open(tp).convert('RGBA')
+            # Sample a 256x256 region to give terrain adequate palette weight
+            crop = timg.crop((128, 128, 384, 384))
+            tdata = np.array(crop)
+            all_images.append(tdata)
+            print(f"  terrain/{tf}: sampled 256x256")
 
     if not all_images:
         print("ERROR: No sprite images found!")
@@ -219,7 +312,7 @@ def main():
 
     # --- Build shared palette ---
     print("\nBuilding shared palette...")
-    palette = build_shared_palette(all_images, max_colors=248)
+    palette = build_shared_palette(all_images, max_colors=230)
     print(f"  Quantized to {len(palette)} colors")
 
     # --- Player color handling ---
@@ -227,7 +320,7 @@ def main():
     print(f"  Found {len(blue_indices)} blue player color shades")
 
     # Create red variants of blue player colors
-    red_remap = {}  # maps NDS index (1-based) to red NDS index
+    red_remap = {}  # maps NDS index (16-based) to red NDS index
     red_colors = []
     for bi in blue_indices:
         r, g, b = palette[bi]
@@ -241,11 +334,11 @@ def main():
     red_start_idx = len(palette)
     for i, rc in enumerate(red_colors):
         palette.append(rc)
-        # Map blue NDS index (bi+1) to red NDS index (red_start_idx+i+1)
-        red_remap[blue_indices[i] + 1] = red_start_idx + i + 1
+        # Map blue NDS index (bi+16) to red NDS index (red_start_idx+i+16)
+        red_remap[blue_indices[i] + 16] = red_start_idx + i + 16
 
-    # Pad palette to 255 entries
-    while len(palette) < 255:
+    # Pad palette to 240 entries (indices 16-255 = 240 slots)
+    while len(palette) < 240:
         palette.append((0, 0, 0))
 
     print(f"  Final palette: {len(palette)} colors + transparent (index 0)")
@@ -254,11 +347,10 @@ def main():
     # --- Save NDS palette (BGR555, 256 entries x 2 bytes = 512 bytes) ---
     print("\nSaving palette...")
     pal_bin = bytearray(512)
-    # Index 0 = transparent (value doesn't matter, but use 0)
-    struct.pack_into('<H', pal_bin, 0, 0)
+    # Indices 0-15 reserved (0=transparent, 1-15=UI colors set at runtime)
     for i, (r, g, b) in enumerate(palette):
         val = rgb_to_bgr555(r, g, b)
-        struct.pack_into('<H', pal_bin, (i + 1) * 2, val)
+        struct.pack_into('<H', pal_bin, (i + 16) * 2, val)
 
     pal_path = os.path.join(DATA_DIR, 'sprite_pal.bin')
     with open(pal_path, 'wb') as f:
@@ -276,8 +368,8 @@ def main():
         f.write(remap)
     print(f"  {remap_path}: {len(remap)} bytes")
 
-    # --- Prepare palette array for indexing ---
-    palette_array = np.array(palette, dtype=np.int32)
+    # --- Prepare palette array for indexing (exclude red variants and padding) ---
+    palette_array = np.array(palette[:red_start_idx], dtype=np.int32)
 
     # --- Process unit sprite sheets ---
     print("\nProcessing unit sprites...")
@@ -298,6 +390,18 @@ def main():
             continue
         data, tw2, th2 = building_data[name]
         indexed, w, h = index_rgba_image(data, palette_array, (tw, th))
+        out_path = os.path.join(DATA_DIR, f'{name}.bin')
+        with open(out_path, 'wb') as f:
+            f.write(indexed)
+        print(f"  {name}: {w}x{h} = {len(indexed)} bytes")
+
+    # --- Process resource sprites ---
+    print("\nProcessing resource sprites...")
+    for name, filename in RESOURCE_SPRITES:
+        if name not in resource_data:
+            continue
+        data = resource_data[name]
+        indexed, w, h = index_rgba_image(data, palette_array)
         out_path = os.path.join(DATA_DIR, f'{name}.bin')
         with open(out_path, 'wb') as f:
             f.write(indexed)

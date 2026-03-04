@@ -34,8 +34,10 @@ struct GameState {
     Player   players[NUM_PLAYERS];
     int      camX, camY;
     bool     followCam;
-    int      selectedUnit;   // index into unit pool, -1 = none
+    int      selectedUnit;   // primary selection (first selected), -1 = none
     int      selectedBldg;   // index into building pool, -1 = none
+    bool     unitSelected[MAX_UNITS]; // multi-selection: true if unit i is selected
+    int      selectionCount; // number of currently selected units
     GamePhase phase;
     int      frameCount;
 
@@ -46,6 +48,15 @@ struct GameState {
     // Build menu
     bool buildMenuOpen;
     u8   buildMenuPage; // which page of building options
+
+    // Selected terrain tile (for resource info display)
+    s8   selectedTileX, selectedTileY; // -1 = none
+
+    // Drag-to-select state
+    bool  touchActive;    // touch is currently held
+    bool  isDragging;     // user is dragging (moved beyond threshold)
+    s16   dragStartX, dragStartY; // screen coords where touch began
+    s16   dragEndX, dragEndY;     // current touch position during drag
 };
 
 // ---------------------------------------------------------------------------
@@ -59,3 +70,8 @@ void game_deduct_cost(GameState& gs, int player, const int cost[RES_COUNT]);
 void game_refund_cost(GameState& gs, int player, const int cost[RES_COUNT]);
 void game_add_resource(GameState& gs, int player, int resType, int amount);
 void game_update_pop_cap(GameState& gs, int player);
+
+// Selection helpers
+void game_clear_selection(GameState& gs);
+void game_select_unit(GameState& gs, int unitIdx);
+void game_add_to_selection(GameState& gs, int unitIdx);

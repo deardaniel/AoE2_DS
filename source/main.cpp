@@ -6,6 +6,7 @@
 #include "config.h"
 #include "game.h"
 #include "terrain.h"
+#include "iso.h"
 #include "units.h"
 #include "buildings.h"
 #include "input.h"
@@ -15,6 +16,7 @@
 #include "tech.h"
 #include "ai.h"
 #include "sound.h"
+#include "font.h"
 
 // Global game state (accessible by tech.cpp via extern)
 GameState gameState;
@@ -61,19 +63,25 @@ static void game_start() {
     }
 
     // --- Player 0 (human) — top-left corner ---
-    // Place Town Center at tile (2,2) — 3x3 building
+    // Place Town Center at tile (2,2) — 4x4 building
     int tc0 = building_place(BLDG_TOWN_CENTER, 0, 2, 2, gameState, terrain);
     if (tc0 >= 0) {
         buildings[tc0].buildProgress = BLDG_STATS[BLDG_TOWN_CENTER].buildTime; // start complete
     }
 
-    // Spawn 3 villagers near TC (below and right of 3x3 TC)
-    unit_spawn(UNIT_VILLAGER, 0, 5 * TILE_PX, 5 * TILE_PX);
-    unit_spawn(UNIT_VILLAGER, 0, 6 * TILE_PX, 5 * TILE_PX);
-    unit_spawn(UNIT_VILLAGER, 0, 5 * TILE_PX, 6 * TILE_PX);
+    // Spawn 3 villagers near TC (below and right of 4x4 TC)
+    unit_spawn(UNIT_VILLAGER, 0, 6 * TILE_PX, 6 * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 0, 7 * TILE_PX, 6 * TILE_PX);
+    unit_spawn(UNIT_VILLAGER, 0, 6 * TILE_PX, 7 * TILE_PX);
+
+    // Spawn scout cavalry near TC (auto-scouts by default)
+    {
+        int si = unit_spawn(UNIT_SCOUT, 0, 7 * TILE_PX, 7 * TILE_PX);
+        if (si >= 0) units[si].state = USTATE_SCOUTING;
+    }
 
     // --- Player 1 (AI) — bottom-right corner ---
-    int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 5, MAP_TILES - 5, gameState, terrain);
+    int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 6, MAP_TILES - 6, gameState, terrain);
     if (tc1 >= 0) {
         buildings[tc1].buildProgress = BLDG_STATS[BLDG_TOWN_CENTER].buildTime;
     }
@@ -81,6 +89,12 @@ static void game_start() {
     unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 2) * TILE_PX);
     unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 1) * TILE_PX, (MAP_TILES - 2) * TILE_PX);
     unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 1) * TILE_PX);
+
+    // Spawn AI scout near TC (auto-scouts by default)
+    {
+        int si = unit_spawn(UNIT_SCOUT, 1, (MAP_TILES - 1) * TILE_PX, (MAP_TILES - 1) * TILE_PX);
+        if (si >= 0) units[si].state = USTATE_SCOUTING;
+    }
 
     // Reset resources to actual starting values (TC placement was free)
     for (int p = 0; p < NUM_PLAYERS; p++) {
@@ -95,9 +109,11 @@ static void game_start() {
     game_update_pop_cap(gameState, 0);
     game_update_pop_cap(gameState, 1);
 
-    // Center camera on player's TC (3x3, center at tile 3.5, 3.5)
-    gameState.camX = 3 * TILE_PX + TILE_PX / 2 - SCREEN_W / 2;
-    gameState.camY = 3 * TILE_PX + TILE_PX / 2 - SCREEN_H / 2;
+    // Center camera on player's TC (3x3, center at tile 3.5, 3.5) in iso space
+    int isoX, isoY;
+    tileToIso(4, 4, isoX, isoY);
+    gameState.camX = isoX - SCREEN_W / 2;
+    gameState.camY = isoY - SCREEN_H / 2;
     if (gameState.camX < 0) gameState.camX = 0;
     if (gameState.camY < 0) gameState.camY = 0;
 }
@@ -133,6 +149,9 @@ int main(void) {
 
     // Init render system
     render_init();
+
+    // Init bitmap font
+    font_init();
 
     // Init sound (stubs for now)
     sound_init();
@@ -229,37 +248,71 @@ int main(void) {
         // (NDS VRAM doesn't support byte writes — STRB is silently dropped)
         terrain.renderViewport(terrainBuf, gameState.camX, gameState.camY);
 
-        // Sub screen: fog overlay on buffer
+        // Sub screen: fog overlay on buffer (isometric diamond tiles)
         {
-            int startTX = gameState.camX / TILE_PX;
-            int startTY = gameState.camY / TILE_PX;
-            int offX = gameState.camX % TILE_PX;
-            int offY = gameState.camY % TILE_PX;
-            int tilesW = (SCREEN_W / TILE_PX) + 2;
-            int tilesH = (SCREEN_H / TILE_PX) + 2;
+            // Determine visible tile range from screen corners
+            int minTX, minTY, maxTX, maxTY;
+            int tmpTX, tmpTY;
 
-            for (int ty = 0; ty < tilesH; ty++) {
-                for (int tx = 0; tx < tilesW; tx++) {
-                    int mapTX = startTX + tx;
-                    int mapTY = startTY + ty;
-                    if (mapTX < 0 || mapTX >= MAP_TILES || mapTY < 0 || mapTY >= MAP_TILES) continue;
+            screenToTile(0, 0, gameState.camX, gameState.camY, minTX, minTY);
+            maxTX = minTX; maxTY = minTY;
 
-                    u8 fogState = fogMap.state[0][mapTY][mapTX];
+            screenToTile(SCREEN_W, 0, gameState.camX, gameState.camY, tmpTX, tmpTY);
+            if (tmpTX < minTX) minTX = tmpTX;
+            if (tmpTX > maxTX) maxTX = tmpTX;
+            if (tmpTY < minTY) minTY = tmpTY;
+            if (tmpTY > maxTY) maxTY = tmpTY;
+
+            screenToTile(0, SCREEN_H, gameState.camX, gameState.camY, tmpTX, tmpTY);
+            if (tmpTX < minTX) minTX = tmpTX;
+            if (tmpTX > maxTX) maxTX = tmpTX;
+            if (tmpTY < minTY) minTY = tmpTY;
+            if (tmpTY > maxTY) maxTY = tmpTY;
+
+            screenToTile(SCREEN_W, SCREEN_H, gameState.camX, gameState.camY, tmpTX, tmpTY);
+            if (tmpTX < minTX) minTX = tmpTX;
+            if (tmpTX > maxTX) maxTX = tmpTX;
+            if (tmpTY < minTY) minTY = tmpTY;
+            if (tmpTY > maxTY) maxTY = tmpTY;
+
+            minTX -= 1; minTY -= 1;
+            maxTX += 1; maxTY += 1;
+
+            int minSum = minTX + minTY;
+            int maxSum = maxTX + maxTY;
+
+            for (int sum = minSum; sum <= maxSum; sum++) {
+                for (int tx = minTX; tx <= maxTX; tx++) {
+                    int ty = sum - tx;
+                    if (ty < minTY || ty > maxTY) continue;
+                    if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
+
+                    u8 fogState = fogMap.state[0][ty][tx];
                     if (fogState == FOG_VISIBLE) continue;
 
-                    int dstX = tx * TILE_PX - offX;
-                    int dstY = ty * TILE_PX - offY;
+                    int isoFX, isoFY;
+                    tileToIso(tx, ty, isoFX, isoFY);
+                    int dstX = isoFX - gameState.camX;
+                    int dstY = isoFY - gameState.camY;
 
-                    for (int py = 0; py < TILE_PX; py++) {
+                    if (dstX + ISO_TILE_W <= 0 || dstX >= SCREEN_W) continue;
+                    if (dstY + ISO_TILE_H <= 0 || dstY >= SCREEN_H) continue;
+
+                    for (int py = 0; py < ISO_TILE_H; py++) {
                         int screenY = dstY + py;
                         if (screenY < 0 || screenY >= SCREEN_H) continue;
-                        for (int px = 0; px < TILE_PX; px++) {
+
+                        int xs = ISO_DIAMOND_XSTART[py];
+                        int xe = ISO_DIAMOND_XEND[py];
+
+                        for (int px = xs; px < xe; px++) {
                             int screenX = dstX + px;
                             if (screenX < 0 || screenX >= SCREEN_W) continue;
                             int idx = screenY * 256 + screenX;
                             if (fogState == FOG_UNEXPLORED) {
                                 terrainBuf[idx] = PAL_BLACK;
                             } else {
+                                // Explored but not visible: checkerboard dither
                                 if ((px + py) & 1) {
                                     terrainBuf[idx] = PAL_BLACK;
                                 }
@@ -275,6 +328,9 @@ int main(void) {
 
         // Sub screen: build menu overlay on buffer
         render_build_menu(terrainBuf, gameState);
+
+        // Sub screen: drag-selection box overlay
+        render_drag_box(terrainBuf, gameState);
 
         // DMA copy completed buffer to VRAM
         dmaCopy(terrainBuf, subVram, 256 * 192);

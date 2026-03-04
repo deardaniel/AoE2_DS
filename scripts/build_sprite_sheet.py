@@ -22,6 +22,8 @@ def main():
     ap.add_argument('--cell', default='32x32', help='Cell size WxH (default: 32x32)')
     ap.add_argument('--cols', type=int, default=4, help='Columns in sheet (default: 4)')
     ap.add_argument('--fit', action='store_true', help='Scale frames down to fit cell')
+    ap.add_argument('--scale', type=float, default=0.0,
+                    help='Override scale factor (e.g. 0.45). Overrides --fit.')
     ap.add_argument('--limit', type=int, default=0, help='Limit number of frames packed')
     ap.add_argument('--dirs', type=int, default=0,
                     help='Number of directions in SLP (samples frames per dir)')
@@ -45,7 +47,9 @@ def main():
             'python3', 'scripts/pack_frames.py', tmp_dir, args.out_png,
             '--cell', args.cell, '--cols', str(args.cols)
         ]
-        if args.fit:
+        if args.scale > 0:
+            pack_cmd.extend(['--scale', str(args.scale)])
+        elif args.fit:
             pack_cmd.append('--fit')
         if args.dirs and args.dirs > 0:
             pack_cmd.extend(['--dirs', str(args.dirs)])

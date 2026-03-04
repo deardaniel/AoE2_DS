@@ -15,3 +15,6 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain);
 
 // Draw the build menu bar on the bottom of the screen
 void render_build_menu(u8* vram, const GameState& gs);
+
+// Draw the drag-selection box overlay
+void render_drag_box(u8* buf, const GameState& gs);

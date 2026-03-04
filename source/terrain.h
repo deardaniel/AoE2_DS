@@ -22,8 +22,14 @@ struct TerrainMap {
     void setTile(int tx, int ty, u8 type, int resAmt = 0);
 };
 
-// Tile graphics cache (16x16 bytes per terrain type)
-extern u8 tileGfxCache[TERRAIN_COUNT][TILE_PX * TILE_PX];
+// Tile graphics cache (32x16 bytes per terrain type, isometric diamond)
+extern u8 tileGfxCache[TERRAIN_COUNT][ISO_TILE_W * ISO_TILE_H];
+
+// Grass tile variant cache (4 variants for visual variety)
+extern u8 grassVariantCache[GRASS_VARIANTS][ISO_TILE_W * ISO_TILE_H];
 
 // Initialize the palette for procedural terrain/sprite colors
 void terrain_initPalette();
+
+// Get resource sprite data for a terrain type (NULL if none)
+const u8* terrain_get_resource_sprite(u8 ttype);

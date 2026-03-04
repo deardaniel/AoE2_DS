@@ -90,36 +90,46 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
 
     // ---- Economy phase ----
 
-    // Train villagers if under target
-    if (vilCount < 8 && tcIdx >= 0 && building_is_complete(tcIdx)) {
+    // Train villagers if under target (scale with age)
+    int vilTarget = 8 + p.age * 4;  // Dark=8, Feudal=12, Castle=16, Imperial=20
+    if (vilCount < vilTarget && tcIdx >= 0 && building_is_complete(tcIdx)) {
         building_train(tcIdx, UNIT_VILLAGER, gs);
     }
 
-    // Assign idle villagers to resources
+    // Assign idle villagers to resources based on need
     for (int tries = 0; tries < 4; tries++) {
         int vil = unit_find_idle_villager(AI_PLAYER, 0);
         if (vil < 0) break;
 
-        // Prioritize: food, wood, gold, stone
         int resTX = 0, resTY = 0;
         bool assigned = false;
 
-        // Need food first
-        if (!assigned && ai_find_resource(tcTX, tcTY, TERRAIN_FARM, terrain, resTX, resTY)) {
+        // Find the most-needed resource and assign to it
+        int lowestRes = 0;
+        int lowestVal = p.resources[RES_FOOD];
+        for (int r = 1; r < RES_COUNT; r++) {
+            if (p.resources[r] < lowestVal) {
+                lowestVal = p.resources[r];
+                lowestRes = r;
+            }
+        }
+
+        // Map resource type to terrain type
+        u8 terrTypes[] = { TERRAIN_FARM, TERRAIN_FOREST, TERRAIN_GOLD, TERRAIN_STONE };
+        if (ai_find_resource(tcTX, tcTY, terrTypes[lowestRes], terrain, resTX, resTY)) {
             unit_command_gather(vil, resTX, resTY, terrain);
             assigned = true;
         }
-        if (!assigned && ai_find_resource(tcTX, tcTY, TERRAIN_FOREST, terrain, resTX, resTY)) {
-            unit_command_gather(vil, resTX, resTY, terrain);
-            assigned = true;
-        }
-        if (!assigned && ai_find_resource(tcTX, tcTY, TERRAIN_GOLD, terrain, resTX, resTY)) {
-            unit_command_gather(vil, resTX, resTY, terrain);
-            assigned = true;
-        }
-        if (!assigned && ai_find_resource(tcTX, tcTY, TERRAIN_STONE, terrain, resTX, resTY)) {
-            unit_command_gather(vil, resTX, resTY, terrain);
-            assigned = true;
+
+        // Fallback: try any available resource
+        if (!assigned) {
+            for (int r = 0; r < RES_COUNT; r++) {
+                if (ai_find_resource(tcTX, tcTY, terrTypes[r], terrain, resTX, resTY)) {
+                    unit_command_gather(vil, resTX, resTY, terrain);
+                    assigned = true;
+                    break;
+                }
+            }
         }
     }
 
@@ -162,8 +172,9 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
-    // Farms if low on food
-    if (p.resources[RES_FOOD] < 100 && building_count(AI_PLAYER, BLDG_FARM) < 3) {
+    // Farms if low on food (scale with age)
+    int farmTarget = 3 + p.age * 2;
+    if (p.resources[RES_FOOD] < 150 && building_count(AI_PLAYER, BLDG_FARM) < farmTarget) {
         int bx, by;
         if (ai_find_build_spot(tcTX - 1, tcTY + 2, 1, 1, terrain, bx, by)) {
             ai_place_and_build(BLDG_FARM, bx, by, gs, terrain);
@@ -245,14 +256,14 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     }
 
     // ---- Attack decision ----
-    int armyThreshold = 5 + p.age * 3;
+    int armyThreshold = 3 + p.age * 2;  // Dark=3, Feudal=5, Castle=7, Imperial=9
 
-    // Retreat: if army too small, pull back to TC
+    // Retreat: if army too small and under pressure, pull back to TC
     if (militaryCount > 0 && militaryCount < 2) {
         for (int i = 0; i < MAX_UNITS; i++) {
             if (!units[i].alive || units[i].owner != AI_PLAYER) continue;
             if (units[i].type == UNIT_VILLAGER) continue;
-            if (units[i].state == USTATE_ATTACKING || units[i].state == USTATE_MOVING) {
+            if (units[i].state == USTATE_IDLE) {
                 unit_command_move(i, tcTX * TILE_PX, tcTY * TILE_PX, terrain);
             }
         }
@@ -273,6 +284,19 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
                         // Attack the building directly
                         unit_command_attack_building(i, enemyBldg);
                     }
+                }
+            }
+        }
+    }
+    // In between: idle military should still engage nearby enemies
+    else if (militaryCount >= 2) {
+        for (int i = 0; i < MAX_UNITS; i++) {
+            if (!units[i].alive || units[i].owner != AI_PLAYER) continue;
+            if (units[i].type == UNIT_VILLAGER) continue;
+            if (units[i].state == USTATE_IDLE) {
+                int enemy = unit_find_nearest_enemy(i);
+                if (enemy >= 0) {
+                    unit_command_attack(i, enemy);
                 }
             }
         }

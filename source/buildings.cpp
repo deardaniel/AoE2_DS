@@ -12,6 +12,8 @@ void buildings_init() {
         buildings[i].alive = false;
         buildings[i].oamSlot = -1;
         for (int q = 0; q < 3; q++) buildings[i].trainQueue[q] = -1;
+        buildings[i].garrisonCount = 0;
+        for (int g = 0; g < MAX_GARRISON; g++) buildings[i].garrison[g] = -1;
     }
 }
 
@@ -65,6 +67,8 @@ int building_place(u8 type, u8 owner, int tileX, int tileY, GameState& gs, Terra
     b.oamSlot = -1;
     b.attackCooldown = 0;
     for (int q = 0; q < 3; q++) b.trainQueue[q] = -1;
+    b.garrisonCount = 0;
+    for (int g = 0; g < MAX_GARRISON; g++) b.garrison[g] = -1;
 
     // Mark terrain tiles for farm
     if (type == BLDG_FARM) {
@@ -94,6 +98,7 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
         }
 
         // TC arrow attack: shoot nearest enemy in range
+        // Damage scales with garrisoned units (+2 per unit)
         if (b.type == BLDG_TOWN_CENTER) {
             if (b.attackCooldown > 0) {
                 b.attackCooldown--;
@@ -113,7 +118,8 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
                     }
                 }
                 if (bestEnemy >= 0) {
-                    units[bestEnemy].hp -= 5;
+                    int dmg = 5 + b.garrisonCount * 2;
+                    units[bestEnemy].hp -= dmg;
                     if (units[bestEnemy].hp <= 0) {
                         unit_kill(bestEnemy);
                     }
@@ -136,14 +142,13 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
                 int by = b.y / TILE_PX;
                 bool spawned = false;
 
-                // Try tiles around the building
+                // Try tiles around the building (skip occupied tiles to avoid stacking)
                 for (int dy = -1; dy <= bh && !spawned; dy++) {
                     for (int dx = -1; dx <= bw && !spawned; dx++) {
                         if (dx >= 0 && dx < bw && dy >= 0 && dy < bh) continue;
                         int tx = bx + dx;
                         int ty = by + dy;
-                        if (terrain.passable(tx, ty)) {
-                            // Check pop cap
+                        if (terrain.passable(tx, ty) && !tile_has_unit(tx, ty)) {
                             if (gs.players[b.owner].popCount < gs.players[b.owner].popCap) {
                                 int uid = unit_spawn(unitType, b.owner, tx * TILE_PX, ty * TILE_PX);
                                 if (uid >= 0) spawned = true;
@@ -175,6 +180,11 @@ void building_damage(int idx, int amount) {
 void building_destroy(int idx, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_BUILDINGS || !buildings[idx].alive) return;
     Building& b = buildings[idx];
+
+    // Eject garrisoned units before destroying
+    if (b.garrisonCount > 0) {
+        building_ungarrison_all(idx, terrain);
+    }
 
     // Revert farm terrain
     if (b.type == BLDG_FARM) {
@@ -302,4 +312,75 @@ int building_count(int owner, int type) {
 bool building_is_complete(int idx) {
     if (idx < 0 || idx >= MAX_BUILDINGS || !buildings[idx].alive) return false;
     return buildings[idx].buildProgress >= BLDG_STATS[buildings[idx].type].buildTime;
+}
+
+bool building_garrison(int bldgIdx, int unitIdx) {
+    if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return false;
+    if (unitIdx < 0 || unitIdx >= MAX_UNITS || !units[unitIdx].alive) return false;
+    Building& b = buildings[bldgIdx];
+    if (!building_is_complete(bldgIdx)) return false;
+    if (b.type != BLDG_TOWN_CENTER) return false; // only TC supports garrison
+    if (b.owner != units[unitIdx].owner) return false;
+    if (b.garrisonCount >= MAX_GARRISON) return false;
+
+    // Add to garrison
+    for (int g = 0; g < MAX_GARRISON; g++) {
+        if (b.garrison[g] < 0) {
+            b.garrison[g] = unitIdx;
+            b.garrisonCount++;
+
+            // Hide unit (mark as garrisoned — not dead, just invisible)
+            Unit& u = units[unitIdx];
+            u.state = USTATE_GARRISONED;
+            u.x = b.x + BLDG_STATS[b.type].tileW * TILE_PX / 2;
+            u.y = b.y + BLDG_STATS[b.type].tileH * TILE_PX / 2;
+
+            // Free sprite resources while garrisoned
+            if (u.spriteGfx) {
+                oamFreeGfx(&oamSub, u.spriteGfx);
+                u.spriteGfx = NULL;
+            }
+            u.oamSlot = -1;
+            return true;
+        }
+    }
+    return false;
+}
+
+void building_ungarrison_all(int bldgIdx, TerrainMap& terrain) {
+    if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
+    Building& b = buildings[bldgIdx];
+    if (b.garrisonCount == 0) return;
+
+    int bx = b.x / TILE_PX;
+    int by = b.y / TILE_PX;
+    int bw = BLDG_STATS[b.type].tileW;
+    int bh = BLDG_STATS[b.type].tileH;
+
+    for (int g = 0; g < MAX_GARRISON; g++) {
+        if (b.garrison[g] < 0) continue;
+        int ui = b.garrison[g];
+        if (ui < 0 || ui >= MAX_UNITS || !units[ui].alive) {
+            b.garrison[g] = -1;
+            continue;
+        }
+
+        // Find adjacent tile to place unit (skip occupied tiles to avoid stacking)
+        bool placed = false;
+        for (int dy = -1; dy <= bh && !placed; dy++) {
+            for (int dx = -1; dx <= bw && !placed; dx++) {
+                if (dx >= 0 && dx < bw && dy >= 0 && dy < bh) continue;
+                int tx = bx + dx;
+                int ty = by + dy;
+                if (terrain.passable(tx, ty) && !tile_has_unit(tx, ty)) {
+                    units[ui].x = tx * TILE_PX;
+                    units[ui].y = ty * TILE_PX;
+                    units[ui].state = USTATE_IDLE;
+                    placed = true;
+                }
+            }
+        }
+        b.garrison[g] = -1;
+    }
+    b.garrisonCount = 0;
 }
