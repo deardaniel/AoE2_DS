@@ -8,7 +8,7 @@
 |-------|-------------|--------|-------|
 | 1 | Config & Architecture Refactor | DONE | config.h, game.h/cpp, input.h/cpp, render.h/cpp |
 | 2 | Enhanced Terrain & Map Generation | DONE | All 7 terrain types, procedural gen, resources |
-| 3 | Unit System | DONE | 5 unit types, A* pathfinding, movement |
+| 3 | Unit System | DONE | 6 unit types, A* pathfinding, movement |
 | 4 | Building System | DONE | 8 building types, training queues, TC arrows |
 | 5 | Economy | DONE | Gathering, drop-offs, farms |
 | 6 | Combat | DONE | Unit-vs-unit + unit-vs-building combat |
@@ -18,8 +18,9 @@
 | 10 | AI Opponent | DONE | Attack-move, retreat logic, building attacks |
 | 11 | Sound | PARTIAL | 8 WAV SFX extracted to audio/, not yet wired to maxmod |
 | 12 | Game Flow & Polish | DONE | Win/lose, restart, age-up, tech research UI |
-| 13 | HD Sprite Extraction | DONE | Palette fixed (50500.bina), 5 unit types + 30 HD sprites extracted |
+| 13 | HD Sprite Extraction | DONE | Palette fixed (50500.bina), 6 unit types + buildings extracted |
 | 14 | HD Sprite Integration | DONE | All procedural sprites replaced with HD art, 32×32 units, player colors |
+| 15 | Unit Collision Avoidance | DONE | Tile occupancy grid, formation spreading, nudge/wait/repath |
 
 ## Bug Fixes Applied
 
@@ -34,12 +35,14 @@
 8. **Sprite tile format fixed** — Added linear_to_tiled() conversion for OAM sprite data (8x8 tile layout)
 9. **Gather rate fixed** — Added separate gatherTick field to avoid double-increment with animTick
 10. **Stale selection cleared** — selectedUnit/selectedBldg cleared when entity dies
+11. **Unit collision avoidance** — Tile occupancy grid, movement collision (nudge/wait/repath), formation spreading, pathfinding routes around stationary units
 
 ### Player Controls
 - **START** on selected TC: Age advancement (priority) or train villager
 - **START** on selected military building: Research tech (if available) or train unit
 - **Touch enemy building** with unit selected: Attack building
 - **Touch enemy unit** with unit selected: Attack unit
+- **A**: Ungarrison TC (if selected with garrison), else select first military unit
 - **X**: Toggle build menu
 - **B**: Cancel action
 - **L/R**: Cycle idle villagers
@@ -50,8 +53,6 @@
 ### Asset Pipeline Fix
 - **Root cause**: Previous agent used `pal_5.pal` (terrain palette with muddy greens) instead of `50500.bina` (the actual AoE2 unit rendering palette with proper player colors)
 - **Fix**: Updated `extract-slp.js` palette search order to prioritize `50500.bina` from `drs/interface/`
-- **Fix**: Updated `gen_manifest_hd.py` default palette to `50500.bina`
-- **Fix**: Updated all manifest files (`manifest.json`, `manifest_hd.json`) to use correct palette
 - **Fix**: Raised frame size limit from 256px to 400px in extract-slp.js (buildings were being filtered)
 - **Result**: All sprites now have correct AoE2 colors (blue player color, natural skin tones, proper armor/weapon colors)
 - **SLP IDs**: Verified against [openage aoc-slp-list](https://github.com/SFTtech/openage/blob/master/doc/media/aoc-slp-list.md)
@@ -65,6 +66,7 @@
 | Archer | 708 | 702 | 713 |
 | Knight | 669 | 663 | 673 |
 | Spearman | 873 | 867 | 877 |
+| Scout | 2085 | — | 2089 |
 
 | Building | SLP | Notes |
 |----------|-----|-------|
@@ -76,12 +78,7 @@
 | Mining Camp | 3492 | North European |
 | Lumber Camp | 3504 | North European |
 
-### Extracted Game Sprites (18 total)
-- **Units (11)**: villager, villager_walk, villager_f, militia, militia_fight, archer, archer_fire, knight, knight_fight, spearman, spearman_fight
-- **Buildings (7)**: town_center, house, barracks, archery_range, stable, mining_camp, lumber_camp
-- **Makefile target**: `make assets-game`
-
-### Unit Stats Update (wiki-verified)
+### Unit Stats (wiki-verified)
 Updated config.h to match real AoE2 values:
 - Militia: 40 HP, 4 ATK, 1 ARM (was 10 ATK — way too high)
 - Archer: 30 HP, 4 ATK, range 4, costs 25W/45G (no food)
@@ -97,48 +94,88 @@ Extracted 8 candidate WAV files from AoE2 HD (`drs/sounds/`) to `audio/`:
 - sfx_select.wav (0.57s), sfx_death.wav (0.54s), sfx_complete.wav (0.47s)
 - Total: 128KB — ready for maxmod integration
 
-### Cleanup
-- Removed: debug scripts (probe-slp.js, extract-slp-big.js), debug images (debug_raw.pgm), old sprites (villager.bmp/.ppm/_old.png, index.html), wrong-palette vil_*.png (20 files), stale scripts (gen_manifest_villagers.py, gen_sprite_index.py), stale manifest (manifest_villagers.json)
-
 ### HD Sprite Integration (Phase 14)
 - **Preprocessing pipeline**: `scripts/preprocess_sprites.py` converts all HD sprite PNGs to indexed binary data with shared 256-color palette
-- **Shared palette**: All 18 sprites (11 unit sheets + 7 buildings) quantized to 177 unique colors, stored in `data/sprite_pal.bin` (512 bytes, BGR555 format)
+- **Shared palette**: All sprites quantized to shared colors, stored in `data/sprite_pal.bin` (512 bytes, BGR555 format)
 - **Player color remap**: Blue→Red remap table (`data/sprite_remap.bin`) for player 2 units/buildings. 7 blue shades auto-detected and mapped to red variants.
 - **Unit sprites upgraded to 32×32 OAM** (from 16×16) for HD detail. Centered on tile with -8px offset.
-- **Direction mapping**: AoE2 SLP 5-frame directions (S,SW,W,NW,N) mapped to 4-direction system. East = hFlip of West (done in software before tiling).
-- **Animation**: Walk/fight sheets use 3 animation frames per direction (15 frames total, 5 dirs × 3 anims). Stand sheets use 1 frame per direction.
+- **Direction mapping**: AoE2 SLP 5-frame directions (S,SW,W,NW,N) mapped to 8-direction system with mirroring.
+- **Animation**: Walk/fight sheets use 10 animation frames per direction. Stand sheets use 5 frames per direction.
 - **State→sheet mapping**: Idle→stand, Moving/Returning→walk, Attacking/Gathering→fight. Falls back to stand if no specific sheet exists.
 - **Death effect**: All visible pixels mapped to palette index 255 (dark gray)
-- **Buildings**: 64×64 source PNGs scaled to 32×32 (2×2 tile) or 16×16 (1×1 tile). Under-construction buildings show outline pattern.
-- **Total binary sprite data**: 170.5 KB in `data/` directory
-- **ROM size**: 546 KB (up from ~350 KB with procedural sprites)
+- **Buildings**: HD source PNGs scaled to fit 32×32 (1×1 tile), 64×64 (2×2 tile), or 128×128 (4×4 tile). Under-construction buildings show outline pattern.
 - **Build**: `make sprites` to regenerate binary data from PNGs, then `make` to build ROM
+
+### Unit Collision Avoidance (Phase 15)
+- **Tile occupancy grid**: `tileOccupant[32][32]` rebuilt every frame, tracks which unit occupies each tile
+- **Formation spreading**: Move commands assign spiral pattern destinations (center → ring-1 → ring-2) so units spread out
+- **Movement collision**: Before stepping to next tile, check occupancy — nudge idle friendlies, wait for moving friendlies, repath after 8 frames, allow enemy overlap for combat
+- **Pathfinding awareness**: A* marks stationary units (idle/gathering/building/attacking) as impassable, skips moving/scouting units
+- **Spawn/ungarrison**: Only place units on unoccupied passable tiles
+- **Gather/build preference**: Prefer unoccupied adjacent tiles when multiple villagers work the same resource or building
 
 ### Known Limitations (by design)
 - Sound is stubbed (no maxmod integration yet)
-- Buildings auto-construct (no builder villager required)
 - No Mill building — only TC accepts food
 - Path length capped at 64 steps (re-path needed for very long paths)
 - Tech HP bonus only applies to newly spawned units, not existing ones
-- Terrain tiles (forest, gold, stone, farm) still use procedural palette-based graphics
 
 ## File Manifest
+
+### Source Code
 ```
-source/main.cpp      - Entry point, main loop, game start
-source/config.h      - Constants, enums, stat tables, palette indices
-source/game.h/cpp    - GameState, Player, resources, win/lose
-source/terrain.h/cpp - TerrainMap, procedural generation, tile cache
-source/units.h/cpp   - Unit pool, A* pathfinding, combat, gathering
-source/buildings.h/cpp - Building pool, training, TC arrows, destruction
-source/input.h/cpp   - Touch + button input dispatch
-source/render.h/cpp  - OAM sprites, HD sprite loading, tile conversion
-source/ui.h/cpp      - Top screen minimap + console info panel
-source/fog.h/cpp     - Fog of war (2-player, 3-state)
-source/tech.h/cpp    - Age advancement + 3 unit upgrades
-source/ai.h/cpp      - AI opponent (economy, military, building, attack)
-source/sound.h/cpp   - Sound stubs
-data/sprite_pal.bin  - Shared 256-color NDS palette for all OAM sprites
-data/sprite_remap.bin - Player 2 color remap table (blue→red)
-data/spr_*.bin       - Indexed sprite data for units and buildings
-scripts/preprocess_sprites.py - PNG→binary sprite preprocessor
+source/main.cpp       - Entry point, main loop, phase management, rendering pipeline
+source/config.h       - Constants, enums, stat tables, palette indices
+source/game.h/cpp     - GameState, Player, resources, selection, win/lose
+source/terrain.h/cpp  - TerrainMap, procedural generation, isometric tile rendering
+source/units.h/cpp    - Unit pool, A* pathfinding, combat, gathering, collision avoidance
+source/buildings.h/cpp - Building pool, training, TC arrows, garrison, destruction
+source/input.h/cpp    - Touch + button input, drag-select, build menu, formation spreading
+source/render.h/cpp   - Software sprite rendering, HD sprite sheets, depth sorting
+source/ui.h/cpp       - Top screen minimap + console HUD, bitmap font rendering
+source/fog.h/cpp      - Fog of war (2-player, 3-state)
+source/tech.h/cpp     - Age advancement + 3 unit upgrades
+source/ai.h/cpp       - AI opponent (economy, military, building, attack)
+source/sound.h/cpp    - Sound stubs (maxmod not yet integrated)
+source/font.h/cpp     - Bitmap font (Century Bold 14px) for both screens
+source/iso.h          - Isometric coordinate conversions, diamond mask tables
+source/res_icons.h    - Resource icon pixel data
+```
+
+### Asset Pipeline
+```
+extract-slp.js                         - SLP→PNG frame extractor (Node.js, uses genie-slp)
+scripts/build_assets_from_manifest.py  - Manifest-driven batch sprite sheet builder
+scripts/build_sprite_sheet.py          - Per-SLP sheet builder (calls extract-slp.js + pack_frames.py)
+scripts/pack_frames.py                 - Frame packer with hotspot anchoring and uniform scaling
+scripts/preprocess_sprites.py          - PNG→NDS indexed binary converter (shared palette)
+scripts/preprocess_terrain.py          - HD terrain textures→NDS binary tiles
+assets/manifest_game.json              - Sprite manifest (SLP IDs, layout, grouping)
+```
+
+### Research/Reference Scripts (not part of build)
+```
+scripts/dump_tc_graphics.js            - Inspect TC graphic chain from .dat file
+scripts/dump_building_gfx.js           - Inspect building SLPs by architecture set
+scripts/dump_villager_graphics.js      - Inspect villager graphic IDs from .dat file
+scripts/composite_tc.py                - One-off: composite TC from 7 SLP layers
+```
+
+### Binary Data (generated by `make sprites`)
+```
+data/sprite_pal.bin    - Shared 256-color NDS palette (BGR555)
+data/sprite_remap.bin  - Player 2 color remap table (blue→red)
+data/spr_*.bin         - Indexed sprite data for all units and buildings
+data/terrain_tiles.bin - Isometric terrain tiles indexed against sprite palette
+data/terrain_pal.bin   - UI palette overlay for console text colors
+data/font_aoe2.bin     - Bitmap font glyph data
+```
+
+### Build Targets
+```
+make                - Compile C++ and link .nds ROM
+make clean          - Remove build artifacts
+make assets-game    - Extract HD sprites from SLP files via manifest
+make assets         - Extract a single SLP (SLP=... OUT=... args)
+make sprites        - Preprocess sprites/*.png + terrain → data/*.bin
 ```

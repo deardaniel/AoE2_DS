@@ -96,8 +96,7 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
-.PHONY: $(BUILD) clean assets assets-batch
-.PHONY: assets-batch-hd assets-game sprites
+.PHONY: $(BUILD) clean assets assets-game sprites
 
 #---------------------------------------------------------------------------------
 $(BUILD):
@@ -128,19 +127,7 @@ assets:
 		$(if $(FIT),--fit,)
 
 #---------------------------------------------------------------------------------
-# Batch build from assets/manifest.json
-#---------------------------------------------------------------------------------
-assets-batch:
-	@python3 scripts/build_assets_from_manifest.py assets/manifest.json
-
-#---------------------------------------------------------------------------------
-# Batch build from generated HD manifest
-#---------------------------------------------------------------------------------
-assets-batch-hd:
-	@python3 scripts/build_assets_from_manifest.py assets/manifest_hd.json
-
-#---------------------------------------------------------------------------------
-# Extract game unit/building sprites (villager, militia, archer, knight, spearman)
+# Extract game unit/building sprites from manifest
 #---------------------------------------------------------------------------------
 assets-game:
 	@python3 scripts/build_assets_from_manifest.py assets/manifest_game.json
