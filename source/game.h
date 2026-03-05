@@ -64,6 +64,13 @@ struct GameState {
     // Move target marker (flashing diamond at destination)
     s16   moveTargetIsoX, moveTargetIsoY;
     u8    moveTargetTimer;  // frames remaining (0 = not showing)
+
+    // Under attack alert
+    u8    underAttackTimer;  // frames remaining for alert display (0 = not active)
+    s16   attackAlertTX, attackAlertTY;  // tile location of attack
+
+    // Training unit type selection (-1 = auto/first available)
+    s8    trainUnitType;
 };
 
 // ---------------------------------------------------------------------------

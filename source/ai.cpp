@@ -115,8 +115,16 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
 
         // Map resource type to terrain type
+        // For food, prefer berries (free) over farms (cost wood)
         u8 terrTypes[] = { TERRAIN_FARM, TERRAIN_FOREST, TERRAIN_GOLD, TERRAIN_STONE };
-        if (ai_find_resource(tcTX, tcTY, terrTypes[lowestRes], terrain, resTX, resTY)) {
+        if (lowestRes == RES_FOOD) {
+            // Try berries first
+            if (ai_find_resource(tcTX, tcTY, TERRAIN_BERRIES, terrain, resTX, resTY)) {
+                unit_command_gather(vil, resTX, resTY, terrain);
+                assigned = true;
+            }
+        }
+        if (!assigned && ai_find_resource(tcTX, tcTY, terrTypes[lowestRes], terrain, resTX, resTY)) {
             unit_command_gather(vil, resTX, resTY, terrain);
             assigned = true;
         }

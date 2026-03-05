@@ -463,6 +463,7 @@ static bool find_nearest_resource(int cx, int cy, u8 carryType, const TerrainMap
             if (carryType == RES_GOLD  && tt == TERRAIN_GOLD)   match = true;
             if (carryType == RES_STONE && tt == TERRAIN_STONE)  match = true;
             if (carryType == RES_FOOD  && tt == TERRAIN_FARM)   match = true;
+            if (carryType == RES_FOOD  && tt == TERRAIN_BERRIES) match = true;
             if (!match) continue;
             int dx = tx - cx; if (dx < 0) dx = -dx;
             int dy = ty - cy; if (dy < 0) dy = -dy;
@@ -511,7 +512,8 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     if (u.type != UNIT_VILLAGER) return;
 
     u8 tt = terrain.tileAt(tileTX, tileTY);
-    if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE && tt != TERRAIN_FARM)
+    if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE &&
+        tt != TERRAIN_FARM && tt != TERRAIN_BERRIES)
         return;
 
     u.gatherTX = tileTX;
@@ -525,7 +527,8 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     if (tt == TERRAIN_FOREST) { u.carryType = RES_WOOD;  u.role = VROLE_LUMBERJACK; }
     else if (tt == TERRAIN_GOLD)   { u.carryType = RES_GOLD;  u.role = VROLE_MINER; }
     else if (tt == TERRAIN_STONE)  { u.carryType = RES_STONE; u.role = VROLE_MINER; }
-    else if (tt == TERRAIN_FARM)   { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
+    else if (tt == TERRAIN_FARM)    { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
+    else if (tt == TERRAIN_BERRIES) { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
 
     // Find path to nearest adjacent passable tile of the resource
     int sx = u.x / TILE_PX;
@@ -1104,6 +1107,14 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
 
     target.hp -= dmg;
     u.attackCooldown = 30; // ~0.5s between attacks
+
+    // Trigger "under attack" alert for player 0
+    if (target.owner == 0 && gs.underAttackTimer == 0) {
+        gs.underAttackTimer = 180; // 3 seconds
+        gs.attackAlertTX = target.x / TILE_PX;
+        gs.attackAlertTY = target.y / TILE_PX;
+    }
+
     if (u.owner == 0) {
         if (u.type == UNIT_ARCHER)
             sound_play(SFX_ARROW_FIRE);
@@ -1267,6 +1278,63 @@ void units_update(GameState& gs, TerrainMap& terrain) {
 
         case USTATE_SCOUTING:
             // Auto-scout: move toward unexplored tiles
+            // First check for nearby enemies and flee
+            {
+                int utx = (u.x + TILE_PX / 2) / TILE_PX;
+                int uty = (u.y + TILE_PX / 2) / TILE_PX;
+
+                // Check for enemies within 4 tiles
+                int nearestEnemyDist = 99999;
+                int enemyDX = 0, enemyDY = 0;
+                for (int j = 0; j < MAX_UNITS; j++) {
+                    if (!units[j].alive || units[j].state == USTATE_DEAD) continue;
+                    if (units[j].owner == u.owner) continue;
+                    int etx = units[j].x / TILE_PX;
+                    int ety = units[j].y / TILE_PX;
+                    int dx = etx - utx;
+                    int dy = ety - uty;
+                    int dist = dx * dx + dy * dy;
+                    if (dist < nearestEnemyDist && dist <= 4 * 4) {
+                        nearestEnemyDist = dist;
+                        enemyDX = dx;
+                        enemyDY = dy;
+                    }
+                }
+
+                if (nearestEnemyDist <= 4 * 4) {
+                    // Flee: move in opposite direction, 7 tiles away
+                    int fleeDX = -enemyDX;
+                    int fleeDY = -enemyDY;
+                    // Normalize to 7 tiles
+                    if (fleeDX == 0 && fleeDY == 0) { fleeDX = 1; fleeDY = 1; }
+                    int fleeTX = utx + fleeDX * 7 / ((fleeDX < 0 ? -fleeDX : fleeDX) + (fleeDY < 0 ? -fleeDY : fleeDY) + 1);
+                    int fleeTY = uty + fleeDY * 7 / ((fleeDX < 0 ? -fleeDX : fleeDX) + (fleeDY < 0 ? -fleeDY : fleeDY) + 1);
+                    // Clamp to map
+                    if (fleeTX < 1) fleeTX = 1;
+                    if (fleeTY < 1) fleeTY = 1;
+                    if (fleeTX >= MAP_TILES - 1) fleeTX = MAP_TILES - 2;
+                    if (fleeTY >= MAP_TILES - 1) fleeTY = MAP_TILES - 2;
+                    // Find passable tile near flee target
+                    bool fled = false;
+                    for (int r = 0; r <= 3 && !fled; r++) {
+                        for (int dy = -r; dy <= r && !fled; dy++) {
+                            for (int dx = -r; dx <= r && !fled; dx++) {
+                                int ftx = fleeTX + dx;
+                                int fty = fleeTY + dy;
+                                if (ftx >= 0 && ftx < MAP_TILES && fty >= 0 && fty < MAP_TILES &&
+                                    terrain.passable(ftx, fty)) {
+                                    if (unit_find_path(utx, uty, ftx, fty, terrain, u.pathDirs, u.pathLen, i)) {
+                                        unit_begin_path(u, utx, uty, ftx, fty);
+                                        fled = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+
             // Only pick a new target when idle (reached previous one)
             if (u.pathLen == 0) {
                 int utx = (u.x + TILE_PX / 2) / TILE_PX;

@@ -16,6 +16,8 @@ void buildings_init() {
         for (int q = 0; q < 3; q++) buildings[i].trainQueue[q] = -1;
         buildings[i].garrisonCount = 0;
         for (int g = 0; g < MAX_GARRISON; g++) buildings[i].garrison[g] = -1;
+        buildings[i].rallyTX = -1;
+        buildings[i].rallyTY = -1;
     }
 }
 
@@ -72,8 +74,8 @@ int building_place(u8 type, u8 owner, int tileX, int tileY, GameState& gs, Terra
     for (int q = 0; q < 3; q++) b.trainQueue[q] = -1;
     b.garrisonCount = 0;
     for (int g = 0; g < MAX_GARRISON; g++) b.garrison[g] = -1;
-
-    // Mark terrain tiles for farm
+    b.rallyTX = -1;
+    b.rallyTY = -1;
     if (type == BLDG_FARM) {
         terrain.setTile(tileX, tileY, TERRAIN_FARM, FARM_RESOURCE_AMT);
     }
@@ -173,7 +175,28 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
                         if (terrain.passable(tx, ty) && !tile_has_unit(tx, ty)) {
                             if (gs.players[b.owner].popCount < gs.players[b.owner].popCap) {
                                 int uid = unit_spawn(unitType, b.owner, tx * TILE_PX, ty * TILE_PX);
-                                if (uid >= 0) spawned = true;
+                                if (uid >= 0) {
+                                    spawned = true;
+                                    // Apply rally point
+                                    if (b.rallyTX >= 0 && b.rallyTY >= 0) {
+                                        u8 rtt = terrain.tileAt(b.rallyTX, b.rallyTY);
+                                        bool isResource = (rtt == TERRAIN_FOREST || rtt == TERRAIN_GOLD ||
+                                                           rtt == TERRAIN_STONE || rtt == TERRAIN_FARM ||
+                                                           rtt == TERRAIN_BERRIES);
+                                        int rallyBldg = building_at_tile(b.rallyTX, b.rallyTY);
+                                        bool isIncompleteBldg = (rallyBldg >= 0 &&
+                                            !building_is_complete(rallyBldg) &&
+                                            buildings[rallyBldg].owner == b.owner);
+                                        if (isResource && unitType == UNIT_VILLAGER) {
+                                            unit_command_gather(uid, b.rallyTX, b.rallyTY, terrain);
+                                        } else if (isIncompleteBldg && unitType == UNIT_VILLAGER) {
+                                            unit_command_build(uid, rallyBldg, terrain);
+                                        } else {
+                                            unit_command_move(uid, b.rallyTX * TILE_PX + TILE_PX / 2,
+                                                              b.rallyTY * TILE_PX + TILE_PX / 2, terrain);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -197,6 +220,16 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
 void building_damage(int idx, int amount) {
     if (idx < 0 || idx >= MAX_BUILDINGS || !buildings[idx].alive) return;
     buildings[idx].hp -= amount;
+
+    // Trigger "under attack" alert for player 0
+    if (buildings[idx].owner == 0) {
+        extern GameState gameState;
+        if (gameState.underAttackTimer == 0) {
+            gameState.underAttackTimer = 180;
+            gameState.attackAlertTX = buildings[idx].x / TILE_PX;
+            gameState.attackAlertTY = buildings[idx].y / TILE_PX;
+        }
+    }
 }
 
 void building_destroy(int idx, TerrainMap& terrain) {

@@ -17,6 +17,7 @@ extern const u32 sprite_pal_bin_size;
 extern const u8 spr_tree_bin[];
 extern const u8 spr_gold_mine_bin[];
 extern const u8 spr_stone_mine_bin[];
+extern const u8 spr_berries_bin[];
 
 u8 tileGfxCache[TERRAIN_COUNT][ISO_TILE_W * ISO_TILE_H];
 u8 grassVariantCache[GRASS_VARIANTS][ISO_TILE_W * ISO_TILE_H];
@@ -181,22 +182,27 @@ void TerrainMap::initTileGfx() {
     //   16 grass variant tiles × 512 bytes = 8192 bytes
     //   4 dirt variant tiles × 512 bytes = 2048 bytes
     // Total: 13824 bytes
+    // Note: TERRAIN_BERRIES (7) is not in the binary — it reuses grass tile gfx
     int tileSize = ISO_TILE_W * ISO_TILE_H;
-    for (int t = 0; t < TERRAIN_COUNT; t++) {
+    int binTerrainCount = 7; // tiles stored in terrain_tiles.bin
+    for (int t = 0; t < binTerrainCount; t++) {
         memcpy(tileGfxCache[t],
                &terrain_tiles_bin[t * tileSize],
                tileSize);
     }
+    // Berries tile reuses grass base tile (berry sprite drawn on top)
+    memcpy(tileGfxCache[TERRAIN_BERRIES], tileGfxCache[TERRAIN_GRASS], tileSize);
+
     // Load grass variants (stored after the 7 base tiles)
     for (int v = 0; v < GRASS_VARIANTS; v++) {
         memcpy(grassVariantCache[v],
-               &terrain_tiles_bin[(TERRAIN_COUNT + v) * tileSize],
+               &terrain_tiles_bin[(binTerrainCount + v) * tileSize],
                tileSize);
     }
     // Load dirt variants (stored after grass variants)
     for (int v = 0; v < DIRT_VARIANTS; v++) {
         memcpy(dirtVariantCache[v],
-               &terrain_tiles_bin[(TERRAIN_COUNT + GRASS_VARIANTS + v) * tileSize],
+               &terrain_tiles_bin[(binTerrainCount + GRASS_VARIANTS + v) * tileSize],
                tileSize);
     }
 
@@ -210,6 +216,7 @@ const u8* terrain_get_resource_sprite(u8 ttype) {
     case TERRAIN_FOREST: return spr_tree_bin;
     case TERRAIN_GOLD:   return spr_gold_mine_bin;
     case TERRAIN_STONE:  return spr_stone_mine_bin;
+    case TERRAIN_BERRIES: return spr_berries_bin;
     default: return NULL;
     }
 }
@@ -327,7 +334,7 @@ void TerrainMap::generate(u32 seed) {
     }
 
     // Place some resources near starting positions for fairness
-    // Player 0 (top-left): forest and gold nearby
+    // Player 0 (top-left): forest, gold, berries nearby
     tiles[2][8]  = TERRAIN_FOREST; resourceAmt[2][8]  = FOREST_RESOURCE_AMT;
     tiles[3][8]  = TERRAIN_FOREST; resourceAmt[3][8]  = FOREST_RESOURCE_AMT;
     tiles[4][8]  = TERRAIN_FOREST; resourceAmt[4][8]  = FOREST_RESOURCE_AMT;
@@ -335,6 +342,12 @@ void TerrainMap::generate(u32 seed) {
     tiles[7][4]  = TERRAIN_GOLD;   resourceAmt[7][4]  = GOLD_RESOURCE_AMT;
     tiles[8][2]  = TERRAIN_STONE;  resourceAmt[8][2]  = STONE_RESOURCE_AMT;
     tiles[8][3]  = TERRAIN_STONE;  resourceAmt[8][3]  = STONE_RESOURCE_AMT;
+
+    // Berry patches near player 0 TC
+    tiles[1][7]  = TERRAIN_BERRIES; resourceAmt[1][7]  = BERRIES_RESOURCE_AMT;
+    tiles[2][7]  = TERRAIN_BERRIES; resourceAmt[2][7]  = BERRIES_RESOURCE_AMT;
+    tiles[3][7]  = TERRAIN_BERRIES; resourceAmt[3][7]  = BERRIES_RESOURCE_AMT;
+    tiles[4][7]  = TERRAIN_BERRIES; resourceAmt[4][7]  = BERRIES_RESOURCE_AMT;
 
     // Player 1 (bottom-right): mirror resources
     int bx = MAP_TILES - 9, by = MAP_TILES - 3;
@@ -346,6 +359,29 @@ void TerrainMap::generate(u32 seed) {
     tiles[by][bx+1] = TERRAIN_GOLD;   resourceAmt[by][bx+1] = GOLD_RESOURCE_AMT;
     tiles[by-1][bx+1] = TERRAIN_STONE; resourceAmt[by-1][bx+1] = STONE_RESOURCE_AMT;
     tiles[by-1][bx]   = TERRAIN_STONE; resourceAmt[by-1][bx]   = STONE_RESOURCE_AMT;
+
+    // Berry patches near player 1 TC
+    bx = MAP_TILES - 8; by = MAP_TILES - 2;
+    tiles[by][bx]   = TERRAIN_BERRIES; resourceAmt[by][bx]   = BERRIES_RESOURCE_AMT;
+    tiles[by-1][bx] = TERRAIN_BERRIES; resourceAmt[by-1][bx] = BERRIES_RESOURCE_AMT;
+    tiles[by-2][bx] = TERRAIN_BERRIES; resourceAmt[by-2][bx] = BERRIES_RESOURCE_AMT;
+    tiles[by-3][bx] = TERRAIN_BERRIES; resourceAmt[by-3][bx] = BERRIES_RESOURCE_AMT;
+
+    // Random berry patches (1-2 neutral patches elsewhere)
+    int numBerries = rngRange(1, 2);
+    for (int i = 0; i < numBerries; i++) {
+        int cx = rngRange(10, MAP_TILES - 11);
+        int cy = rngRange(10, MAP_TILES - 11);
+        int count = rngRange(3, 4);
+        for (int j = 0; j < count; j++) {
+            int tx = cx + rngRange(-1, 1);
+            int ty = cy + rngRange(-1, 1);
+            if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
+            if (tiles[ty][tx] != TERRAIN_GRASS && tiles[ty][tx] != TERRAIN_DIRT) continue;
+            tiles[ty][tx] = TERRAIN_BERRIES;
+            resourceAmt[ty][tx] = BERRIES_RESOURCE_AMT;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

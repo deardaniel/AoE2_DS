@@ -192,6 +192,36 @@ int main(void) {
         // Note: scanKeys() already called in input_update() — reuse keysDown()
         {
             int kp = keysDown();
+
+            // D-pad up/down: cycle train unit type when military building selected
+            if ((kp & KEY_UP) || (kp & KEY_DOWN)) {
+                if (gameState.selectedBldg >= 0 && buildings[gameState.selectedBldg].alive &&
+                    building_is_complete(gameState.selectedBldg) &&
+                    buildings[gameState.selectedBldg].owner == 0) {
+                    Building& b = buildings[gameState.selectedBldg];
+                    // Only for buildings that train units (not market, not farm, etc.)
+                    // Build list of trainable unit types for this building
+                    int trainable[UNIT_TYPE_COUNT];
+                    int trainCount = 0;
+                    for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
+                        if (UNIT_STATS[ut].bldgReq == b.type &&
+                            gameState.players[0].age >= UNIT_STATS[ut].ageReq) {
+                            trainable[trainCount++] = ut;
+                        }
+                    }
+                    if (trainCount > 1) {
+                        // Find current index
+                        int curIdx = 0;
+                        for (int t = 0; t < trainCount; t++) {
+                            if (trainable[t] == gameState.trainUnitType) { curIdx = t; break; }
+                        }
+                        if (kp & KEY_DOWN) curIdx = (curIdx + 1) % trainCount;
+                        if (kp & KEY_UP)   curIdx = (curIdx + trainCount - 1) % trainCount;
+                        gameState.trainUnitType = trainable[curIdx];
+                    }
+                }
+            }
+
             if (kp & KEY_START) {
                 if (gameState.selectedBldg >= 0 && buildings[gameState.selectedBldg].alive &&
                     building_is_complete(gameState.selectedBldg)) {
@@ -223,13 +253,19 @@ int main(void) {
                         }
                     }
 
-                    // Quick-train: train the first available unit
+                    // Train selected unit type (or first available if none selected)
                     if (!didAction) {
-                        for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
-                            if (UNIT_STATS[ut].bldgReq == b.type &&
-                                gameState.players[0].age >= UNIT_STATS[ut].ageReq) {
-                                building_train(gameState.selectedBldg, ut, gameState);
-                                break;
+                        if (gameState.trainUnitType >= 0 &&
+                            UNIT_STATS[gameState.trainUnitType].bldgReq == b.type &&
+                            gameState.players[0].age >= UNIT_STATS[gameState.trainUnitType].ageReq) {
+                            building_train(gameState.selectedBldg, gameState.trainUnitType, gameState);
+                        } else {
+                            for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
+                                if (UNIT_STATS[ut].bldgReq == b.type &&
+                                    gameState.players[0].age >= UNIT_STATS[ut].ageReq) {
+                                    building_train(gameState.selectedBldg, ut, gameState);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -249,6 +285,9 @@ int main(void) {
 
         // AI
         ai_update(gameState, terrain);
+
+        // Under attack alert timer
+        if (gameState.underAttackTimer > 0) gameState.underAttackTimer--;
 
         // --- Rendering ---
 

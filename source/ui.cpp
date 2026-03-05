@@ -220,6 +220,7 @@ static u16 terrainMiniColors[TERRAIN_COUNT] = {
     RGB15(28, 28,  4), // gold
     RGB15(16, 16, 16), // stone
     RGB15(12, 20,  4), // farm
+    RGB15(24,  4, 12), // berries (reddish-pink)
 };
 
 // ---------------------------------------------------------------------------
@@ -331,6 +332,21 @@ static void ui_draw_minimap(const GameState& gs, const TerrainMap& terrain) {
                             minimapVram[py * 256 + px] = dotColor;
                     }
                 }
+            }
+        }
+    }
+
+    // Under attack alert — flashing red dot on minimap
+    if (gs.underAttackTimer > 0 && gs.attackAlertTX >= 0 && ((gs.frameCount >> 3) & 1)) {
+        int mx, my;
+        tileToMinimap(gs.attackAlertTX, gs.attackAlertTY, mx, my);
+        u16 alertColor = RGB15(31, 0, 0) | BIT(15);
+        for (int dy = -1; dy <= 2; dy++) {
+            for (int dx = -1; dx <= 2; dx++) {
+                int px = mx + dx + 1;
+                int py = my + dy + 1;
+                if (px >= 0 && px < 256 && py >= 0 && py < 192)
+                    minimapVram[py * 256 + px] = alertColor;
             }
         }
     }
@@ -460,6 +476,12 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
             font_draw_str_16(minimapVram, 256, 192, x, ty, " idle", colYellow, gameFont);
             ty += 12;
         }
+    }
+
+    // Under attack alert
+    if (gs.underAttackTimer > 0 && ((gs.frameCount >> 3) & 1)) {
+        font_draw_str_16(minimapVram, 256, 192, TX, ty, "UNDER ATTACK!", colRed, gameFont);
+        ty += 12;
     }
 
     // --- Separator line ---
@@ -643,16 +665,25 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
             }
         }
 
-        // Trainable units
+        // Trainable units (highlight selected)
         for (int ut = 0; ut < UNIT_TYPE_COUNT && ty + 12 < INFO_Y + INFO_H; ut++) {
             if (UNIT_STATS[ut].bldgReq == b.type && gs.players[0].age >= UNIT_STATS[ut].ageReq) {
+                bool isSelected = (ut == gs.trainUnitType);
                 char buf[32];
-                snprintf(buf, sizeof(buf), "%s F%d W%d G%d", UNIT_NAMES[ut],
+                snprintf(buf, sizeof(buf), "%s%s F%d W%d G%d",
+                         isSelected ? ">" : " ", UNIT_NAMES[ut],
                          UNIT_STATS[ut].cost[RES_FOOD], UNIT_STATS[ut].cost[RES_WOOD],
                          UNIT_STATS[ut].cost[RES_GOLD]);
-                font_draw_str_16(minimapVram, 256, 192, TX, ty, buf, colText, gameFont);
+                font_draw_str_16(minimapVram, 256, 192, TX, ty, buf,
+                                 isSelected ? colGold : colText, gameFont);
                 ty += 12;
             }
+        }
+
+        // Rally point indicator
+        if (b.rallyTX >= 0 && b.rallyTY >= 0 && ty + 12 < INFO_Y + INFO_H) {
+            font_draw_str_16(minimapVram, 256, 192, TX, ty, "Rally set", colGold, gameFont);
+            ty += 12;
         }
 
     } else if (gs.selectedTileX >= 0 && gs.selectedTileX < MAP_TILES &&
@@ -666,6 +697,7 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         case TERRAIN_GOLD:   tileName = "Gold Mine"; resName = "Gold"; break;
         case TERRAIN_STONE:  tileName = "Stone Mine"; resName = "Stone"; break;
         case TERRAIN_FARM:   tileName = "Farm"; resName = "Food"; break;
+        case TERRAIN_BERRIES: tileName = "Berries"; resName = "Food"; break;
         default: break;
         }
         font_draw_str_16(minimapVram, 256, 192, TX, ty, tileName, colText, gameFont);

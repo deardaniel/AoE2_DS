@@ -168,10 +168,6 @@ else
 # main targets
 #---------------------------------------------------------------------------------
 $(OUTPUT).nds	: 	$(OUTPUT).elf
-	ndstool -c $@ -9 $< -7 $(DEVKITPRO)/calico/bin/ds7_maine.elf \
-		-g "AE2D" "01" "AOE2DSI" \
-		-b $(GAME_ICON) "$(GAME_TITLE);$(GAME_SUBTITLE1);$(GAME_SUBTITLE2)"
-	@echo built ... $(notdir $@)
 
 $(OUTPUT).elf	:	$(OFILES)
 

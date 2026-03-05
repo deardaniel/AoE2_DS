@@ -39,6 +39,10 @@ void game_init(GameState& gs) {
     gs.moveTargetIsoX = 0;
     gs.moveTargetIsoY = 0;
     gs.moveTargetTimer = 0;
+    gs.underAttackTimer = 0;
+    gs.attackAlertTX = -1;
+    gs.attackAlertTY = -1;
+    gs.trainUnitType = -1;
 }
 
 bool game_can_afford(const GameState& gs, int player, const int cost[RES_COUNT]) {
@@ -126,6 +130,7 @@ void game_clear_selection(GameState& gs) {
     gs.selectedTileX = -1;
     gs.selectedTileY = -1;
     gs.selectionCount = 0;
+    gs.trainUnitType = -1;
     for (int i = 0; i < MAX_UNITS; i++) gs.unitSelected[i] = false;
 }
 

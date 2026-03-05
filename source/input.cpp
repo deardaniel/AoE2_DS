@@ -174,7 +174,8 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     // Check if tapped on resource tile (gather command for selected villagers)
     if (gs.selectionCount > 0) {
         u8 tt = terrain.tileAt(tileX, tileY);
-        if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE || tt == TERRAIN_FARM) {
+        if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE ||
+            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES) {
             bool sentGatherer = false;
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (!gs.unitSelected[i]) continue;
@@ -190,12 +191,42 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     // Check if tapped on resource tile without selection — show info
     {
         u8 tt = terrain.tileAt(tileX, tileY);
-        if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE || tt == TERRAIN_FARM) {
+        if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE ||
+            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES) {
+            // If building selected that can train, set rally to resource
+            if (gs.selectionCount == 0 && gs.selectedBldg >= 0 &&
+                buildings[gs.selectedBldg].alive && buildings[gs.selectedBldg].owner == 0 &&
+                building_is_complete(gs.selectedBldg)) {
+                buildings[gs.selectedBldg].rallyTX = tileX;
+                buildings[gs.selectedBldg].rallyTY = tileY;
+                // Show rally marker
+                int mtIsoX, mtIsoY;
+                worldToIso(mapX, mapY, mtIsoX, mtIsoY);
+                gs.moveTargetIsoX = mtIsoX;
+                gs.moveTargetIsoY = mtIsoY;
+                gs.moveTargetTimer = 30;
+                return;
+            }
             game_clear_selection(gs);
             gs.selectedTileX = tileX;
             gs.selectedTileY = tileY;
             return;
         }
+    }
+
+    // Set rally point: if a building is selected (no units), tap on map sets rally
+    if (gs.selectionCount == 0 && gs.selectedBldg >= 0 &&
+        buildings[gs.selectedBldg].alive && buildings[gs.selectedBldg].owner == 0 &&
+        building_is_complete(gs.selectedBldg)) {
+        buildings[gs.selectedBldg].rallyTX = tileX;
+        buildings[gs.selectedBldg].rallyTY = tileY;
+        // Show rally marker
+        int mtIsoX, mtIsoY;
+        worldToIso(mapX, mapY, mtIsoX, mtIsoY);
+        gs.moveTargetIsoX = mtIsoX;
+        gs.moveTargetIsoY = mtIsoY;
+        gs.moveTargetTimer = 30;
+        return;
     }
 
     // Default: move selected units with formation spreading.
@@ -331,6 +362,18 @@ void input_update(GameState& gs, TerrainMap& terrain) {
                            buildings[gs.selectedBldg].type == BLDG_MARKET &&
                            buildings[gs.selectedBldg].owner == 0 &&
                            building_is_complete(gs.selectedBldg));
+    // Check if building has multiple trainable unit types (D-pad up/down used for cycling)
+    bool trainCycleActive = false;
+    if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
+        buildings[gs.selectedBldg].owner == 0 &&
+        building_is_complete(gs.selectedBldg) && !marketSelected) {
+        int trainCount = 0;
+        for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
+            if (UNIT_STATS[ut].bldgReq == buildings[gs.selectedBldg].type &&
+                gs.players[0].age >= UNIT_STATS[ut].ageReq) trainCount++;
+        }
+        trainCycleActive = (trainCount > 1);
+    }
     if (marketSelected) {
         if (keysPressed & KEY_LEFT) {
             gs.marketTradeIdx = (gs.marketTradeIdx + 3) % 4; // wrap backward
@@ -365,8 +408,8 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         dpadPrevDir = dpadHeld;
 
         int scrollSpeed = dpadFast ? 12 : 6;
-        if (keys & KEY_UP)    gs.camY -= scrollSpeed;
-        if (keys & KEY_DOWN)  gs.camY += scrollSpeed;
+        if (keys & KEY_UP)    { if (!trainCycleActive) gs.camY -= scrollSpeed; }
+        if (keys & KEY_DOWN)  { if (!trainCycleActive) gs.camY += scrollSpeed; }
         if (keys & KEY_LEFT)  gs.camX -= scrollSpeed;
         if (keys & KEY_RIGHT) gs.camX += scrollSpeed;
     }

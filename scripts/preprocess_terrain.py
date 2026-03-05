@@ -31,7 +31,7 @@ SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
 TERRAIN_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/terrain/textures'
 
-NUM_TILES = TERRAIN_COUNT
+NUM_TILES = 7  # Only 7 base terrain tiles stored in binary (berries reuses grass at runtime)
 
 # Diamond mask aliases (from shared_constants)
 DIAMOND_XSTART = ISO_DIAMOND_XSTART
