@@ -1126,7 +1126,7 @@ void units_update(GameState& gs, TerrainMap& terrain) {
             u.animTick = 0;
             if (u.state == USTATE_MOVING || u.state == USTATE_ATTACKING ||
                 u.state == USTATE_GATHERING || u.state == USTATE_RETURNING ||
-                u.state == USTATE_BUILDING) {
+                u.state == USTATE_BUILDING || u.state == USTATE_SCOUTING) {
                 u.animFrame = (u.animFrame + 1) % 10;
             } else {
                 u.animFrame = 0;
