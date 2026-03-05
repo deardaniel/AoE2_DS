@@ -27,7 +27,8 @@ ISO_DIAMOND_XEND   = [16, 18, 20, 22, 24, 26, 28, 30, 30, 28, 26, 24, 22, 20, 18
 # Terrain
 # ---------------------------------------------------------------------------
 TERRAIN_COUNT  = 7   # Number of base terrain types (GRASS..FARM)
-GRASS_VARIANTS = 4   # Number of grass tile visual variants
+GRASS_VARIANTS = 16  # Number of grass tile visual variants
+DIRT_VARIANTS  = 4   # Number of dirt tile visual variants
 
 # ---------------------------------------------------------------------------
 # UI palette (indices 0-15 in BG_PALETTE_SUB)

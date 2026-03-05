@@ -358,7 +358,8 @@ def main():
     # Use large samples (256x256) to give terrain colors proper weight
     TERRAIN_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/terrain/textures'
     terrain_files = ['g_grs_00_color.png', 'g_for_00_color.png', 'g_wtr_00_color.png',
-                     'g_rd1_00_color.png', 'g_des_00_color.png']
+                     'g_rd1_00_color.png', 'g_des_00_color.png',
+                     'g_gr2_00_color.png', 'g_gr3_00_color.png', 'g_gr6_00_color.png']
     for tf in terrain_files:
         tp = os.path.join(TERRAIN_DIR, tf)
         if os.path.exists(tp):

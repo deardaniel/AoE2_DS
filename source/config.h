@@ -12,8 +12,9 @@ enum { ISO_TILE_W = 32, ISO_TILE_H = 16 };
 enum { ISO_MAP_W = MAP_TILES * ISO_TILE_W,   // 1024
        ISO_MAP_H = MAP_TILES * ISO_TILE_H };  // 512
 
-// Grass tile variants for visual variety
-enum { GRASS_VARIANTS = 4 };
+// Terrain tile variants for visual variety
+enum { GRASS_VARIANTS = 16 };
+enum { DIRT_VARIANTS = 4 };
 
 // ---------------------------------------------------------------------------
 // Pool sizes
@@ -44,6 +45,18 @@ enum TerrainType : u8 {
     TERRAIN_STONE  = 5,
     TERRAIN_FARM   = 6,
     TERRAIN_COUNT  = 7
+};
+
+// Blend priority for terrain edge transitions (-1 = no blending)
+// Higher priority bleeds into lower priority neighbors
+static const s8 TERRAIN_BLEND_PRIORITY[TERRAIN_COUNT] = {
+    1,  // GRASS
+    2,  // DIRT — bleeds into grass
+    0,  // WATER — lowest
+   -1,  // FOREST — no blending
+   -1,  // GOLD
+   -1,  // STONE
+   -1,  // FARM
 };
 
 // ---------------------------------------------------------------------------

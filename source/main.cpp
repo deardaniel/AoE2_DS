@@ -313,6 +313,12 @@ int main(void) {
                         int xs = ISO_DIAMOND_XSTART[py];
                         int xe = ISO_DIAMOND_XEND[py];
 
+                        // Match the extended diamond used in renderViewport
+                        if (!terrain.showTileGrid) {
+                            if (xs > 0) xs--;
+                            if (xe < ISO_TILE_W) xe++;
+                        }
+
                         for (int px = xs; px < xe; px++) {
                             int screenX = dstX + px;
                             if (screenX < 0 || screenX >= SCREEN_W) continue;

@@ -6,9 +6,10 @@ them against the SPRITE palette (from sprite_pal.bin) so that terrain and
 software-rendered sprites share the same BG palette at runtime.
 
 Output:
-  data/terrain_tiles.bin - 7 base terrain tiles + 4 grass variants = 11 tiles
+  data/terrain_tiles.bin - 7 base terrain tiles + 16 grass variants + 4 dirt variants
                            Each tile is 32x16 pixels = 512 bytes
-                           Layout: [0-6] = base terrain types, [7-10] = grass variants
+                           Layout: [0-6] = base terrain types, [7-22] = grass variants,
+                                   [23-26] = dirt variants
                            Pixels outside the diamond mask are set to index 0
                            Inside pixels use sprite palette indices (16-255)
 
@@ -21,7 +22,7 @@ import sys
 import numpy as np
 from PIL import Image
 from shared_constants import (
-    ISO_TILE_W, ISO_TILE_H, TERRAIN_COUNT, GRASS_VARIANTS,
+    ISO_TILE_W, ISO_TILE_H, TERRAIN_COUNT, GRASS_VARIANTS, DIRT_VARIANTS,
     ISO_DIAMOND_XSTART, ISO_DIAMOND_XEND, UI_PALETTE_RGB,
     rgb_to_bgr555, bgr555_to_rgb,
 )
@@ -59,13 +60,22 @@ TERRAIN_SOURCES = [
     (6, 'terrain', 'g_fc1_00_color.png', (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H)),
 ]
 
-# Grass variant sample positions — 4 well-spaced positions in the 512x512 texture
-# chosen for maximum visual diversity (different brightness/color)
-GRASS_VARIANT_CROPS = [
-    (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H),  # variant 0: medium (base)
-    (256, 224, 256 + ISO_TILE_W, 224 + ISO_TILE_H),  # variant 1: lighter
-    (160, 448, 160 + ISO_TILE_W, 448 + ISO_TILE_H),  # variant 2: darker
-    (128, 384, 128 + ISO_TILE_W, 384 + ISO_TILE_H),  # variant 3: greener
+# Grass variant sources — 4 crops per texture from 4 different grass textures
+# for natural color/brightness variation across the map
+GRASS_SOURCES = [
+    # (filename, crops[]) — 4 crops per texture, well-spaced across 512x512
+    ('g_grs_00_color.png', [(200,200), (320,128), (96,320), (400,400)]),   # base green, brightness ~106
+    ('g_gr2_00_color.png', [(200,200), (300,300), (100,400), (400,128)]),   # darker green, ~98
+    ('g_gr3_00_color.png', [(200,200), (350,150), (128,350), (420,380)]),   # lighter, ~111
+    ('g_gr6_00_color.png', [(200,200), (280,350), (150,150), (380,280)]),   # darkest, ~94
+]
+
+# Dirt variant sample positions — 4 well-spaced positions in the 512x512 dirt texture
+DIRT_VARIANT_CROPS = [
+    (200, 200, 200 + ISO_TILE_W, 200 + ISO_TILE_H),  # variant 0
+    (320, 128, 320 + ISO_TILE_W, 128 + ISO_TILE_H),  # variant 1
+    (128, 384, 128 + ISO_TILE_W, 384 + ISO_TILE_H),  # variant 2
+    (400, 300, 400 + ISO_TILE_W, 300 + ISO_TILE_H),  # variant 3
 ]
 
 
@@ -188,12 +198,22 @@ def main():
         all_tile_data.extend(bytes(indexed))
         print(f"  Tile {idx}: {w}x{h} = {w * h} bytes")
 
-    # Generate grass variant tiles (appended after the 7 base terrain tiles)
-    print(f"\nGenerating {GRASS_VARIANTS} grass variant tiles...")
-    grass_src = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/terrain/textures/g_grs_00_color.png'
-    if os.path.exists(grass_src):
-        grass_img = Image.open(grass_src).convert('RGB')
-        for vi, crop in enumerate(GRASS_VARIANT_CROPS):
+    # Generate grass variant tiles from multiple source textures
+    print(f"\nGenerating {GRASS_VARIANTS} grass variant tiles from {len(GRASS_SOURCES)} textures...")
+    grass_count = 0
+    for grass_file, crop_positions in GRASS_SOURCES:
+        grass_path = os.path.join(TERRAIN_DIR, grass_file)
+        if not os.path.exists(grass_path):
+            print(f"  WARNING: {grass_file} not found, using fallback")
+            base_grass = all_tile_data[:ISO_TILE_W * ISO_TILE_H]
+            for _ in crop_positions:
+                all_tile_data.extend(base_grass)
+                grass_count += 1
+            continue
+
+        grass_img = Image.open(grass_path).convert('RGB')
+        for cx, cy in crop_positions:
+            crop = (cx, cy, cx + ISO_TILE_W, cy + ISO_TILE_H)
             variant = np.array(grass_img.crop(crop))
             if variant.shape != (ISO_TILE_H, ISO_TILE_W, 3):
                 variant = np.array(grass_img.crop(crop).resize((ISO_TILE_W, ISO_TILE_H), Image.NEAREST))
@@ -208,13 +228,36 @@ def main():
                 indexed[i] = valid_pal_indices[nearest]
             apply_diamond_mask(indexed)
             all_tile_data.extend(bytes(indexed))
-            print(f"  Grass variant {vi}: {ISO_TILE_W}x{ISO_TILE_H} = {ISO_TILE_W * ISO_TILE_H} bytes")
+            print(f"  Grass variant {grass_count} ({grass_file} @ {cx},{cy}): {ISO_TILE_W}x{ISO_TILE_H} = {ISO_TILE_W * ISO_TILE_H} bytes")
+            grass_count += 1
+
+    # Generate dirt variant tiles
+    print(f"\nGenerating {DIRT_VARIANTS} dirt variant tiles...")
+    dirt_src = os.path.join(TERRAIN_DIR, 'g_rd1_00_color.png')
+    if os.path.exists(dirt_src):
+        dirt_img = Image.open(dirt_src).convert('RGB')
+        for vi, crop in enumerate(DIRT_VARIANT_CROPS):
+            variant = np.array(dirt_img.crop(crop))
+            if variant.shape != (ISO_TILE_H, ISO_TILE_W, 3):
+                variant = np.array(dirt_img.crop(crop).resize((ISO_TILE_W, ISO_TILE_H), Image.NEAREST))
+
+            flat_rgb = variant.reshape(-1, 3).astype(np.int32)
+            indexed = np.zeros(ISO_TILE_W * ISO_TILE_H, dtype=np.uint8)
+            for i in range(len(flat_rgb)):
+                r, g, b = flat_rgb[i]
+                diff = pal_array - np.array([r, g, b], dtype=np.int32)
+                dists = np.sum(diff * diff, axis=1)
+                nearest = np.argmin(dists)
+                indexed[i] = valid_pal_indices[nearest]
+            apply_diamond_mask(indexed)
+            all_tile_data.extend(bytes(indexed))
+            print(f"  Dirt variant {vi}: {ISO_TILE_W}x{ISO_TILE_H} = {ISO_TILE_W * ISO_TILE_H} bytes")
     else:
-        print(f"  WARNING: grass texture not found, duplicating base grass for variants")
-        base_grass = all_tile_data[:ISO_TILE_W * ISO_TILE_H]
-        for vi in range(GRASS_VARIANTS):
-            all_tile_data.extend(base_grass)
-            print(f"  Grass variant {vi}: fallback copy")
+        print(f"  WARNING: dirt texture not found, duplicating base dirt for variants")
+        base_dirt = all_tile_data[ISO_TILE_W * ISO_TILE_H:2 * ISO_TILE_W * ISO_TILE_H]
+        for vi in range(DIRT_VARIANTS):
+            all_tile_data.extend(base_dirt)
+            print(f"  Dirt variant {vi}: fallback copy")
 
     tiles_path = os.path.join(DATA_DIR, 'terrain_tiles.bin')
     with open(tiles_path, 'wb') as f:

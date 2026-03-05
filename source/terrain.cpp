@@ -1,4 +1,5 @@
 #include "terrain.h"
+#include "fog.h"
 #include "iso.h"
 #include <string.h>
 
@@ -19,6 +20,128 @@ extern const u8 spr_stone_mine_bin[];
 
 u8 tileGfxCache[TERRAIN_COUNT][ISO_TILE_W * ISO_TILE_H];
 u8 grassVariantCache[GRASS_VARIANTS][ISO_TILE_W * ISO_TILE_H];
+u8 dirtVariantCache[DIRT_VARIANTS][ISO_TILE_W * ISO_TILE_H];
+
+// ---------------------------------------------------------------------------
+// Terrain edge blending
+// ---------------------------------------------------------------------------
+struct BlendEdge {
+    u8 xs[ISO_TILE_H];  // blend strip start x per row
+    u8 xe[ISO_TILE_H];  // blend strip end x per row (exclusive)
+};
+
+enum { EDGE_TL = 0, EDGE_TR = 1, EDGE_BL = 2, EDGE_BR = 3 };
+static BlendEdge blendEdges[4];      // cross-terrain blend (5px)
+static BlendEdge blendEdgesWide[4];  // same-terrain blend (8px)
+
+// Each diamond edge maps to one neighbor tile offset
+static const s8 EDGE_NEIGHBOR[4][2] = {
+    {-1,  0},  // top-left     → (tx-1, ty)
+    { 0, -1},  // top-right    → (tx, ty-1)
+    { 0, +1},  // bottom-left  → (tx, ty+1)
+    {+1,  0},  // bottom-right → (tx+1, ty)
+};
+
+static void initBlendSet(BlendEdge edges[4], int maxStrip) {
+    for (int py = 0; py < ISO_TILE_H; py++) {
+        int dxs = ISO_DIAMOND_XSTART[py];
+        int dxe = ISO_DIAMOND_XEND[py];
+        int width = dxe - dxs;
+        int strip = (width < maxStrip) ? width : maxStrip;
+
+        bool topHalf = (py < ISO_TILE_H / 2);
+
+        edges[EDGE_TL].xs[py] = topHalf ? dxs : 0;
+        edges[EDGE_TL].xe[py] = topHalf ? dxs + strip : 0;
+
+        edges[EDGE_TR].xs[py] = topHalf ? dxe - strip : 0;
+        edges[EDGE_TR].xe[py] = topHalf ? dxe : 0;
+
+        edges[EDGE_BL].xs[py] = topHalf ? 0 : dxs;
+        edges[EDGE_BL].xe[py] = topHalf ? 0 : dxs + strip;
+
+        edges[EDGE_BR].xs[py] = topHalf ? 0 : dxe - strip;
+        edges[EDGE_BR].xe[py] = topHalf ? 0 : dxe;
+    }
+}
+
+static void terrain_initBlend() {
+    initBlendSet(blendEdges, 5);
+    initBlendSet(blendEdgesWide, 8);
+}
+
+// Get the tile graphics pointer for a given tile position and type
+static inline const u8* getTileGfx(int tx, int ty, u8 ttype) {
+    if (ttype == TERRAIN_GRASS) {
+        int variant = ((tx * 7) ^ (ty * 13) ^ (tx + ty)) & (GRASS_VARIANTS - 1);
+        return grassVariantCache[variant];
+    } else if (ttype == TERRAIN_DIRT) {
+        int variant = ((tx * 11) ^ (ty * 17) ^ (tx + ty)) & (DIRT_VARIANTS - 1);
+        return dirtVariantCache[variant];
+    }
+    return tileGfxCache[ttype];
+}
+
+// Blend neighbor terrain edges onto the current tile
+static void blendTileEdges(u8* vram, int tx, int ty, u8 ttype,
+                           int dstX, int dstY, const TerrainMap& map) {
+    s8 myPri = TERRAIN_BLEND_PRIORITY[ttype];
+    if (myPri < 0) return;  // this tile doesn't participate in blending
+
+    // Skip blending if this tile is unexplored
+    if (!fogMap.isExplored(0, tx, ty)) return;
+
+    for (int e = 0; e < 4; e++) {
+        int nx = tx + EDGE_NEIGHBOR[e][0];
+        int ny = ty + EDGE_NEIGHBOR[e][1];
+        if (nx < 0 || nx >= MAP_TILES || ny < 0 || ny >= MAP_TILES) continue;
+
+        // Skip blending with unexplored neighbors
+        if (!fogMap.isExplored(0, nx, ny)) continue;
+
+        u8 ntype = map.tiles[ny][nx];
+        s8 nPri = TERRAIN_BLEND_PRIORITY[ntype];
+        if (nPri < 0) continue;  // neighbor doesn't participate
+
+        // Blend if neighbor has higher priority (cross-terrain),
+        // or same terrain type (variant-to-variant smoothing)
+        bool crossBlend = (nPri > myPri);
+        bool sameBlend = (ntype == ttype);
+        if (!crossBlend && !sameBlend) continue;
+
+        const u8* nsrc = getTileGfx(nx, ny, ntype);
+        // Use wider blend strip for same-terrain variant blending
+        const BlendEdge& be = sameBlend ? blendEdgesWide[e] : blendEdges[e];
+
+        for (int py = 0; py < ISO_TILE_H; py++) {
+            int bxs = be.xs[py];
+            int bxe = be.xe[py];
+            if (bxs >= bxe) continue;
+
+            int screenY = dstY + py;
+            if (screenY < 0 || screenY >= SCREEN_H) continue;
+
+            for (int px = bxs; px < bxe; px++) {
+                int screenX = dstX + px;
+                if (screenX < 0 || screenX >= SCREEN_W) continue;
+
+                // Compute distance from the outer edge
+                int dist;
+                if (e == EDGE_TL || e == EDGE_BL) {
+                    dist = px - bxs;       // left edges: 0 at leftmost
+                } else {
+                    dist = bxe - 1 - px;   // right edges: 0 at rightmost
+                }
+
+                // Graduated dither: 0-1px always, 2px=75%, 3px=50%, 4px=25%
+                u32 hash = (u32)(screenX * 7 + screenY * 13 + tx + ty);
+                if (dist >= 2 && (int)(hash & 3) < (dist - 1)) continue;
+
+                vram[screenY * 256 + screenX] = nsrc[py * ISO_TILE_W + px];
+            }
+        }
+    }
+}
 
 // Simple pseudo-random number generator
 static u32 rngState;
@@ -55,8 +178,9 @@ void terrain_initPalette() {
 void TerrainMap::initTileGfx() {
     // terrain_tiles_bin contains:
     //   7 base terrain tiles × 512 bytes = 3584 bytes
-    //   4 grass variant tiles × 512 bytes = 2048 bytes
-    // Total: 5632 bytes
+    //   16 grass variant tiles × 512 bytes = 8192 bytes
+    //   4 dirt variant tiles × 512 bytes = 2048 bytes
+    // Total: 13824 bytes
     int tileSize = ISO_TILE_W * ISO_TILE_H;
     for (int t = 0; t < TERRAIN_COUNT; t++) {
         memcpy(tileGfxCache[t],
@@ -69,6 +193,15 @@ void TerrainMap::initTileGfx() {
                &terrain_tiles_bin[(TERRAIN_COUNT + v) * tileSize],
                tileSize);
     }
+    // Load dirt variants (stored after grass variants)
+    for (int v = 0; v < DIRT_VARIANTS; v++) {
+        memcpy(dirtVariantCache[v],
+               &terrain_tiles_bin[(TERRAIN_COUNT + GRASS_VARIANTS + v) * tileSize],
+               tileSize);
+    }
+
+    // Initialize blend edge masks
+    terrain_initBlend();
 }
 
 // Get resource sprite data for a terrain type (NULL if none)
@@ -86,6 +219,7 @@ const u8* terrain_get_resource_sprite(u8 ttype) {
 // ---------------------------------------------------------------------------
 void TerrainMap::generate(u32 seed) {
     rngState = seed ? seed : 12345;
+    showTileGrid = false;
 
     // Fill all grass
     memset(tiles, TERRAIN_GRASS, sizeof(tiles));
@@ -264,15 +398,9 @@ void TerrainMap::renderViewport(u8* vram, int camX, int camY) const {
             if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
             u8 ttype = tiles[ty][tx];
 
-            // For grass tiles, select a variant based on tile position
+            // For grass/dirt tiles, select a variant based on tile position
             // Uses a simple hash to pick deterministically
-            const u8* src;
-            if (ttype == TERRAIN_GRASS) {
-                int variant = ((tx * 7) ^ (ty * 13) ^ (tx + ty)) & (GRASS_VARIANTS - 1);
-                src = grassVariantCache[variant];
-            } else {
-                src = tileGfxCache[ttype];
-            }
+            const u8* src = getTileGfx(tx, ty, ttype);
 
             // Compute screen position of this tile's top-left corner
             int isoX, isoY;
@@ -292,19 +420,41 @@ void TerrainMap::renderViewport(u8* vram, int camX, int camY) const {
                 int xs = ISO_DIAMOND_XSTART[py];
                 int xe = ISO_DIAMOND_XEND[py];
 
+                // When grid is hidden, extend diamond 1px on each side
+                // to fill the gap between adjacent tiles, clamping source reads
+                int renderXs = xs;
+                int renderXe = xe;
+                if (!showTileGrid) {
+                    renderXs = (xs > 0) ? xs - 1 : xs;
+                    renderXe = (xe < ISO_TILE_W) ? xe + 1 : xe;
+                }
+
                 // Clip to screen horizontally
-                int drawXs = dstX + xs;
-                int drawXe = dstX + xe;
-                int srcStart = xs;
-                if (drawXs < 0) { srcStart -= drawXs; drawXs = 0; }
+                int drawXs = dstX + renderXs;
+                int drawXe = dstX + renderXe;
+                int srcOff = renderXs;
+                if (drawXs < 0) { srcOff -= drawXs; drawXs = 0; }
                 if (drawXe > SCREEN_W) drawXe = SCREEN_W;
                 if (drawXs >= drawXe) continue;
 
-                int span = drawXe - drawXs;
-                memcpy(&vram[screenY * 256 + drawXs],
-                       &src[py * ISO_TILE_W + srcStart],
-                       span);
+                u8* dst = &vram[screenY * 256 + drawXs];
+                if (showTileGrid) {
+                    // Simple memcpy when grid is shown
+                    memcpy(dst, &src[py * ISO_TILE_W + srcOff], drawXe - drawXs);
+                } else {
+                    // Copy with edge clamping for extended pixels
+                    for (int px = drawXs; px < drawXe; px++) {
+                        int srcX = (px - dstX);
+                        // Clamp to diamond interior
+                        if (srcX < xs) srcX = xs;
+                        if (srcX >= xe) srcX = xe - 1;
+                        *dst++ = src[py * ISO_TILE_W + srcX];
+                    }
+                }
             }
+
+            // Blend higher-priority neighbor terrain onto this tile's edges
+            blendTileEdges(vram, tx, ty, ttype, dstX, dstY, *this);
         }
     }
 }
