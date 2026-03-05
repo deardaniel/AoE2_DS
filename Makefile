@@ -116,13 +116,14 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 #---------------------------------------------------------------------------------
 $(BUILD):
+	@python3 -c "from PIL import Image; Image.open('icon.png').convert('RGB').quantize(colors=16).save('icon.bmp')"
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds
+	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds icon.bmp
 
 #---------------------------------------------------------------------------------
 # Asset pipeline helper
