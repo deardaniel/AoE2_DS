@@ -26,6 +26,7 @@ struct Unit {
     s8   attackTarget;       // unit index being attacked (-1 = none)
     s8   attackBldgTarget;   // building index being attacked (-1 = none)
     s8   buildTarget;        // building index being constructed (-1 = none)
+    s8   garrisonTarget;     // building index to garrison into (-1 = none)
     u8   attackCooldown;
     u8   waitCounter;        // frames waiting for blocked tile during movement
     u8   deadTimer;          // countdown after death before removal
@@ -57,6 +58,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain);
 void unit_command_attack(int idx, int targetIdx);
 void unit_command_attack_building(int idx, int bldgIdx);
 void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain);
+void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain);
 int  unit_at_pixel(s16 px, s16 py, int ignoreOwner = -1);
 int  unit_count(int owner);
 int  unit_count_type(int owner, int type);

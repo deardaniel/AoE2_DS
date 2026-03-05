@@ -48,6 +48,7 @@ void units_init() {
         units[i].attackTarget = -1;
         units[i].attackBldgTarget = -1;
         units[i].buildTarget = -1;
+        units[i].garrisonTarget = -1;
         units[i].gatherTX = -1;
         units[i].gatherTY = -1;
         units[i].oamSlot = -1;
@@ -78,6 +79,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.attackTarget = -1;
             u.attackBldgTarget = -1;
             u.buildTarget = -1;
+            u.garrisonTarget = -1;
             u.attackCooldown = 0;
             u.waitCounter = 0;
             u.deadTimer = 0;
@@ -493,6 +495,7 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
         u.attackTarget = -1;
         u.attackBldgTarget = -1;
         u.buildTarget = -1;
+        u.garrisonTarget = -1;
         u.gatherTX = -1;
         u.gatherTY = -1;
         // Reset role to base when given explicit move command
@@ -638,6 +641,55 @@ void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
         }
     }
     // Second pass: any passable tile
+    for (int dy = -1; dy <= bst.tileH; dy++) {
+        for (int dx = -1; dx <= bst.tileW; dx++) {
+            if (dx >= 0 && dx < bst.tileW && dy >= 0 && dy < bst.tileH) continue;
+            int tx = bx + dx;
+            int ty = by + dy;
+            if (terrain.passable(tx, ty)) {
+                if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen, idx)) {
+                    unit_begin_path(u, sx, sy, tx, ty);
+                    u.state = USTATE_MOVING;
+                    return;
+                }
+            }
+        }
+    }
+}
+
+void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
+    if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
+    if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
+    Building& b = buildings[bldgIdx];
+    if (!building_is_complete(bldgIdx)) return;
+    if (b.type != BLDG_TOWN_CENTER) return;
+    if (b.owner != units[idx].owner) return;
+
+    Unit& u = units[idx];
+    u.garrisonTarget = bldgIdx;
+    u.attackTarget = -1;
+    u.attackBldgTarget = -1;
+    u.buildTarget = -1;
+    u.gatherTX = -1;
+    u.gatherTY = -1;
+
+    // Check if already adjacent to TC — garrison immediately
+    const BuildingStats& bst = BLDG_STATS[b.type];
+    int ux = u.x / TILE_PX;
+    int uy = u.y / TILE_PX;
+    int bx = b.x / TILE_PX;
+    int by = b.y / TILE_PX;
+    bool adjacent = (ux >= bx - 1 && ux <= bx + bst.tileW &&
+                     uy >= by - 1 && uy <= by + bst.tileH);
+    if (adjacent) {
+        building_garrison(bldgIdx, idx);
+        u.garrisonTarget = -1;
+        return;
+    }
+
+    // Path to adjacent tile of TC
+    int sx = u.x / TILE_PX;
+    int sy = u.y / TILE_PX;
     for (int dy = -1; dy <= bst.tileH; dy++) {
         for (int dx = -1; dx <= bst.tileW; dx++) {
             if (dx >= 0 && dx < bst.tileW && dy >= 0 && dy < bst.tileH) continue;
@@ -1177,7 +1229,15 @@ void units_update(GameState& gs, TerrainMap& terrain) {
             }
             // If path done, check what we should do next
             if (u.state == USTATE_IDLE) {
-                if (u.buildTarget >= 0 && u.type == UNIT_VILLAGER) {
+                if (u.garrisonTarget >= 0) {
+                    // Arrived near TC — garrison
+                    if (building_garrison(u.garrisonTarget, i)) {
+                        u.garrisonTarget = -1;
+                    } else {
+                        // Garrison failed (full?), clear target
+                        u.garrisonTarget = -1;
+                    }
+                } else if (u.buildTarget >= 0 && u.type == UNIT_VILLAGER) {
                     u.state = USTATE_BUILDING;
                 } else if (u.gatherTX >= 0 && u.gatherTY >= 0 && u.type == UNIT_VILLAGER) {
                     u.state = USTATE_GATHERING;

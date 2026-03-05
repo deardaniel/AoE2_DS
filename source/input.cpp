@@ -122,14 +122,13 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         // If units selected and tapping on TC, garrison them
         if (gs.selectionCount > 0 && buildings[tappedBldg].type == BLDG_TOWN_CENTER &&
             building_is_complete(tappedBldg)) {
-            bool garrisoned = false;
+            bool commanded = false;
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (!gs.unitSelected[i] || !units[i].alive) continue;
-                if (building_garrison(tappedBldg, i)) {
-                    garrisoned = true;
-                }
+                unit_command_garrison(i, tappedBldg, terrain);
+                commanded = true;
             }
-            if (garrisoned) {
+            if (commanded) {
                 game_clear_selection(gs);
                 gs.selectedBldg = tappedBldg;
                 return;
