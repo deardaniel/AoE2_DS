@@ -826,13 +826,22 @@ static void render_resource_sw(u8* buf, const GameState& gs, int tx, int ty, con
     int isoX, isoY;
     tileToIso(tx, ty, isoX, isoY);
     int sx = isoX - gs.camX;
-    int sy = isoY - gs.camY - (32 - ISO_TILE_H);  // offset up so sprite rises above diamond
+    int sy = isoY - gs.camY - (32 - ISO_TILE_H / 2);  // align sprite base with tile center
+
+    // Tree variety: hash-based h-flip and slight position jitter
+    bool hflip = false;
+    if (ttype == TERRAIN_FOREST) {
+        u32 h = (u32)(tx * 7 + ty * 13);
+        hflip = (h & 1);
+        sx += (int)((h >> 1) & 3) - 1;  // -1 to +2 px horizontal jitter
+        sy += (int)((h >> 3) & 1);      // 0 to 1 px vertical jitter
+    }
 
     for (int py = 0; py < 32; py++) {
         int screenY = sy + py;
         if (screenY < 0 || screenY >= SCREEN_H) continue;
         for (int px = 0; px < 32; px++) {
-            int screenX = sx + px;
+            int screenX = sx + (hflip ? (31 - px) : px);
             if (screenX < 0 || screenX >= SCREEN_W) continue;
             u8 val = spr[py * 32 + px];
             if (val != 0) buf[screenY * 256 + screenX] = val;
@@ -937,7 +946,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
                 int isoX, isoY;
                 tileToIso(tx, ty, isoX, isoY);
                 int sx = isoX - gs.camX;
-                int sy = isoY - gs.camY - (32 - ISO_TILE_H);
+                int sy = isoY - gs.camY - (32 - ISO_TILE_H / 2);
                 if (sx + 32 <= 0 || sx >= SCREEN_W || sy + 32 <= 0 || sy >= SCREEN_H) continue;
 
                 // Sort by bottom of tile (tile center bottom in iso)
