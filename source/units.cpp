@@ -4,6 +4,7 @@
 #include "terrain.h"
 #include "tech.h"
 #include "fog.h"
+#include "sound.h"
 #include <string.h>
 
 Unit units[MAX_UNITS];
@@ -97,6 +98,7 @@ void unit_kill(int idx) {
     u.deadTimer = 40; // 10 frames × 4 ticks = death animation duration
     u.animFrame = 0;
     u.animTick = 0;
+    sound_play(SFX_UNIT_DEATH);
 }
 
 // ---------------------------------------------------------------------------
@@ -767,6 +769,7 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
         u.gatherTick = 0;
         int got = terrain.depleteResource(u.gatherTX, u.gatherTY, 1);
         u.carryAmount += got;
+        if (u.owner == 0 && tt == TERRAIN_FOREST) sound_play(SFX_CHOP);
     }
 
     // If carry full, return to drop-off
@@ -935,6 +938,9 @@ static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
 
     // Advance build progress (1 point per frame per villager)
     b.buildProgress++;
+    if (b.buildProgress == bst.buildTime && u.owner == 0) {
+        sound_play(SFX_BUILDING_COMPLETE);
+    }
 }
 
 static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
@@ -977,6 +983,7 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
 
         building_damage(u.attackBldgTarget, dmg);
         u.attackCooldown = 30;
+        if (u.owner == 0) sound_play(SFX_SWORD_HIT);
 
         if (bt.hp <= 0) {
             building_destroy(u.attackBldgTarget, terrain);
@@ -1045,6 +1052,12 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
 
     target.hp -= dmg;
     u.attackCooldown = 30; // ~0.5s between attacks
+    if (u.owner == 0) {
+        if (u.type == UNIT_ARCHER)
+            sound_play(SFX_ARROW_FIRE);
+        else
+            sound_play(SFX_SWORD_HIT);
+    }
 
     if (target.hp <= 0) {
         unit_kill(u.attackTarget);

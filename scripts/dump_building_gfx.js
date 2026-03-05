@@ -12,7 +12,7 @@ const SLP_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resour
 const PAL_PATH = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina';
 
 const datBuf = fs.readFileSync(DAT_PATH);
-const dat = DatFile.DatFile.load(datBuf);
+const dat = DatFile.load(datBuf);
 
 const palette = Palette(fs.readFileSync(PAL_PATH));
 const safePalette = new Array(1024);

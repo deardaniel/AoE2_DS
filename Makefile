@@ -21,6 +21,8 @@ SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
 SPRITES		:=  sprites
+AUDIO		:=	audio
+NITRODATA	:=	nitrofiles
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -39,7 +41,7 @@ LDFLAGS	=	-specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project (order is important)
 #---------------------------------------------------------------------------------
-LIBS	:= 	-lnds9
+LIBS	:= 	-lfat -lmm9 -lnds9
 
 
 #---------------------------------------------------------------------------------
@@ -63,10 +65,16 @@ export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
 
 export DEPSDIR	:=	$(CURDIR)/$(BUILD)
 
+export AUDIOFILES :=	$(foreach dir,$(AUDIO),$(wildcard $(CURDIR)/$(dir)/*))
+
+ifneq ($(strip $(NITRODATA)),)
+	export NITRO_FILES	:=	$(CURDIR)/$(NITRODATA)
+endif
+
 CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
-BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
+BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*))) soundbank.bin
 # All terrain + sprite data is preprocessed to data/*.bin files
 # No grit-processed PNGs needed
 SPRITE_FILES   :=
@@ -134,9 +142,14 @@ assets-game:
 
 #---------------------------------------------------------------------------------
 # Preprocess HD sprite PNGs into NDS-ready indexed binary data (data/*.bin)
+# IMPORTANT: terrain tiles are indexed against the sprite palette, so terrain
+# MUST be re-preprocessed whenever sprites change. Always use `make sprites`
+# instead of running the scripts individually.
 #---------------------------------------------------------------------------------
 sprites:
+	@echo "=== Preprocessing sprites (palette + indexed data) ==="
 	@python3 scripts/preprocess_sprites.py
+	@echo "=== Preprocessing terrain (re-indexing against sprite palette) ==="
 	@python3 scripts/preprocess_terrain.py
 
 #---------------------------------------------------------------------------------
@@ -156,6 +169,12 @@ $(OUTPUT).elf	:	$(OFILES)
 #---------------------------------------------------------------------------------
 	@echo $(notdir $<)
 	$(bin2o)
+
+#---------------------------------------------------------------------------------
+# soundbank generation from audio WAV files
+#---------------------------------------------------------------------------------
+soundbank.bin soundbank.h : $(AUDIOFILES)
+	@mmutil $^ -d -osoundbank.bin -hsoundbank.h
 
 -include $(DEPSDIR)/*.d
 

@@ -5,9 +5,10 @@
 #include "terrain.h"
 #include "iso.h"
 #include "tech.h"
+#include "sound.h"
 
 // Build menu layout on bottom screen (bottom strip)
-enum { BUILD_MENU_Y = 176, BUILD_MENU_H = 16, BUILD_MENU_ITEM_W = 32 };
+enum { BUILD_MENU_Y = 160, BUILD_MENU_H = 32, BUILD_MENU_ITEM_W = 32 };
 
 // Drag threshold in pixels — beyond this, touch becomes a drag-select
 enum { DRAG_THRESHOLD = 8 };
@@ -19,10 +20,11 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     // Build menu check (bottom strip)
     if (gs.buildMenuOpen && screenY >= BUILD_MENU_Y) {
         int slot = screenX / BUILD_MENU_ITEM_W;
-        if (slot < BLDG_TYPE_COUNT) {
-            if (gs.players[0].age >= BLDG_STATS[slot].ageReq) {
+        int bldgIdx = slot + gs.buildMenuPage * 8;
+        if (bldgIdx < BLDG_TYPE_COUNT) {
+            if (gs.players[0].age >= BLDG_STATS[bldgIdx].ageReq) {
                 gs.inputMode = 1;
-                gs.placeBldgType = slot;
+                gs.placeBldgType = bldgIdx;
                 gs.buildMenuOpen = false;
             }
         }
@@ -92,6 +94,11 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         } else {
             game_select_unit(gs, tappedUnit);
         }
+        // Villager selection → random Britons voice; others → click
+        if (units[tappedUnit].type == UNIT_VILLAGER)
+            sound_play_random(SFX_VILL_SEL_FIRST, SFX_VILL_SEL_COUNT);
+        else
+            sound_play(SFX_CLICK);
         return;
     }
 
@@ -200,6 +207,14 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     if (gs.selectionCount > 0) {
         gs.selectedTileX = -1;
         gs.selectedTileY = -1;
+        sound_play_random(SFX_VILL_CMD_FIRST, SFX_VILL_CMD_COUNT);
+
+        // Set move target marker
+        int mtIsoX, mtIsoY;
+        worldToIso(mapX, mapY, mtIsoX, mtIsoY);
+        gs.moveTargetIsoX = mtIsoX;
+        gs.moveTargetIsoY = mtIsoY;
+        gs.moveTargetTimer = 30; // 0.5s at 60fps
 
         int centerTX = mapX / TILE_PX;
         int centerTY = mapY / TILE_PX;
@@ -291,9 +306,66 @@ void input_update(GameState& gs, TerrainMap& terrain) {
     // SELECT = toggle follow cam
     if (keysPressed & KEY_SELECT) gs.followCam = !gs.followCam;
 
-    // D-pad: camera scroll
-    if (!gs.followCam) {
-        int scrollSpeed = 4;
+    // START = toggle music (when no building selected; training handled in main.cpp)
+    // When market selected: execute trade
+    if (keysPressed & KEY_START) {
+        if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
+            buildings[gs.selectedBldg].type == BLDG_MARKET &&
+            buildings[gs.selectedBldg].owner == 0 &&
+            building_is_complete(gs.selectedBldg)) {
+            // Market trade: sell 100 of one resource, buy 70 of another
+            static const int TRADE_SELL_RES[4] = { RES_FOOD, RES_WOOD, RES_GOLD, RES_STONE };
+            static const int TRADE_BUY_RES[4]  = { RES_GOLD, RES_FOOD, RES_STONE, RES_WOOD };
+            int sellRes = TRADE_SELL_RES[gs.marketTradeIdx];
+            int buyRes  = TRADE_BUY_RES[gs.marketTradeIdx];
+            if (gs.players[0].resources[sellRes] >= 100) {
+                gs.players[0].resources[sellRes] -= 100;
+                gs.players[0].resources[buyRes]  += 70;
+            }
+        } else if (gs.selectedBldg < 0) {
+            sound_music_toggle();
+        }
+    }
+
+    // D-pad: camera scroll, or market trade cycling when market selected
+    bool marketSelected = (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
+                           buildings[gs.selectedBldg].type == BLDG_MARKET &&
+                           buildings[gs.selectedBldg].owner == 0 &&
+                           building_is_complete(gs.selectedBldg));
+    if (marketSelected) {
+        if (keysPressed & KEY_LEFT) {
+            gs.marketTradeIdx = (gs.marketTradeIdx + 3) % 4; // wrap backward
+        }
+        if (keysPressed & KEY_RIGHT) {
+            gs.marketTradeIdx = (gs.marketTradeIdx + 1) % 4;
+        }
+    }
+    if (!gs.followCam && !marketSelected) {
+        // Double-tap-and-hold same direction: fast scroll at 12px/frame
+        static u8 dpadGapTimer = 0;  // frames since last d-pad release
+        static int dpadPrevDir = 0;  // d-pad direction held last frame
+        static int dpadLastDir = 0;  // direction that was released
+        static bool dpadFast = false;
+        int dpadMask = KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT;
+        int dpadHeld = keys & dpadMask;
+        int dpadJustPressed = keysPressed & dpadMask;
+        bool dpadJustReleased = (keysReleased & dpadMask) != 0;
+
+        if (dpadJustReleased) { dpadLastDir = dpadPrevDir; dpadGapTimer = 1; }
+        else if (dpadGapTimer > 0 && !dpadHeld) dpadGapTimer++;
+
+        if (dpadJustPressed && dpadGapTimer > 0 && dpadGapTimer <= 6 &&
+            dpadJustPressed == dpadLastDir)
+            dpadFast = true;
+        if (!dpadHeld) {
+            if (dpadGapTimer > 6) { dpadGapTimer = 0; dpadFast = false; }
+        }
+        if (dpadHeld && dpadFast && dpadHeld != dpadLastDir)
+            dpadFast = false;
+
+        dpadPrevDir = dpadHeld;
+
+        int scrollSpeed = dpadFast ? 12 : 6;
         if (keys & KEY_UP)    gs.camY -= scrollSpeed;
         if (keys & KEY_DOWN)  gs.camY += scrollSpeed;
         if (keys & KEY_LEFT)  gs.camX -= scrollSpeed;
@@ -345,9 +417,18 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
-    // X: toggle build menu
+    // X: toggle/cycle build menu pages
     if (keysPressed & KEY_X) {
-        gs.buildMenuOpen = !gs.buildMenuOpen;
+        if (gs.buildMenuOpen) {
+            int totalPages = (BLDG_TYPE_COUNT + 7) / 8;
+            gs.buildMenuPage = (gs.buildMenuPage + 1) % totalPages;
+            if (gs.buildMenuPage == 0) {
+                gs.buildMenuOpen = false;
+            }
+        } else {
+            gs.buildMenuOpen = true;
+            gs.buildMenuPage = 0;
+        }
         gs.inputMode = 0;
     }
 

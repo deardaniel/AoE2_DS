@@ -211,11 +211,37 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
+    // Tower near TC if feudal and none, and have stone
+    if (p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_TOWER) == 0 &&
+        p.resources[RES_STONE] >= 50) {
+        int bx, by;
+        if (ai_find_build_spot(tcTX - 1, tcTY - 1, 1, 1, terrain, bx, by)) {
+            ai_place_and_build(BLDG_TOWER, bx, by, gs, terrain);
+        }
+    }
+
+    // Market if feudal and none
+    if (p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_MARKET) == 0) {
+        int bx, by;
+        if (ai_find_build_spot(tcTX + 3, tcTY + 3, 2, 2, terrain, bx, by)) {
+            ai_place_and_build(BLDG_MARKET, bx, by, gs, terrain);
+        }
+    }
+
     // Stable if castle and none
     if (p.age >= AGE_CASTLE && building_count(AI_PLAYER, BLDG_STABLE) == 0) {
         int bx, by;
         if (ai_find_build_spot(tcTX - 3, tcTY, 2, 2, terrain, bx, by)) {
             ai_place_and_build(BLDG_STABLE, bx, by, gs, terrain);
+        }
+    }
+
+    // Castle if imperial and none, and have stone
+    if (p.age >= AGE_IMPERIAL && building_count(AI_PLAYER, BLDG_CASTLE) == 0 &&
+        p.resources[RES_STONE] >= 650) {
+        int bx, by;
+        if (ai_find_build_spot(tcTX + 2, tcTY - 2, 3, 3, terrain, bx, by)) {
+            ai_place_and_build(BLDG_CASTLE, bx, by, gs, terrain);
         }
     }
 

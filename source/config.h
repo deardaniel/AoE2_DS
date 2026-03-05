@@ -71,7 +71,11 @@ enum BuildingTypeId {
     BLDG_FARM          = 5,
     BLDG_MINING_CAMP   = 6,
     BLDG_LUMBER_CAMP   = 7,
-    BLDG_TYPE_COUNT    = 8
+    BLDG_WALL          = 8,
+    BLDG_TOWER         = 9,
+    BLDG_MARKET        = 10,
+    BLDG_CASTLE        = 11,
+    BLDG_TYPE_COUNT    = 12
 };
 
 // ---------------------------------------------------------------------------
@@ -178,6 +182,10 @@ static const BuildingStats BLDG_STATS[BLDG_TYPE_COUNT] = {
     /* FARM          */ {  50, 100, {  0,  60,  0,   0}, AGE_DARK,    0,  1, 1 },
     /* MINING_CAMP   */ { 100, 150, {  0, 100,  0,   0}, AGE_DARK,    0,  1, 1 },
     /* LUMBER_CAMP   */ { 100, 150, {  0, 100,  0,   0}, AGE_DARK,    0,  1, 1 },
+    /* WALL          */ { 100,  30, {  0,   5,  0,   0}, AGE_DARK,    0,  1, 1 },
+    /* TOWER         */ { 200, 300, {  0,  50,  0,  25}, AGE_FEUDAL,  0,  1, 1 },
+    /* MARKET        */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  2, 2 },
+    /* CASTLE        */ {1000, 900, {  0,   0,  0, 650}, AGE_IMPERIAL,0,  3, 3 },
 };
 
 // ---------------------------------------------------------------------------
@@ -206,7 +214,8 @@ static const char* const UNIT_NAMES[UNIT_TYPE_COUNT] = {
 
 static const char* const BLDG_NAMES[BLDG_TYPE_COUNT] = {
     "Town Center", "House", "Barracks", "Archery Range",
-    "Stable", "Farm", "Mining Camp", "Lumber Camp"
+    "Stable", "Farm", "Mining Camp", "Lumber Camp",
+    "Wall", "Tower", "Market", "Castle"
 };
 
 static const char* const AGE_NAMES[AGE_COUNT] = {

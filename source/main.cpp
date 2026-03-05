@@ -17,6 +17,7 @@
 #include "ai.h"
 #include "sound.h"
 #include "font.h"
+#include <filesystem.h>
 
 // Global game state (accessible by tech.cpp via extern)
 GameState gameState;
@@ -79,6 +80,7 @@ static void game_start() {
         int si = unit_spawn(UNIT_SCOUT, 0, 7 * TILE_PX, 7 * TILE_PX);
         if (si >= 0) units[si].state = USTATE_SCOUTING;
     }
+
 
     // --- Player 1 (AI) — bottom-right corner ---
     int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 6, MAP_TILES - 6, gameState, terrain);
@@ -153,8 +155,14 @@ int main(void) {
     // Init bitmap font
     font_init();
 
-    // Init sound (stubs for now)
+    // Init NitroFS (for streaming music from ROM filesystem)
+    nitroFSInit(NULL);
+
+    // Init sound
     sound_init();
+
+    // Start background music
+    sound_music_start();
 
     // Start free-running hardware timers for random seed generation
     TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1;
@@ -326,8 +334,23 @@ int main(void) {
         // Sub screen: software-render units and buildings into buffer
         render_sprites_sw(terrainBuf, gameState, terrain);
 
+        // Sub screen: move target marker
+        render_move_target(terrainBuf, gameState);
+
+        // Sub screen: attack visualization lines
+        render_attack_lines(terrainBuf, gameState);
+
+        // Sub screen: training progress bars
+        render_training_bars(terrainBuf, gameState);
+
+        // Sub screen: building placement preview (diamond footprint)
+        render_placement_preview(terrainBuf, gameState, terrain);
+
         // Sub screen: build menu overlay on buffer
         render_build_menu(terrainBuf, gameState);
+
+        // Sub screen: age advancement progress bar
+        render_age_progress(terrainBuf, gameState);
 
         // Sub screen: drag-selection box overlay
         render_drag_box(terrainBuf, gameState);
@@ -337,6 +360,9 @@ int main(void) {
 
         // Top screen: minimap + info panel
         ui_update(gameState, terrain);
+
+        // Stream music from NitroFS (manual mode)
+        sound_music_update();
 
         swiWaitForVBlank();
     }

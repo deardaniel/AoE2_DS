@@ -2,6 +2,7 @@
 #include "game.h"
 #include "units.h"
 #include "terrain.h"
+#include "sound.h"
 #include <string.h>
 
 Building buildings[MAX_BUILDINGS];
@@ -11,6 +12,7 @@ void buildings_init() {
     for (int i = 0; i < MAX_BUILDINGS; i++) {
         buildings[i].alive = false;
         buildings[i].oamSlot = -1;
+        buildings[i].attackTargetUnit = -1;
         for (int q = 0; q < 3; q++) buildings[i].trainQueue[q] = -1;
         buildings[i].garrisonCount = 0;
         for (int g = 0; g < MAX_GARRISON; g++) buildings[i].garrison[g] = -1;
@@ -66,6 +68,7 @@ int building_place(u8 type, u8 owner, int tileX, int tileY, GameState& gs, Terra
     b.spriteGfx = NULL;
     b.oamSlot = -1;
     b.attackCooldown = 0;
+    b.attackTargetUnit = -1;
     for (int q = 0; q < 3; q++) b.trainQueue[q] = -1;
     b.garrisonCount = 0;
     for (int g = 0; g < MAX_GARRISON; g++) b.garrison[g] = -1;
@@ -74,6 +77,8 @@ int building_place(u8 type, u8 owner, int tileX, int tileY, GameState& gs, Terra
     if (type == BLDG_FARM) {
         terrain.setTile(tileX, tileY, TERRAIN_FARM, FARM_RESOURCE_AMT);
     }
+
+    if (owner == 0) sound_play(SFX_BUILDING_PLACE);
 
     return slot;
 }
@@ -97,13 +102,30 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
             continue; // Can't train while building
         }
 
-        // TC arrow attack: shoot nearest enemy in range
-        // Damage scales with garrisoned units (+2 per unit)
-        if (b.type == BLDG_TOWN_CENTER) {
+        // Farm auto-reseed: if completed farm's terrain tile has reverted to grass,
+        // automatically replant if owner can afford it
+        if (b.type == BLDG_FARM) {
+            int tx = b.x / TILE_PX;
+            int ty = b.y / TILE_PX;
+            if (terrain.tileAt(tx, ty) != TERRAIN_FARM) {
+                if (game_can_afford(gs, b.owner, BLDG_STATS[BLDG_FARM].cost)) {
+                    game_deduct_cost(gs, b.owner, BLDG_STATS[BLDG_FARM].cost);
+                    terrain.setTile(tx, ty, TERRAIN_FARM, FARM_RESOURCE_AMT);
+                }
+            }
+        }
+
+        // Ranged building attack: TC, Tower, Castle
+        int bldgRange = 0, bldgDmg = 0, bldgCooldown = 0;
+        if (b.type == BLDG_TOWN_CENTER)  { bldgRange = 6; bldgDmg = 5 + b.garrisonCount * 2; bldgCooldown = 60; }
+        else if (b.type == BLDG_TOWER)   { bldgRange = 7; bldgDmg = 5; bldgCooldown = 60; }
+        else if (b.type == BLDG_CASTLE)  { bldgRange = 8; bldgDmg = 11; bldgCooldown = 45; }
+
+        if (bldgRange > 0) {
             if (b.attackCooldown > 0) {
                 b.attackCooldown--;
             } else {
-                int rangePx = 6 * TILE_PX;
+                int rangePx = bldgRange * TILE_PX;
                 int bestDist = rangePx * rangePx + 1;
                 int bestEnemy = -1;
                 for (int j = 0; j < MAX_UNITS; j++) {
@@ -118,12 +140,12 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
                     }
                 }
                 if (bestEnemy >= 0) {
-                    int dmg = 5 + b.garrisonCount * 2;
-                    units[bestEnemy].hp -= dmg;
+                    units[bestEnemy].hp -= bldgDmg;
                     if (units[bestEnemy].hp <= 0) {
                         unit_kill(bestEnemy);
                     }
-                    b.attackCooldown = 60;
+                    b.attackCooldown = bldgCooldown;
+                    b.attackTargetUnit = bestEnemy;
                 }
             }
         }

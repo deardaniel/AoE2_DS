@@ -1,6 +1,7 @@
 #include "game.h"
 #include "buildings.h"
 #include "units.h"
+#include "sound.h"
 
 void game_init(GameState& gs) {
     for (int p = 0; p < NUM_PLAYERS; p++) {
@@ -28,12 +29,16 @@ void game_init(GameState& gs) {
     gs.placeBldgType = 0;
     gs.buildMenuOpen = false;
     gs.buildMenuPage = 0;
+    gs.marketTradeIdx = 0;
     gs.selectedTileX = -1;
     gs.selectedTileY = -1;
     gs.touchActive = false;
     gs.isDragging = false;
     gs.dragStartX = gs.dragStartY = 0;
     gs.dragEndX = gs.dragEndY = 0;
+    gs.moveTargetIsoX = 0;
+    gs.moveTargetIsoY = 0;
+    gs.moveTargetTimer = 0;
 }
 
 bool game_can_afford(const GameState& gs, int player, const int cost[RES_COUNT]) {
@@ -106,6 +111,7 @@ void game_update(GameState& gs) {
             if (nextAge < AGE_COUNT && gs.players[p].ageProgress >= AGE_RESEARCH_TIME[nextAge]) {
                 gs.players[p].age = nextAge;
                 gs.players[p].ageProgress = -1;
+                if (p == 0) sound_play(SFX_BUILDING_COMPLETE);
             }
         }
     }

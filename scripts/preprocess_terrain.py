@@ -20,39 +20,24 @@ import struct
 import sys
 import numpy as np
 from PIL import Image
+from shared_constants import (
+    ISO_TILE_W, ISO_TILE_H, TERRAIN_COUNT, GRASS_VARIANTS,
+    ISO_DIAMOND_XSTART, ISO_DIAMOND_XEND, UI_PALETTE_RGB,
+    rgb_to_bgr555, bgr555_to_rgb,
+)
 
 SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sprites')
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
 TERRAIN_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/terrain/textures'
 
-ISO_TILE_W = 32
-ISO_TILE_H = 16
-NUM_TILES = 7  # TERRAIN_COUNT
-GRASS_VARIANTS = 4  # Number of grass tile variants for visual variety
+NUM_TILES = TERRAIN_COUNT
 
-# Diamond mask: for each row, the start and end X of the filled region
-# Must match ISO_DIAMOND_XSTART/XEND in iso.h
-DIAMOND_XSTART = [15, 13, 11, 9, 7, 5, 3, 1, 1, 3, 5, 7, 9, 11, 13, 15]
-DIAMOND_XEND   = [16, 18, 20, 22, 24, 26, 28, 30, 30, 28, 26, 24, 22, 20, 18, 16]
+# Diamond mask aliases (from shared_constants)
+DIAMOND_XSTART = ISO_DIAMOND_XSTART
+DIAMOND_XEND   = ISO_DIAMOND_XEND
 
-# UI palette entries (indices 1-15) — must match config.h PAL_* values
-UI_PALETTE = {
-    1:  (0,   0,   0),    # PAL_BLACK
-    2:  (80,  48,  16),   # PAL_BROWN
-    3:  (160, 128, 80),   # PAL_TAN
-    4:  (32,  64,  224),  # PAL_BLUE
-    5:  (224, 32,  32),   # PAL_RED
-    6:  (16,  96,  16),   # PAL_DARKGREEN
-    7:  (32,  160, 32),   # PAL_GREEN
-    8:  (224, 224, 32),   # PAL_YELLOW
-    9:  (128, 128, 128),  # PAL_GRAY
-    10: (64,  64,  64),   # PAL_DARKGRAY
-    11: (248, 248, 248),  # PAL_WHITE
-    12: (224, 128, 32),   # PAL_ORANGE
-    13: (176, 144, 80),   # PAL_LIGHTBROWN
-    14: (224, 176, 128),  # PAL_SKIN
-    15: (48,  32,  16),   # PAL_DARKBROWN
-}
+# UI palette alias (from shared_constants)
+UI_PALETTE = UI_PALETTE_RGB
 
 # Terrain tile sources: (type_index, source_path_or_sprite, crop_region)
 # crop_region = (left, top, right, bottom) in the source image
@@ -115,22 +100,6 @@ def apply_diamond_mask(indexed_tile):
                 indexed_tile[row * ISO_TILE_W + x] = 0  # PAL_TRANSPARENT
 
 
-def bgr555_to_rgb(val):
-    """Convert NDS BGR555 to RGB888."""
-    r = (val & 0x1F) << 3
-    g = ((val >> 5) & 0x1F) << 3
-    b = ((val >> 10) & 0x1F) << 3
-    return (r, g, b)
-
-
-def rgb_to_bgr555(r, g, b):
-    """Convert RGB888 to NDS BGR555 format."""
-    r5 = min(31, r >> 3)
-    g5 = min(31, g >> 3)
-    b5 = min(31, b >> 3)
-    return (b5 << 10) | (g5 << 5) | r5 | (1 << 15)
-
-
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -141,6 +110,15 @@ def main():
     if not os.path.exists(sprite_pal_path):
         print(f"ERROR: {sprite_pal_path} not found. Run preprocess_sprites.py first.")
         sys.exit(1)
+
+    # Warn if sprite palette is older than any source sprite (likely stale)
+    pal_mtime = os.path.getmtime(sprite_pal_path)
+    for f in os.listdir(SPRITES_DIR):
+        if f.endswith('.png'):
+            src_mtime = os.path.getmtime(os.path.join(SPRITES_DIR, f))
+            if src_mtime > pal_mtime:
+                print(f"WARNING: {f} is newer than sprite_pal.bin — run preprocess_sprites.py first!")
+                break
 
     print("Loading sprite palette...")
     with open(sprite_pal_path, 'rb') as f:

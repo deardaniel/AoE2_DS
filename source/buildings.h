@@ -21,6 +21,7 @@ struct Building {
     u16* spriteGfx;      // OAM gfx pointer
     s8   oamSlot;        // OAM slot (-1 = not visible)
     u8   attackCooldown; // for TC arrows
+    s8   attackTargetUnit; // last unit attacked (for arrow visualization, -1 = none)
     s8   garrison[MAX_GARRISON]; // unit indices garrisoned inside (-1 = empty)
     u8   garrisonCount;
 };

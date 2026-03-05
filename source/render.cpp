@@ -72,13 +72,31 @@ extern const u8 spr_archery_range_bin[];
 extern const u8 spr_stable_bin[];
 extern const u8 spr_mining_camp_bin[];
 extern const u8 spr_lumber_camp_bin[];
+extern const u8 spr_wall_bin[];
+extern const u8 spr_tower_bin[];
+extern const u8 spr_market_bin[];
+extern const u8 spr_castle_bin[];
+
+// Build menu icon sprites (32x32 indexed, single frame)
+extern const u8 icon_tc_bin[];
+extern const u8 icon_house_bin[];
+extern const u8 icon_barracks_bin[];
+extern const u8 icon_archery_range_bin[];
+extern const u8 icon_stable_bin[];
+extern const u8 icon_farm_bin[];
+extern const u8 icon_mining_camp_bin[];
+extern const u8 icon_lumber_camp_bin[];
+extern const u8 icon_wall_bin[];
+extern const u8 icon_tower_bin[];
+extern const u8 icon_market_bin[];
+extern const u8 icon_castle_bin[];
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 // Build menu layout (shared with input.cpp)
-enum { BUILD_MENU_Y = 176, BUILD_MENU_H = 16, BUILD_MENU_ITEM_W = 32 };
+enum { BUILD_MENU_Y = 160, BUILD_MENU_H = 32, BUILD_MENU_ITEM_W = 32 };
 
 // OAM slot management
 static const int MAX_OAM_UNITS = 50;
@@ -86,6 +104,22 @@ static const int MAX_OAM_BLDGS = 30;
 static const int OAM_UNIT_START = 0;
 static const int OAM_BLDG_START = MAX_OAM_UNITS;
 static const int OAM_UI_START = 80;
+
+// Build menu icon lookup (indexed by BLDG_* enum)
+static const u8* buildingIcon[BLDG_TYPE_COUNT] = {
+    icon_tc_bin,            // BLDG_TOWN_CENTER
+    icon_house_bin,         // BLDG_HOUSE
+    icon_barracks_bin,      // BLDG_BARRACKS
+    icon_archery_range_bin, // BLDG_ARCHERY_RANGE
+    icon_stable_bin,        // BLDG_STABLE
+    icon_farm_bin,          // BLDG_FARM
+    icon_mining_camp_bin,   // BLDG_MINING_CAMP
+    icon_lumber_camp_bin,   // BLDG_LUMBER_CAMP
+    icon_wall_bin,          // BLDG_WALL
+    icon_tower_bin,         // BLDG_TOWER
+    icon_market_bin,        // BLDG_MARKET
+    icon_castle_bin,        // BLDG_CASTLE
+};
 
 // Sprite sheet dimensions
 static const int ANIM_SHEET_W = 320;  // 10 columns of 32px (walk/fight sheets)
@@ -368,24 +402,35 @@ void render_init() {
     buildingSheet[BLDG_FARM]          = NULL;  // farm rendered as terrain
     buildingSheet[BLDG_MINING_CAMP]   = spr_mining_camp_bin;
     buildingSheet[BLDG_LUMBER_CAMP]   = spr_lumber_camp_bin;
+    buildingSheet[BLDG_WALL]          = spr_wall_bin;
+    buildingSheet[BLDG_TOWER]         = spr_tower_bin;
+    buildingSheet[BLDG_MARKET]        = spr_market_bin;
+    buildingSheet[BLDG_CASTLE]        = spr_castle_bin;
 
     // Building sprite pixel sizes (must match preprocessing target sizes)
     // Isometric: footW = (tileW+tileH)*16, sprH = footH + 16 above-ground
     buildingSprW[BLDG_TOWN_CENTER]   = 128; buildingSprH[BLDG_TOWN_CENTER]   = 96;
     buildingSprW[BLDG_HOUSE]         = 32;  buildingSprH[BLDG_HOUSE]         = 32;
-    buildingSprW[BLDG_BARRACKS]      = 64;  buildingSprH[BLDG_BARRACKS]      = 48;
-    buildingSprW[BLDG_ARCHERY_RANGE] = 64;  buildingSprH[BLDG_ARCHERY_RANGE] = 48;
-    buildingSprW[BLDG_STABLE]        = 64;  buildingSprH[BLDG_STABLE]        = 48;
+    buildingSprW[BLDG_BARRACKS]      = 64;  buildingSprH[BLDG_BARRACKS]      = 64;
+    buildingSprW[BLDG_ARCHERY_RANGE] = 64;  buildingSprH[BLDG_ARCHERY_RANGE] = 80;
+    buildingSprW[BLDG_STABLE]        = 64;  buildingSprH[BLDG_STABLE]        = 64;
     buildingSprW[BLDG_FARM]          = 32;  buildingSprH[BLDG_FARM]          = 32;
     buildingSprW[BLDG_MINING_CAMP]   = 32;  buildingSprH[BLDG_MINING_CAMP]   = 32;
-    buildingSprW[BLDG_LUMBER_CAMP]   = 32;  buildingSprH[BLDG_LUMBER_CAMP]   = 32;
+    buildingSprW[BLDG_LUMBER_CAMP]   = 32;  buildingSprH[BLDG_LUMBER_CAMP]   = 48;
+    buildingSprW[BLDG_WALL]          = 32;  buildingSprH[BLDG_WALL]          = 32;
+    buildingSprW[BLDG_TOWER]         = 32;  buildingSprH[BLDG_TOWER]         = 64;
+    buildingSprW[BLDG_MARKET]        = 64;  buildingSprH[BLDG_MARKET]        = 80;
+    buildingSprW[BLDG_CASTLE]        = 96;  buildingSprH[BLDG_CASTLE]        = 128;
 }
 
 // ---------------------------------------------------------------------------
 // Compute building sprite screen offset from worldToIso origin
 // ---------------------------------------------------------------------------
 static void bldg_sprite_offset(int tileW, int tileH, int ph, int& offX, int& offY) {
-    offX = -tileH * (ISO_TILE_W / 2);
+    // Leftmost pixel of the footprint diamond comes from tile (0, tileH-1)
+    // whose isoX is -(tileH-1) * half-tile-width from the origin tile
+    offX = -(tileH - 1) * (ISO_TILE_W / 2);
+    // Above-ground height: sprite extends this many pixels above the footprint
     int footH = (tileW + tileH) * (ISO_TILE_H / 2);
     offY = -(ph - footH);
 }
@@ -560,15 +605,15 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
 // ---------------------------------------------------------------------------
 // Draw a horizontal HP bar into the bitmap buffer
 // ---------------------------------------------------------------------------
-static void draw_hp_bar(u8* buf, int cx, int sy, int barW, int hp, int maxHp) {
+static void draw_hp_bar(u8* buf, int cx, int sy, int barW, int hp, int maxHp, bool forceShow = false) {
     if (maxHp <= 0) return;
     int filledW = (hp * barW) / maxHp;
     if (filledW < 0) filledW = 0;
     if (filledW > barW) filledW = barW;
     int x0 = cx - barW / 2;
 
-    // Only draw if damaged
-    if (hp >= maxHp) return;
+    // Only draw if damaged or selected
+    if (hp >= maxHp && !forceShow) return;
 
     for (int px = 0; px < barW; px++) {
         int screenX = x0 + px;
@@ -730,22 +775,44 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
     int sy = bScreenY + offY;
 
     bool complete = (b.buildProgress >= BLDG_STATS[b.type].buildTime);
-    u8 frame[128 * 96]; // max building sprite size (TC 4x4 = 128x96)
-    memset(frame, 0, sizeof(frame));
+    static u8 frame[128 * 128]; // max building sprite size (castle = 96x128)
+    memset(frame, 0, pw * ph);
 
     if (!complete || buildingSheet[b.type] == NULL) {
-        for (int y = 0; y < ph; y++)
-            for (int x = 0; x < pw; x++) {
-                bool border = (x == 0 || y == 0 || x == pw-1 || y == ph-1);
-                if (border || ((x + y) % 6 == 0))
-                    frame[y * pw + x] = PAL_BROWN;
-            }
-    } else {
-        memcpy(frame, buildingSheet[b.type], pw * ph);
-        if (b.owner == 1) apply_color_remap(frame, pw * ph);
-    }
+        // Draw under-construction scaffold as diamond shape matching iso footprint
+        int footH = (tileW + tileH) * (ISO_TILE_H / 2);
+        int scaffoldBaseY = ph - footH;
+        for (int dty = 0; dty < tileH; dty++) {
+            for (int dtx = 0; dtx < tileW; dtx++) {
+                int tIsoX = (dtx - dty) * (ISO_TILE_W / 2) - offX;
+                int tIsoY = scaffoldBaseY + (dtx + dty) * (ISO_TILE_H / 2);
 
-    blit_frame(buf, frame, pw, ph, sx, sy, false);
+                for (int py = 0; py < ISO_TILE_H; py++) {
+                    int fy = tIsoY + py;
+                    if (fy < 0 || fy >= ph) continue;
+                    int xs = ISO_DIAMOND_XSTART[py];
+                    int xe = ISO_DIAMOND_XEND[py];
+                    for (int px = xs; px < xe; px++) {
+                        int fx = tIsoX + px;
+                        if (fx < 0 || fx >= pw) continue;
+                        bool border = (px == xs || px == xe - 1 || py == 0 || py == ISO_TILE_H - 1);
+                        if (border || ((px + py) % 6 == 0))
+                            frame[fy * pw + fx] = PAL_BROWN;
+                    }
+                }
+            }
+        }
+        blit_frame(buf, frame, pw, ph, sx, sy, false);
+    } else {
+        // Blit completed sprite — positioned via hotspot alignment in preprocessing.
+        const u8* sprData = buildingSheet[b.type];
+        if (b.owner == 1) {
+            memcpy(frame, sprData, pw * ph);
+            apply_color_remap(frame, pw * ph);
+            sprData = frame;
+        }
+        blit_frame(buf, sprData, pw, ph, sx, sy, false);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1004,7 +1071,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
             if (!fogMap.isVisible(0, tx, ty)) continue;
         }
 
-        draw_hp_bar(buf, sx + CELL_W / 2, sy - 3, 16, u.hp, playerUnitStats[u.owner][u.type].hp);
+        draw_hp_bar(buf, sx + CELL_W / 2, sy - 3, 16, u.hp, playerUnitStats[u.owner][u.type].hp, gs.unitSelected[i]);
     }
 
     // Building HP bars
@@ -1033,10 +1100,9 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
     }
 }
 
-// Building abbreviations for the menu
-static const char* BLDG_ABBREV[BLDG_TYPE_COUNT] = {
-    "TC", "Hs", "Bk", "AR", "SB", "Fm", "Mc", "Lc"
-};
+// Build menu pagination
+enum { BUILD_MENU_SLOTS = 8 };
+enum { BUILD_MENU_PAGES = (BLDG_TYPE_COUNT + BUILD_MENU_SLOTS - 1) / BUILD_MENU_SLOTS };
 
 // ---------------------------------------------------------------------------
 // Build menu bar (drawn into bitmap buffer, uses palette indices)
@@ -1044,40 +1110,116 @@ static const char* BLDG_ABBREV[BLDG_TYPE_COUNT] = {
 void render_build_menu(u8* vram, const GameState& gs) {
     if (!gs.buildMenuOpen) return;
 
-    // Draw a bar at bottom of screen
-    for (int y = BUILD_MENU_Y; y < SCREEN_H; y++) {
+    // Fill 32px-tall bar background
+    for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
         for (int x = 0; x < SCREEN_W; x++) {
             vram[y * 256 + x] = PAL_DARKBROWN;
         }
     }
 
-    // Draw icons for each building type
-    for (int i = 0; i < BLDG_TYPE_COUNT; i++) {
-        int ix = i * BUILD_MENU_ITEM_W;
+    // Draw icons for current page of building types
+    int startIdx = gs.buildMenuPage * BUILD_MENU_SLOTS;
+    for (int s = 0; s < BUILD_MENU_SLOTS; s++) {
+        int i = startIdx + s;
+        if (i >= BLDG_TYPE_COUNT) break;
+
+        int ix = s * BUILD_MENU_ITEM_W;
         if (ix + BUILD_MENU_ITEM_W > SCREEN_W) break;
 
         bool available = (gs.players[0].age >= BLDG_STATS[i].ageReq);
         bool affordable = game_can_afford(gs, 0, BLDG_STATS[i].cost);
-        u8 textColor = (available && affordable) ? PAL_WHITE : PAL_GRAY;
-        u8 bgColor = (available && affordable) ? PAL_BROWN : PAL_DARKGRAY;
 
-        // Fill slot background
-        for (int y = BUILD_MENU_Y + 1; y < SCREEN_H - 1; y++) {
-            for (int x = ix + 1; x < ix + BUILD_MENU_ITEM_W - 1; x++) {
-                if (x < SCREEN_W) vram[y * 256 + x] = bgColor;
+        // Blit 32x32 icon from buildingIcon[]
+        const u8* icon = buildingIcon[i];
+        for (int py = 0; py < 32; py++) {
+            int dy = BUILD_MENU_Y + py;
+            if (dy >= SCREEN_H) break;
+            for (int px = 0; px < 32; px++) {
+                int dx = ix + px;
+                if (dx >= SCREEN_W) break;
+                u8 pidx = icon[py * 32 + px];
+                if (pidx == 0) continue; // transparent
+                // Dim unavailable/unaffordable: skip every other pixel
+                if ((!available || !affordable) && ((px + py) & 1))
+                    continue;
+                vram[dy * 256 + dx] = pidx;
             }
         }
 
-        // Draw abbreviation text, centered in slot
-        int textW = font_string_width(gameFont, BLDG_ABBREV[i]);
-        int tx = ix + (BUILD_MENU_ITEM_W - textW) / 2;
-        int ty = BUILD_MENU_Y + (BUILD_MENU_H - gameFont.height) / 2;
-        font_draw_str_8(vram, 256, SCREEN_H, tx, ty, BLDG_ABBREV[i], textColor, gameFont);
-
-        // Border between items
-        for (int y = BUILD_MENU_Y; y < SCREEN_H; y++) {
+        // 1px black border on right edge of each slot
+        for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
             int bx = ix + BUILD_MENU_ITEM_W - 1;
             if (bx < SCREEN_W) vram[y * 256 + bx] = PAL_BLACK;
+        }
+    }
+
+    // Page indicator (right side)
+    if (BUILD_MENU_PAGES > 1) {
+        char pageStr[8];
+        pageStr[0] = '0' + gs.buildMenuPage + 1;
+        pageStr[1] = '/';
+        pageStr[2] = '0' + BUILD_MENU_PAGES;
+        pageStr[3] = '\0';
+        int pw = font_string_width(gameFont, pageStr);
+        int px = SCREEN_W - pw - 2;
+        int py = BUILD_MENU_Y + (BUILD_MENU_H - gameFont.height) / 2;
+        font_draw_str_8(vram, 256, SCREEN_H, px, py, pageStr, PAL_YELLOW, gameFont);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Building placement preview — draws diamond-shaped tile highlights
+// under the current touch position when in placement mode
+// ---------------------------------------------------------------------------
+void render_placement_preview(u8* buf, const GameState& gs, const TerrainMap& terrain) {
+    if (gs.inputMode != 1) return;
+
+    // Use current touch position if touching, otherwise last touch position
+    int screenX = gs.touchActive ? gs.dragEndX : gs.dragStartX;
+    int screenY = gs.touchActive ? gs.dragEndY : gs.dragStartY;
+
+    // Convert screen coords to tile coords
+    int baseTX, baseTY;
+    screenToTile(screenX, screenY, gs.camX, gs.camY, baseTX, baseTY);
+
+    const BuildingStats& st = BLDG_STATS[gs.placeBldgType];
+
+    // Draw diamond highlight for each tile in the building footprint
+    for (int dy = 0; dy < st.tileH; dy++) {
+        for (int dx = 0; dx < st.tileW; dx++) {
+            int tx = baseTX + dx;
+            int ty = baseTY + dy;
+
+            // Determine if this tile is valid for building
+            bool valid = (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES &&
+                          terrain.canBuild(tx, ty) && building_at_tile(tx, ty) < 0);
+
+            u8 color = valid ? PAL_GREEN : PAL_RED;
+
+            // Convert tile to iso screen position
+            int isoX, isoY;
+            tileToIso(tx, ty, isoX, isoY);
+            int dstX = isoX - gs.camX;
+            int dstY = isoY - gs.camY;
+
+            // Draw diamond outline using the mask tables
+            for (int py = 0; py < ISO_TILE_H; py++) {
+                int sy = dstY + py;
+                if (sy < 0 || sy >= SCREEN_H) continue;
+
+                int xs = ISO_DIAMOND_XSTART[py];
+                int xe = ISO_DIAMOND_XEND[py];
+
+                // Draw only the outline (left edge, right edge, top/bottom row)
+                for (int px = xs; px < xe; px++) {
+                    if (px == xs || px == xe - 1 || py == 0 || py == ISO_TILE_H - 1) {
+                        int sx = dstX + px;
+                        if (sx >= 0 && sx < SCREEN_W) {
+                            buf[sy * 256 + sx] = color;
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1104,6 +1246,147 @@ void render_drag_box(u8* buf, const GameState& gs) {
         if (y >= 0 && y < SCREEN_H) {
             if (x0 >= 0 && x0 < SCREEN_W) buf[y * 256 + x0] = PAL_WHITE;
             if (x1 >= 0 && x1 < SCREEN_W) buf[y * 256 + x1] = PAL_WHITE;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Draw move target marker — flashing yellow diamond at move destination
+// ---------------------------------------------------------------------------
+void render_move_target(u8* buf, GameState& gs) {
+    if (gs.moveTargetTimer == 0) return;
+    gs.moveTargetTimer--;
+
+    // Flash: visible every other 4 frames
+    if ((gs.moveTargetTimer / 4) & 1) return;
+
+    int sx = gs.moveTargetIsoX - gs.camX;
+    int sy = gs.moveTargetIsoY - gs.camY;
+
+    // Draw a small 8x4 yellow diamond
+    static const int DH = 4;
+    for (int py = 0; py < DH; py++) {
+        int half = (py < DH/2) ? (py + 1) : (DH - py);
+        int cx = sx + ISO_TILE_W / 2;
+        int cy = sy + ISO_TILE_H / 2 - DH / 2 + py;
+        if (cy < 0 || cy >= SCREEN_H) continue;
+        for (int px = -half; px < half; px++) {
+            int x = cx + px;
+            if (x < 0 || x >= SCREEN_W) continue;
+            if (px == -half || px == half - 1 || py == 0 || py == DH - 1)
+                buf[cy * 256 + x] = PAL_YELLOW;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Draw attack visualization — yellow line from building to target
+// ---------------------------------------------------------------------------
+static void draw_line(u8* buf, int x0, int y0, int x1, int y1, u8 color) {
+    int dx = x1 - x0;
+    int dy = y1 - y0;
+    if (dx < 0) dx = -dx;
+    if (dy < 0) dy = -dy;
+    int sx = (x0 < x1) ? 1 : -1;
+    int sy = (y0 < y1) ? 1 : -1;
+    int err = dx - dy;
+
+    for (int steps = 0; steps < 512; steps++) {
+        if (x0 >= 0 && x0 < SCREEN_W && y0 >= 0 && y0 < SCREEN_H)
+            buf[y0 * 256 + x0] = color;
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = err * 2;
+        if (e2 > -dy) { err -= dy; x0 += sx; }
+        if (e2 < dx)  { err += dx; y0 += sy; }
+    }
+}
+
+void render_attack_lines(u8* buf, const GameState& gs) {
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        const Building& b = buildings[i];
+        if (!b.alive) continue;
+        if (b.attackTargetUnit < 0) continue;
+        // Only show line briefly after firing (while cooldown is high)
+        int maxCd = 0;
+        if (b.type == BLDG_TOWN_CENTER) maxCd = 60;
+        else if (b.type == BLDG_TOWER) maxCd = 60;
+        else if (b.type == BLDG_CASTLE) maxCd = 45;
+        if (maxCd == 0 || b.attackCooldown < maxCd - 10) continue;
+
+        int targetIdx = b.attackTargetUnit;
+        if (targetIdx < 0 || targetIdx >= MAX_UNITS || !units[targetIdx].alive) continue;
+
+        const BuildingStats& st = BLDG_STATS[b.type];
+        int bIsoX, bIsoY;
+        worldToIso(b.x + st.tileW * TILE_PX / 2, b.y + st.tileH * TILE_PX / 2, bIsoX, bIsoY);
+        int bsx = bIsoX - gs.camX + ISO_TILE_W / 2;
+        int bsy = bIsoY - gs.camY;
+
+        int uIsoX, uIsoY;
+        worldToIso(units[targetIdx].x, units[targetIdx].y, uIsoX, uIsoY);
+        int usx = uIsoX - gs.camX + CELL_W / 2;
+        int usy = uIsoY - gs.camY;
+
+        draw_line(buf, bsx, bsy, usx, usy, PAL_YELLOW);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Draw training progress bars on buildings
+// ---------------------------------------------------------------------------
+void render_training_bars(u8* buf, const GameState& gs) {
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        const Building& b = buildings[i];
+        if (!b.alive) continue;
+        if (b.trainQueue[0] < 0) continue;
+        if (b.buildProgress < BLDG_STATS[b.type].buildTime) continue;
+
+        int tileW = BLDG_STATS[b.type].tileW;
+        int tileH = BLDG_STATS[b.type].tileH;
+        int bIsoX, bIsoY;
+        worldToIso(b.x, b.y, bIsoX, bIsoY);
+        int bScreenX = bIsoX - gs.camX;
+        int bScreenY = bIsoY - gs.camY;
+
+        int hpCx = bScreenX + ISO_TILE_W / 2;
+        int barW = (tileW + tileH) * 8;
+        int barY = bScreenY - 6; // 3px below HP bar position
+        if (barY < 0 || barY >= SCREEN_H) continue;
+
+        u8 unitType = b.trainQueue[0];
+        int trainTime = UNIT_STATS[unitType].trainTime;
+        int filledW = (trainTime > 0) ? (b.trainProgress * barW) / trainTime : 0;
+        if (filledW > barW) filledW = barW;
+
+        int x0 = hpCx - barW / 2;
+        for (int px = 0; px < barW; px++) {
+            int screenX = x0 + px;
+            if (screenX < 0 || screenX >= SCREEN_W) continue;
+            u8 color = (px < filledW) ? PAL_BLUE : PAL_DARKGRAY;
+            buf[barY * 256 + screenX] = color;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Draw age advancement progress bar at top of bottom screen
+// ---------------------------------------------------------------------------
+void render_age_progress(u8* buf, const GameState& gs) {
+    if (gs.players[0].ageProgress < 0) return;
+
+    int nextAge = gs.players[0].age + 1;
+    if (nextAge >= AGE_COUNT) return;
+
+    int totalTime = AGE_RESEARCH_TIME[nextAge];
+    if (totalTime <= 0) return;
+
+    int filledW = (gs.players[0].ageProgress * SCREEN_W) / totalTime;
+    if (filledW > SCREEN_W) filledW = SCREEN_W;
+
+    // Draw 2px gold bar at top of screen
+    for (int y = 0; y < 2; y++) {
+        for (int x = 0; x < SCREEN_W; x++) {
+            buf[y * 256 + x] = (x < filledW) ? PAL_YELLOW : PAL_DARKGRAY;
         }
     }
 }

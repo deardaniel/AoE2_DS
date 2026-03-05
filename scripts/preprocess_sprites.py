@@ -18,6 +18,7 @@ import struct
 import sys
 import numpy as np
 from PIL import Image
+from shared_constants import ISO_TILE_H, footprint_height, rgb_to_bgr555
 
 SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sprites')
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
@@ -64,18 +65,41 @@ UNIT_SHEETS = [
     ('spr_villager_die',     'villager_die.png'),
 ]
 
-# Building sprites: (output_name, filename, target_w, target_h)
+# Building sprites: (output_name, filename, target_w, target_h, tileW, tileH, hotspot_y_ratio)
 # Isometric building sizes based on tile footprint:
 #   footprint_w = (tileW + tileH) * 16, footprint_h = (tileW + tileH) * 8
-#   sprite_h = footprint_h + 16 (above-ground height)
+#   hotspot_y_ratio = fraction from top of content where ground level is (from SLP data)
+# Content is positioned so the hotspot aligns with (ph - footH) in the canvas,
+# making the building rise above the terrain footprint naturally.
 BUILDING_SPRITES = [
-    ('spr_town_center',   'town_center.png',  128, 96),  # 4x4 tiles: 128x64 foot + 32 above
-    ('spr_house',         'house.png',          32, 32),  # 1x1 tile:  32x16 foot + 16 above
-    ('spr_barracks',      'barracks.png',       64, 48),  # 2x2 tiles: 64x32 foot + 16 above
-    ('spr_archery_range', 'archery_range.png',  64, 48),  # 2x2 tiles: 64x32 foot + 16 above
-    ('spr_stable',        'stable.png',         64, 48),  # 2x2 tiles: 64x32 foot + 16 above
-    ('spr_mining_camp',   'mining_camp.png',    32, 32),  # 1x1 tile:  32x16 foot + 16 above
-    ('spr_lumber_camp',   'lumber_camp.png',    32, 32),  # 1x1 tile:  32x16 foot + 16 above
+    ('spr_town_center',   'town_center.png',  128,  96, 4, 4, 0.733), # 4x4: TC composite (adjusted for center alignment)
+    ('spr_house',         'house.png',          32,  32, 1, 1, 0.613), # 1x1: SLP 2223, hotspot 73/119
+    ('spr_barracks',      'barracks.png',       64,  64, 2, 2, 0.681), # 2x2: SLP 2683, hotspot 141/207
+    ('spr_archery_range', 'archery_range.png',  64,  80, 2, 2, 0.708), # 2x2: SLP 21, hotspot 179/253
+    ('spr_stable',        'stable.png',         64,  64, 2, 2, 0.663), # 2x2: SLP 1009, hotspot 134/202
+    ('spr_mining_camp',   'mining_camp.png',    32,  32, 1, 1, 0.655), # 1x1: SLP 3492, hotspot 72/110
+    ('spr_lumber_camp',   'lumber_camp.png',    32,  48, 1, 1, 0.715), # 1x1: SLP 3504, hotspot 98/137
+    ('spr_wall',          'wall.png',           32,  32, 1, 1, 0.807), # 1x1: SLP 2099, hotspot 71/88
+    ('spr_tower',         'tower.png',          32,  64, 1, 1, 0.894), # 1x1: SLP 2652, hotspot 202/226
+    ('spr_market',        'market.png',         64,  80, 2, 2, 0.714), # 2x2: SLP 2278, hotspot 220/308
+    ('spr_castle',        'castle.png',         96, 128, 3, 3, 0.798), # 3x3: SLP 305, hotspot 280/351
+]
+
+# Icon sprites for build menu: (output_name, filename, target_w, target_h, cols, rows, scale)
+# 36x36 source icons scaled to 32x32 output (single frame, no directions)
+ICON_SPRITES = [
+    ('icon_tc',            'icon_tc.png',            32, 32, 1, 1, 0.889),
+    ('icon_house',         'icon_house.png',         32, 32, 1, 1, 0.889),
+    ('icon_barracks',      'icon_barracks.png',      32, 32, 1, 1, 0.889),
+    ('icon_archery_range', 'icon_archery_range.png', 32, 32, 1, 1, 0.889),
+    ('icon_stable',        'icon_stable.png',        32, 32, 1, 1, 0.889),
+    ('icon_farm',          'icon_farm.png',           32, 32, 1, 1, 0.889),
+    ('icon_mining_camp',   'icon_mining_camp.png',   32, 32, 1, 1, 0.889),
+    ('icon_lumber_camp',   'icon_lumber_camp.png',   32, 32, 1, 1, 0.889),
+    ('icon_wall',          'icon_wall.png',          32, 32, 1, 1, 0.889),
+    ('icon_tower',         'icon_tower.png',         32, 32, 1, 1, 0.889),
+    ('icon_market',        'icon_market.png',        32, 32, 1, 1, 0.889),
+    ('icon_castle',        'icon_castle.png',        32, 32, 1, 1, 0.889),
 ]
 
 # Resource object sprites: (output_name, filename)
@@ -181,26 +205,64 @@ def build_shared_palette(all_rgba_images, max_colors=248):
     return palette
 
 
-def index_rgba_image(img_data, palette_array, target_size=None):
+def index_rgba_image(img_data, palette_array, target_size=None, hotspot_align=None):
     """Convert RGBA image to indexed format using the shared palette.
 
     Returns (indexed_bytes, width, height).
     Index 0 = transparent, 16-N = palette color (1-15 reserved for UI).
+
+    If hotspot_align=(tileW, tileH, hotspot_y_ratio): auto-crops transparent
+    borders, scales to fit, and positions content so that the ground level
+    (at hotspot_y_ratio from top of content) aligns with the top of the
+    isometric footprint area in the canvas.
     """
     if target_size:
         tw, th = target_size
         img = Image.fromarray(img_data)
-        # Scale proportionally to fit within target, center in canvas
-        scale = min(tw / img.width, th / img.height)
-        new_w = int(img.width * scale)
-        new_h = int(img.height * scale)
-        img = img.resize((new_w, new_h), Image.LANCZOS)
-        # Place on transparent canvas (centered)
-        result = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
-        ox = (tw - new_w) // 2
-        oy = (th - new_h) // 2  # center vertically
-        result.paste(img, (ox, oy))
-        img_data = np.array(result)
+
+        if hotspot_align:
+            tileW, tileH, hotspot_ratio = hotspot_align
+            footH = footprint_height(tileW, tileH)
+            # SLP hotspot marks the CENTER of the footprint diamond, so align
+            # with the center of the footprint zone in the canvas
+            ground_row = th - footH // 2  # canvas row = footprint center
+
+            # Auto-crop transparent borders to get just the building content
+            bbox = img.split()[3].getbbox()
+            if bbox:
+                img = img.crop(bbox)
+
+            # Scale proportionally to fit within target
+            scale = min(tw / img.width, th / img.height)
+            new_w = int(img.width * scale)
+            new_h = int(img.height * scale)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+
+            if hotspot_ratio > 0:
+                # Position so hotspot (ground level) aligns with ground_row
+                hotspot_y = int(hotspot_ratio * new_h)
+                ox = (tw - new_w) // 2
+                oy = ground_row - hotspot_y  # content top, may be negative (clipped)
+            else:
+                # No hotspot: center horizontally, place at top of canvas
+                ox = (tw - new_w) // 2
+                oy = 0
+
+            result = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
+            result.paste(img, (ox, oy))
+            img_data = np.array(result)
+        else:
+            # Default: scale and center
+            scale = min(tw / img.width, th / img.height)
+            new_w = int(img.width * scale)
+            new_h = int(img.height * scale)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+
+            result = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
+            ox = (tw - new_w) // 2
+            oy = (th - new_h) // 2
+            result.paste(img, (ox, oy))
+            img_data = np.array(result)
 
     h, w = img_data.shape[:2]
     alpha = img_data[:, :, 3].reshape(-1)
@@ -242,14 +304,6 @@ def find_blue_player_indices(palette):
     return list(range(8))
 
 
-def rgb_to_bgr555(r, g, b):
-    """Convert RGB888 to NDS BGR555 format (16-bit)."""
-    r5 = min(31, r >> 3)
-    g5 = min(31, g >> 3)
-    b5 = min(31, b >> 3)
-    return (b5 << 10) | (g5 << 5) | r5 | (1 << 15)
-
-
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -269,7 +323,7 @@ def main():
         all_images.append(data)
         print(f"  {filename}: {data.shape[1]}x{data.shape[0]}")
 
-    for name, filename, tw, th in BUILDING_SPRITES:
+    for name, filename, tw, th, tileW, tileH, hotspot_ratio in BUILDING_SPRITES:
         data = load_rgba(filename)
         if data is None:
             continue
@@ -278,7 +332,16 @@ def main():
         if data.shape[0] > data.shape[1]:
             frame_h = data.shape[1]  # assume square frames
             data = data[:frame_h, :frame_h]
-        building_data[name] = (data, tw, th)
+        building_data[name] = (data, tw, th, tileW, tileH, hotspot_ratio)
+        all_images.append(data)
+        print(f"  {filename}: {data.shape[1]}x{data.shape[0]} -> {tw}x{th}")
+
+    icon_data = {}
+    for name, filename, tw, th, cols, rows, scale in ICON_SPRITES:
+        data = load_rgba(filename)
+        if data is None:
+            continue
+        icon_data[name] = (data, tw, th)
         all_images.append(data)
         print(f"  {filename}: {data.shape[1]}x{data.shape[0]} -> {tw}x{th}")
 
@@ -385,10 +448,23 @@ def main():
 
     # --- Process building sprites ---
     print("\nProcessing building sprites...")
-    for name, filename, tw, th in BUILDING_SPRITES:
+    for name, filename, tw, th, tileW, tileH, hotspot_ratio in BUILDING_SPRITES:
         if name not in building_data:
             continue
-        data, tw2, th2 = building_data[name]
+        data, tw2, th2, tw3, th3, hr = building_data[name]
+        indexed, w, h = index_rgba_image(data, palette_array, (tw, th),
+                                          hotspot_align=(tileW, tileH, hotspot_ratio))
+        out_path = os.path.join(DATA_DIR, f'{name}.bin')
+        with open(out_path, 'wb') as f:
+            f.write(indexed)
+        print(f"  {name}: {w}x{h} = {len(indexed)} bytes")
+
+    # --- Process icon sprites ---
+    print("\nProcessing icon sprites...")
+    for name, filename, tw, th, cols, rows, scale in ICON_SPRITES:
+        if name not in icon_data:
+            continue
+        data, tw2, th2 = icon_data[name]
         indexed, w, h = index_rgba_image(data, palette_array, (tw, th))
         out_path = os.path.join(DATA_DIR, f'{name}.bin')
         with open(out_path, 'wb') as f:

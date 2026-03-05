@@ -49,6 +49,9 @@ struct GameState {
     bool buildMenuOpen;
     u8   buildMenuPage; // which page of building options
 
+    // Market trading
+    u8   marketTradeIdx; // 0-3: which trade pair is selected
+
     // Selected terrain tile (for resource info display)
     s8   selectedTileX, selectedTileY; // -1 = none
 
@@ -57,6 +60,10 @@ struct GameState {
     bool  isDragging;     // user is dragging (moved beyond threshold)
     s16   dragStartX, dragStartY; // screen coords where touch began
     s16   dragEndX, dragEndY;     // current touch position during drag
+
+    // Move target marker (flashing diamond at destination)
+    s16   moveTargetIsoX, moveTargetIsoY;
+    u8    moveTargetTimer;  // frames remaining (0 = not showing)
 };
 
 // ---------------------------------------------------------------------------
