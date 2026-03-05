@@ -360,7 +360,7 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         if (!dpadHeld) {
             if (dpadGapTimer > 6) { dpadGapTimer = 0; dpadFast = false; }
         }
-        if (dpadHeld && dpadFast && dpadHeld != dpadLastDir)
+        if (dpadHeld && dpadFast && !(dpadHeld & dpadLastDir))
             dpadFast = false;
 
         dpadPrevDir = dpadHeld;
