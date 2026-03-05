@@ -1116,12 +1116,12 @@ void units_update(GameState& gs, TerrainMap& terrain) {
             continue;
         }
 
-        // Animation tick — full original framerate
-        // 10 anim frames per cycle, advancing every 2 ticks (30fps) for movement
-        // and every 3 ticks (20fps) for combat/work actions
+        // Animation tick
+        // 10 anim frames per cycle, advancing every tick (60fps) for movement
+        // and every 2 ticks (30fps) for combat/work actions
         u.animTick++;
         int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING ||
-                         u.state == USTATE_SCOUTING) ? 2 : 3;
+                         u.state == USTATE_SCOUTING) ? 1 : 2;
         if (u.animTick >= animSpeed) {
             u.animTick = 0;
             if (u.state == USTATE_MOVING || u.state == USTATE_ATTACKING ||

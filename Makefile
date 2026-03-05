@@ -9,6 +9,13 @@ endif
 include $(DEVKITARM)/ds_rules
 
 #---------------------------------------------------------------------------------
+# ROM metadata
+#---------------------------------------------------------------------------------
+GAME_TITLE	:=	AoE2 DSi
+GAME_SUBTITLE1	:=	Age of Empires II
+GAME_SUBTITLE2	:=	daniel.ie
+
+#---------------------------------------------------------------------------------
 # TARGET is the name of the output
 # BUILD is the directory where object files & intermediate files will be placed
 # SOURCES is a list of directories containing source code
@@ -58,6 +65,7 @@ ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
+export GAME_ICON :=	$(CURDIR)/icon.bmp
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
 					$(foreach dir,$(DATA),$(CURDIR)/$(dir)) \
@@ -159,6 +167,11 @@ else
 # main targets
 #---------------------------------------------------------------------------------
 $(OUTPUT).nds	: 	$(OUTPUT).elf
+	ndstool -c $@ -9 $< -7 $(DEVKITPRO)/calico/bin/ds7_maine.elf \
+		-g "AE2D" "01" "AOE2DSI" \
+		-b $(GAME_ICON) "$(GAME_TITLE);$(GAME_SUBTITLE1);$(GAME_SUBTITLE2)"
+	@echo built ... $(notdir $@)
+
 $(OUTPUT).elf	:	$(OFILES)
 
 #---------------------------------------------------------------------------------
