@@ -1267,8 +1267,8 @@ void render_move_target(u8* buf, GameState& gs) {
     static const int DH = 4;
     for (int py = 0; py < DH; py++) {
         int half = (py < DH/2) ? (py + 1) : (DH - py);
-        int cx = sx + ISO_TILE_W / 2;
-        int cy = sy + ISO_TILE_H / 2 - DH / 2 + py;
+        int cx = sx;
+        int cy = sy - DH / 2 + py;
         if (cy < 0 || cy >= SCREEN_H) continue;
         for (int px = -half; px < half; px++) {
             int x = cx + px;
