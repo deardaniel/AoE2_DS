@@ -161,18 +161,18 @@ static int buildingSprH[BLDG_TYPE_COUNT];
 // AoE2 SLP sprites have 5 direction groups: S(0), SW(1), W(2), NW(3), N(4)
 // East-facing directions are horizontal mirrors of their west-facing counterparts.
 //
-// Our 8 directions map to these SLP directions:
-//   DIR_N(0)  -> SLP N  (4)
-//   DIR_NE(1) -> SLP NW (3) + hFlip  (NE = mirror of NW)
-//   DIR_E(2)  -> SLP W  (2) + hFlip  (E = mirror of W)
-//   DIR_SE(3) -> SLP SW (1) + hFlip  (SE = mirror of SW)
-//   DIR_S(4)  -> SLP S  (0)
-//   DIR_SW(5) -> SLP SW (1)
-//   DIR_W(6)  -> SLP W  (2)
-//   DIR_NW(7) -> SLP NW (3)
+// Tile directions are rotated 45° CW from screen directions in iso projection:
+//   DIR_N(0)  = screen NE -> SLP NW(3) + hFlip
+//   DIR_NE(1) = screen E  -> SLP W (2) + hFlip
+//   DIR_E(2)  = screen SE -> SLP SW(1) + hFlip
+//   DIR_SE(3) = screen S  -> SLP S (0)           (toward camera)
+//   DIR_S(4)  = screen SW -> SLP SW(1)
+//   DIR_SW(5) = screen W  -> SLP W (2)
+//   DIR_W(6)  = screen NW -> SLP NW(3)
+//   DIR_NW(7) = screen N  -> SLP N (4)           (away from camera)
 // ---------------------------------------------------------------------------
-static const int DIR_TO_FRAME[DIR_COUNT] = { 4, 3, 2, 1, 0, 1, 2, 3 };
-static const bool DIR_HFLIP[DIR_COUNT] = { false, true, true, true, false, false, false, false };
+static const int DIR_TO_FRAME[DIR_COUNT] = { 3, 2, 1, 0, 1, 2, 3, 4 };
+static const bool DIR_HFLIP[DIR_COUNT] = { true, true, true, false, false, false, false, false };
 
 // For walking/attack sheets (5 dirs x 10 anim frames = 50 frames):
 // SLP Dir 0 (S): frames 0-9
@@ -180,7 +180,7 @@ static const bool DIR_HFLIP[DIR_COUNT] = { false, true, true, true, false, false
 // SLP Dir 2 (W): frames 20-29
 // SLP Dir 3 (NW): frames 30-39
 // SLP Dir 4 (N): frames 40-49
-static const int DIR_TO_ANIM_BASE[DIR_COUNT] = { 40, 30, 20, 10, 0, 10, 20, 30 };
+static const int DIR_TO_ANIM_BASE[DIR_COUNT] = { 30, 20, 10, 0, 10, 20, 30, 40 };
 
 // ---------------------------------------------------------------------------
 // Convert linear pixel buffer to NDS 8x8 tile layout (256-color, 1D mapping)
