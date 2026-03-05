@@ -116,7 +116,7 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 #---------------------------------------------------------------------------------
 $(BUILD):
-	@python3 -c "from PIL import Image; img=Image.open('icon.bmp').convert('RGB'); img.quantize(colors=16, dither=Image.Dither.FLOYDSTEINBERG).save('build_icon.bmp')"
+	@python3 scripts/make_icon.py icon.png build_icon.bmp
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
