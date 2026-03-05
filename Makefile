@@ -65,7 +65,7 @@ ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
-export GAME_ICON :=	$(CURDIR)/icon.bmp
+export GAME_ICON :=	$(CURDIR)/build_icon.bmp
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
 					$(foreach dir,$(DATA),$(CURDIR)/$(dir)) \
@@ -116,14 +116,14 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 #---------------------------------------------------------------------------------
 $(BUILD):
-	@python3 -c "from PIL import Image; Image.open('icon.png').convert('RGB').quantize(colors=16).save('icon.bmp')"
+	@python3 -c "from PIL import Image; img=Image.open('icon.bmp').convert('RGB'); img.quantize(colors=16, dither=Image.Dither.FLOYDSTEINBERG).save('build_icon.bmp')"
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds icon.bmp
+	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds build_icon.bmp
 
 #---------------------------------------------------------------------------------
 # Asset pipeline helper
