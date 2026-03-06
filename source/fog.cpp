@@ -72,3 +72,9 @@ bool FogMap::isExplored(int player, int tx, int ty) const {
     if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return false;
     return state[player][ty][tx] >= FOG_EXPLORED;
 }
+
+void FogMap::forceExplore(int player, int tx, int ty) {
+    if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return;
+    if (state[player][ty][tx] == FOG_UNEXPLORED)
+        state[player][ty][tx] = FOG_EXPLORED;
+}

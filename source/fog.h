@@ -11,6 +11,7 @@ struct FogMap {
     void update(); // recalculate visibility from unit/building positions
     bool isVisible(int player, int tx, int ty) const;
     bool isExplored(int player, int tx, int ty) const;
+    void forceExplore(int player, int tx, int ty);
 };
 
 extern FogMap fogMap;

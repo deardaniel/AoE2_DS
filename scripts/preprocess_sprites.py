@@ -108,6 +108,7 @@ RESOURCE_SPRITES = [
     ('spr_tree',       'tree.png'),
     ('spr_gold_mine',  'gold_mine.png'),
     ('spr_stone_mine', 'stone_mine.png'),
+    ('spr_fire',       'fire_small.png'),
 ]
 
 

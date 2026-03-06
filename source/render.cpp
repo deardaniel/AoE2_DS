@@ -77,6 +77,9 @@ extern const u8 spr_tower_bin[];
 extern const u8 spr_market_bin[];
 extern const u8 spr_castle_bin[];
 
+// Fire overlay sprite (16x16, 4 animation frames stacked = 1024 bytes)
+extern const u8 spr_fire_bin[];
+
 // Build menu icon sprites (32x32 indexed, single frame)
 extern const u8 icon_tc_bin[];
 extern const u8 icon_house_bin[];
@@ -812,6 +815,28 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
             sprData = frame;
         }
         blit_frame(buf, sprData, pw, ph, sx, sy, false);
+
+        // Fire overlay on damaged buildings
+        int maxHp = BLDG_STATS[b.type].hp;
+        if (maxHp > 0 && b.hp < maxHp / 2) {
+            int fireW = 16, fireH = 16;
+            int fireFrame = (gs.frameCount / 8) % 4;
+            const u8* fireSrc = spr_fire_bin + fireFrame * fireW * fireH;
+
+            // First fire: centered horizontally, 1/4 down from top
+            int fx1 = sx + pw / 2 - fireW / 2;
+            int fy1 = sy + ph / 4 - fireH / 2;
+            blit_frame(buf, fireSrc, fireW, fireH, fx1, fy1, false);
+
+            // Second fire at < 25% HP: offset left, 1/3 down
+            if (b.hp < maxHp / 4) {
+                int fireFrame2 = ((gs.frameCount + 13) / 8) % 4;
+                const u8* fireSrc2 = spr_fire_bin + fireFrame2 * fireW * fireH;
+                int fx2 = sx + pw / 3 - fireW / 2;
+                int fy2 = sy + ph / 3 - fireH / 2;
+                blit_frame(buf, fireSrc2, fireW, fireH, fx2, fy2, false);
+            }
+        }
     }
 }
 

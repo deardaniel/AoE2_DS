@@ -1342,17 +1342,37 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                 int bestDist = 999999;
                 int bestTX = -1, bestTY = -1;
                 // Sample every 2nd tile for performance
+                // Require minimum distance of 5 tiles to avoid micro-oscillation
+                int minDist = 5 * 5;
                 for (int ty = 0; ty < MAP_TILES; ty += 2) {
                     for (int tx = 0; tx < MAP_TILES; tx += 2) {
                         if (fogMap.isExplored(u.owner, tx, ty)) continue;
-                        if (terrain.tiles[ty][tx] == TERRAIN_WATER) continue;
+                        if (!terrain.passable(tx, ty)) continue;
                         int dx = tx - utx;
                         int dy = ty - uty;
                         int dist = dx * dx + dy * dy;
-                        if (dist < bestDist) {
+                        if (dist >= minDist && dist < bestDist) {
                             bestDist = dist;
                             bestTX = tx;
                             bestTY = ty;
+                        }
+                    }
+                }
+                // Fallback: if no target at min distance, accept any
+                if (bestTX < 0) {
+                    bestDist = 999999;
+                    for (int ty = 0; ty < MAP_TILES; ty += 2) {
+                        for (int tx = 0; tx < MAP_TILES; tx += 2) {
+                            if (fogMap.isExplored(u.owner, tx, ty)) continue;
+                            if (!terrain.passable(tx, ty)) continue;
+                            int dx = tx - utx;
+                            int dy = ty - uty;
+                            int dist = dx * dx + dy * dy;
+                            if (dist < bestDist) {
+                                bestDist = dist;
+                                bestTX = tx;
+                                bestTY = ty;
+                            }
                         }
                     }
                 }
@@ -1361,7 +1381,15 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                     u.targetY = bestTY * TILE_PX + TILE_PX / 2;
                     int sx = u.x / TILE_PX;
                     int sy = u.y / TILE_PX;
-                    if (unit_find_path(sx, sy, bestTX, bestTY, terrain, u.pathDirs, u.pathLen, i)) {
+                    if (!unit_find_path(sx, sy, bestTX, bestTY, terrain, u.pathDirs, u.pathLen, i)) {
+                        // Path failed — mark nearby tiles as explored to avoid retrying
+                        for (int dy2 = -2; dy2 <= 2; dy2++)
+                            for (int dx2 = -2; dx2 <= 2; dx2++) {
+                                int ex = bestTX + dx2, ey = bestTY + dy2;
+                                if (ex >= 0 && ex < MAP_TILES && ey >= 0 && ey < MAP_TILES)
+                                    fogMap.forceExplore(u.owner, ex, ey);
+                            }
+                    } else {
                         unit_begin_path(u, sx, sy, bestTX, bestTY);
                     }
                 } else {
