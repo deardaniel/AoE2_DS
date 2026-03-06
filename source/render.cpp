@@ -314,6 +314,12 @@ static const u8* get_unit_sheet(const Unit& u) {
 // Check if a sheet is an animated sheet (walk/fight/work) vs stand
 // ---------------------------------------------------------------------------
 static bool is_animated_sheet(const u8* sheet, const Unit& u) {
+    // Work states always animate even if using the standing sheet
+    if (u.state == USTATE_GATHERING || u.state == USTATE_BUILDING ||
+        u.state == USTATE_MOVING || u.state == USTATE_RETURNING ||
+        u.state == USTATE_ATTACKING || u.state == USTATE_SCOUTING) {
+        return true;
+    }
     if (u.type == UNIT_VILLAGER) {
         int role = u.role;
         if (role >= VROLE_COUNT) role = VROLE_BASE;
