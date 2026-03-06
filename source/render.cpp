@@ -33,7 +33,6 @@ extern const u8 spr_villager_f_bin[];
 extern const u8 spr_villager_carry_bin[];
 extern const u8 spr_lumberjack_bin[];
 extern const u8 spr_lumberjack_walk_bin[];
-extern const u8 spr_lumberjack_chop_bin[];
 extern const u8 spr_lumberjack_carry_bin[];
 extern const u8 spr_miner_bin[];
 extern const u8 spr_miner_walk_bin[];
@@ -378,22 +377,22 @@ void render_init() {
 
     villagerRoleStand[VROLE_LUMBERJACK] = spr_lumberjack_bin;
     villagerRoleWalk[VROLE_LUMBERJACK]  = spr_lumberjack_walk_bin;
-    villagerRoleWork[VROLE_LUMBERJACK]  = spr_lumberjack_chop_bin;
+    villagerRoleWork[VROLE_LUMBERJACK]  = spr_lumberjack_bin;         // AoE2 uses standing anim for work
     villagerRoleCarry[VROLE_LUMBERJACK] = spr_lumberjack_carry_bin;
 
     villagerRoleStand[VROLE_MINER]      = spr_miner_bin;
     villagerRoleWalk[VROLE_MINER]       = spr_miner_walk_bin;
-    villagerRoleWork[VROLE_MINER]       = spr_villager_attack_bin; // no mining SLP in AoE2 HD
+    villagerRoleWork[VROLE_MINER]       = spr_miner_bin;              // standing anim = mining anim
     villagerRoleCarry[VROLE_MINER]      = spr_miner_carry_bin;
 
     villagerRoleStand[VROLE_BUILDER]    = spr_builder_bin;
     villagerRoleWalk[VROLE_BUILDER]     = spr_builder_walk_bin;
-    villagerRoleWork[VROLE_BUILDER]     = spr_villager_attack_bin; // no builder SLP in AoE2 HD
-    villagerRoleCarry[VROLE_BUILDER]    = spr_villager_carry_bin;  // builders use base carry
+    villagerRoleWork[VROLE_BUILDER]     = spr_builder_bin;            // standing anim = building anim
+    villagerRoleCarry[VROLE_BUILDER]    = spr_villager_carry_bin;     // builders use base carry
 
     villagerRoleStand[VROLE_FARMER]     = spr_farmer_bin;
     villagerRoleWalk[VROLE_FARMER]      = spr_farmer_walk_bin;
-    villagerRoleWork[VROLE_FARMER]      = spr_villager_attack_bin; // no farmer SLP in AoE2 HD
+    villagerRoleWork[VROLE_FARMER]      = spr_farmer_bin;             // standing anim = farming anim
     villagerRoleCarry[VROLE_FARMER]     = spr_farmer_carry_bin;
 
     // Set up building sheet lookup tables

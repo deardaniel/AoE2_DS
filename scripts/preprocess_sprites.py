@@ -33,7 +33,6 @@ UNIT_SHEETS = [
     ('spr_villager_carry',   'villager_carry.png'),
     ('spr_lumberjack',       'lumberjack.png'),
     ('spr_lumberjack_walk',  'lumberjack_walk.png'),
-    ('spr_lumberjack_chop',  'lumberjack_chop.png'),
     ('spr_lumberjack_carry', 'lumberjack_carry.png'),
     ('spr_miner',            'miner.png'),
     ('spr_miner_walk',       'miner_walk.png'),
