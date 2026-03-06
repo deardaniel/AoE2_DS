@@ -145,7 +145,8 @@ static int heuristic(int ax, int ay, int bx, int by) {
 // selfIdx excludes the pathfinding unit from the blocked set so it doesn't
 // block its own starting tile. Moving/scouting units are also excluded
 // since they'll likely clear their tile before the pathing unit arrives.
-static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1) {
+// skipUnits: if true, don't mark any units as blockers (used for scouts).
+static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1, bool skipUnits = false) {
     for (int y = 0; y < MAP_TILES; y++)
         for (int x = 0; x < MAP_TILES; x++)
             passMap[y][x] = terrain.passable(x, y);
@@ -166,18 +167,20 @@ static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1) {
     }
 
     // Mark stationary units as impassable (skip self and moving/scouting units)
-    for (int i = 0; i < MAX_UNITS; i++) {
-        if (i == selfIdx) continue;
-        if (!units[i].alive || units[i].state == USTATE_DEAD || units[i].state == USTATE_GARRISONED) continue;
-        if (units[i].state == USTATE_MOVING || units[i].state == USTATE_SCOUTING) continue;
-        int tx = units[i].x / TILE_PX, ty = units[i].y / TILE_PX;
-        if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES)
-            passMap[ty][tx] = false;
+    if (!skipUnits) {
+        for (int i = 0; i < MAX_UNITS; i++) {
+            if (i == selfIdx) continue;
+            if (!units[i].alive || units[i].state == USTATE_DEAD || units[i].state == USTATE_GARRISONED) continue;
+            if (units[i].state == USTATE_MOVING || units[i].state == USTATE_SCOUTING) continue;
+            int tx = units[i].x / TILE_PX, ty = units[i].y / TILE_PX;
+            if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES)
+                passMap[ty][tx] = false;
+        }
     }
 }
 
 bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
-                    u8* outDirs, u8& outLen, int selfIdx) {
+                    u8* outDirs, u8& outLen, int selfIdx, bool skipUnits) {
     outLen = 0;
     if (sx == tx && sy == ty) return true;
 
@@ -187,8 +190,8 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
     if (ty < 0) ty = 0;
     if (ty >= MAP_TILES) ty = MAP_TILES - 1;
 
-    // Build combined passability map (terrain + buildings + stationary units)
-    build_pass_map(terrain, selfIdx);
+    // Build combined passability map (terrain + buildings + optionally units)
+    build_pass_map(terrain, selfIdx, skipUnits);
 
     // Ensure start tile is passable (unit might be on a building tile)
     passMap[sy][sx] = true;
@@ -377,7 +380,7 @@ static void unit_step_path(Unit& u, int selfIdx, const TerrainMap& terrain) {
             int occupant = tileOccupant[nextTY][nextTX];
             if (occupant >= 0 && occupant != selfIdx) {
                 Unit& other = units[occupant];
-                if (other.owner == u.owner) {
+                if (other.owner == u.owner && u.state != USTATE_SCOUTING) {
                     if (other.state == USTATE_IDLE) {
                         // Nudge idle unit out of the way
                         nudge_unit(occupant, nextTX, nextTY, terrain);
@@ -1323,7 +1326,7 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                                 int fty = fleeTY + dy;
                                 if (ftx >= 0 && ftx < MAP_TILES && fty >= 0 && fty < MAP_TILES &&
                                     terrain.passable(ftx, fty)) {
-                                    if (unit_find_path(utx, uty, ftx, fty, terrain, u.pathDirs, u.pathLen, i)) {
+                                    if (unit_find_path(utx, uty, ftx, fty, terrain, u.pathDirs, u.pathLen, i, true)) {
                                         unit_begin_path(u, utx, uty, ftx, fty);
                                         fled = true;
                                     }
@@ -1381,7 +1384,7 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                     u.targetY = bestTY * TILE_PX + TILE_PX / 2;
                     int sx = u.x / TILE_PX;
                     int sy = u.y / TILE_PX;
-                    if (!unit_find_path(sx, sy, bestTX, bestTY, terrain, u.pathDirs, u.pathLen, i)) {
+                    if (!unit_find_path(sx, sy, bestTX, bestTY, terrain, u.pathDirs, u.pathLen, i, true)) {
                         // Path failed — mark nearby tiles as explored to avoid retrying
                         for (int dy2 = -2; dy2 <= 2; dy2++)
                             for (int dx2 = -2; dx2 <= 2; dx2++) {

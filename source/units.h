@@ -69,7 +69,7 @@ int  unit_find_nearest_enemy(int unitIdx);
 // selfIdx: index of the pathfinding unit (excluded from the passability map
 // so it doesn't block its own start tile). Pass -1 for external callers.
 bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
-                    u8* outDirs, u8& outLen, int selfIdx = -1);
+                    u8* outDirs, u8& outLen, int selfIdx = -1, bool skipUnits = false);
 
 // Tile occupancy — check if a tile is occupied by any alive, visible unit.
 // Backed by tileOccupant grid rebuilt each frame in units_update().
