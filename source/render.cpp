@@ -33,14 +33,18 @@ extern const u8 spr_villager_f_bin[];
 extern const u8 spr_villager_carry_bin[];
 extern const u8 spr_lumberjack_bin[];
 extern const u8 spr_lumberjack_walk_bin[];
+extern const u8 spr_lumberjack_work_bin[];
 extern const u8 spr_lumberjack_carry_bin[];
 extern const u8 spr_miner_bin[];
 extern const u8 spr_miner_walk_bin[];
+extern const u8 spr_miner_work_bin[];
 extern const u8 spr_miner_carry_bin[];
 extern const u8 spr_builder_bin[];
 extern const u8 spr_builder_walk_bin[];
+extern const u8 spr_builder_work_bin[];
 extern const u8 spr_farmer_bin[];
 extern const u8 spr_farmer_walk_bin[];
+extern const u8 spr_farmer_work_bin[];
 extern const u8 spr_farmer_carry_bin[];
 extern const u8 spr_militia_bin[];
 extern const u8 spr_militia_walk_bin[];
@@ -314,12 +318,6 @@ static const u8* get_unit_sheet(const Unit& u) {
 // Check if a sheet is an animated sheet (walk/fight/work) vs stand
 // ---------------------------------------------------------------------------
 static bool is_animated_sheet(const u8* sheet, const Unit& u) {
-    // Work states always animate even if using the standing sheet
-    if (u.state == USTATE_GATHERING || u.state == USTATE_BUILDING ||
-        u.state == USTATE_MOVING || u.state == USTATE_RETURNING ||
-        u.state == USTATE_ATTACKING || u.state == USTATE_SCOUTING) {
-        return true;
-    }
     if (u.type == UNIT_VILLAGER) {
         int role = u.role;
         if (role >= VROLE_COUNT) role = VROLE_BASE;
@@ -383,22 +381,22 @@ void render_init() {
 
     villagerRoleStand[VROLE_LUMBERJACK] = spr_lumberjack_bin;
     villagerRoleWalk[VROLE_LUMBERJACK]  = spr_lumberjack_walk_bin;
-    villagerRoleWork[VROLE_LUMBERJACK]  = spr_lumberjack_bin;         // AoE2 uses standing anim for work
+    villagerRoleWork[VROLE_LUMBERJACK]  = spr_lumberjack_work_bin;
     villagerRoleCarry[VROLE_LUMBERJACK] = spr_lumberjack_carry_bin;
 
     villagerRoleStand[VROLE_MINER]      = spr_miner_bin;
     villagerRoleWalk[VROLE_MINER]       = spr_miner_walk_bin;
-    villagerRoleWork[VROLE_MINER]       = spr_miner_bin;              // standing anim = mining anim
+    villagerRoleWork[VROLE_MINER]       = spr_miner_work_bin;
     villagerRoleCarry[VROLE_MINER]      = spr_miner_carry_bin;
 
     villagerRoleStand[VROLE_BUILDER]    = spr_builder_bin;
     villagerRoleWalk[VROLE_BUILDER]     = spr_builder_walk_bin;
-    villagerRoleWork[VROLE_BUILDER]     = spr_builder_bin;            // standing anim = building anim
+    villagerRoleWork[VROLE_BUILDER]     = spr_builder_work_bin;
     villagerRoleCarry[VROLE_BUILDER]    = spr_villager_carry_bin;     // builders use base carry
 
     villagerRoleStand[VROLE_FARMER]     = spr_farmer_bin;
     villagerRoleWalk[VROLE_FARMER]      = spr_farmer_walk_bin;
-    villagerRoleWork[VROLE_FARMER]      = spr_farmer_bin;             // standing anim = farming anim
+    villagerRoleWork[VROLE_FARMER]      = spr_farmer_work_bin;
     villagerRoleCarry[VROLE_FARMER]     = spr_farmer_carry_bin;
 
     // Set up building sheet lookup tables

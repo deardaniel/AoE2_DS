@@ -57,11 +57,11 @@
       "dirs": 5
     },
     {
-      "name": "lumberjack_chop",
+      "name": "lumberjack_work",
       "group": "lumberjack",
-      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1535.slp",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1542.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
-      "out": "sprites/lumberjack_chop.png",
+      "out": "sprites/lumberjack_work.png",
       "cell": "32x32",
       "cols": 10,
       "fit": true,
@@ -90,6 +90,17 @@
       "dirs": 5
     },
     {
+      "name": "miner_work",
+      "group": "miner",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1558.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
+      "out": "sprites/miner_work.png",
+      "cell": "32x32",
+      "cols": 10,
+      "fit": true,
+      "dirs": 5
+    },
+    {
       "name": "builder_stand",
       "group": "builder",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1493.slp",
@@ -112,8 +123,18 @@
       "dirs": 5
     },
     {
+      "name": "builder_work",
+      "group": "builder",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1493.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
+      "out": "sprites/builder_work.png",
+      "cell": "32x32",
+      "cols": 10,
+      "fit": true,
+      "dirs": 5
+    },
+    {
       "name": "farmer_stand",
-      "group": "farmer",
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1509.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/farmer.png",
@@ -128,6 +149,17 @@
       "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1515.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/farmer_walk.png",
+      "cell": "32x32",
+      "cols": 10,
+      "fit": true,
+      "dirs": 5
+    },
+    {
+      "name": "farmer_work",
+      "group": "farmer",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1509.slp",
+      "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
+      "out": "sprites/farmer_work.png",
       "cell": "32x32",
       "cols": 10,
       "fit": true,
