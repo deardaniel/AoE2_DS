@@ -59,7 +59,7 @@
     {
       "name": "lumberjack_work",
       "group": "lumberjack",
-      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1542.slp",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1535.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/lumberjack_work.png",
       "cell": "32x32",
@@ -92,7 +92,7 @@
     {
       "name": "miner_work",
       "group": "miner",
-      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1558.slp",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1560.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/miner_work.png",
       "cell": "32x32",
@@ -125,7 +125,7 @@
     {
       "name": "builder_work",
       "group": "builder",
-      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1493.slp",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1490.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/builder_work.png",
       "cell": "32x32",
@@ -157,7 +157,7 @@
     {
       "name": "farmer_work",
       "group": "farmer",
-      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1509.slp",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1506.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/farmer_work.png",
       "cell": "32x32",
