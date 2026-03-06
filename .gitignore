@@ -14,3 +14,6 @@ build/
 *.elf
 *.nds
 .screenshots/
+__pycache__/
+*.Zone.Identifier
+*:Zone.Identifier
