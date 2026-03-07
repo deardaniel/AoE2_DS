@@ -804,7 +804,8 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
 
     // Check if resource still exists
     u8 tt = terrain.tileAt(u.gatherTX, u.gatherTY);
-    if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE && tt != TERRAIN_FARM) {
+    if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE &&
+        tt != TERRAIN_FARM && tt != TERRAIN_BERRIES && tt != TERRAIN_SHEEP) {
         // Resource depleted — try to find nearest similar resource
         int newTX, newTY;
         if (u.carryType < RES_COUNT && find_nearest_resource(ux, uy, u.carryType, terrain, newTX, newTY)) {

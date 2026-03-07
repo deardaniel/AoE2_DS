@@ -214,7 +214,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     {
         u8 tt = terrain.tileAt(tileX, tileY);
         if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE ||
-            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES) {
+            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES || tt == TERRAIN_SHEEP) {
             // If building selected that can train, set rally to resource
             if (gs.selectionCount == 0 && gs.selectedBldg >= 0 &&
                 buildings[gs.selectedBldg].alive && buildings[gs.selectedBldg].owner == 0 &&
