@@ -784,7 +784,31 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
     static u8 frame[128 * 128]; // max building sprite size (castle = 96x128)
     memset(frame, 0, pw * ph);
 
-    if (!complete || buildingSheet[b.type] == NULL) {
+    if (!complete && buildingSheet[b.type] != NULL) {
+        // Under construction: show building sprite with construction overlay
+        // As build progresses, more of the real sprite shows through
+        int buildPct = b.buildProgress * 100 / BLDG_STATS[b.type].buildTime;
+        const u8* sprData = buildingSheet[b.type];
+        memcpy(frame, sprData, pw * ph);
+        if (b.owner == 1) apply_color_remap(frame, pw * ph);
+
+        // Dim pixels based on build progress: skip every Nth pixel to create
+        // a dithering effect that becomes less visible as construction completes
+        for (int py = 0; py < ph; py++) {
+            for (int px = 0; px < pw; px++) {
+                u8& c = frame[py * pw + px];
+                if (c == 0) continue; // skip transparent
+                // Use a hash to pseudo-randomly select which pixels to dim
+                int hash = (px * 7 + py * 13) & 0xFF;
+                int threshold = buildPct * 255 / 100;
+                if (hash > threshold) {
+                    // Replace with scaffold color (brown) or transparent
+                    c = ((px + py) % 4 == 0) ? PAL_BROWN : 0;
+                }
+            }
+        }
+        blit_frame(buf, frame, pw, ph, sx, sy, false);
+    } else if (!complete || buildingSheet[b.type] == NULL) {
         // Draw under-construction scaffold as diamond shape matching iso footprint
         int footH = (tileW + tileH) * (ISO_TILE_H / 2);
         int scaffoldBaseY = ph - footH;

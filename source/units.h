@@ -29,7 +29,7 @@ struct Unit {
     s8   garrisonTarget;     // building index to garrison into (-1 = none)
     u8   attackCooldown;
     u8   waitCounter;        // frames waiting for blocked tile during movement
-    u8   deadTimer;          // countdown after death before removal
+    u16  deadTimer;          // countdown after death before removal
     u16* spriteGfx;          // OAM gfx pointer (NULL if not allocated)
     s8   oamSlot;            // OAM slot index (-1 = not visible)
 

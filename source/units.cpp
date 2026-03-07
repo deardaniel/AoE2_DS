@@ -97,7 +97,7 @@ void unit_kill(int idx) {
     if (idx < 0 || idx >= MAX_UNITS) return;
     Unit& u = units[idx];
     u.state = USTATE_DEAD;
-    u.deadTimer = 40; // 10 frames × 4 ticks = death animation duration
+    u.deadTimer = 300; // ~5 seconds: death animation + corpse linger
     u.animFrame = 0;
     u.animTick = 0;
     sound_play(SFX_UNIT_DEATH);
