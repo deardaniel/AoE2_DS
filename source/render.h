@@ -16,6 +16,9 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain);
 // Draw the build menu bar on the bottom of the screen
 void render_build_menu(u8* vram, const GameState& gs);
 
+// Draw the unit training menu bar on the bottom of the screen
+void render_train_menu(u8* vram, const GameState& gs);
+
 // Draw building placement preview (diamond footprint under touch)
 void render_placement_preview(u8* buf, const GameState& gs, const TerrainMap& terrain);
 

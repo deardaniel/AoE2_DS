@@ -394,6 +394,9 @@ int main(void) {
         // Sub screen: build menu overlay on buffer
         render_build_menu(terrainBuf, gameState);
 
+        // Sub screen: train menu overlay (military buildings)
+        render_train_menu(terrainBuf, gameState);
+
         // Sub screen: age advancement progress bar
         render_age_progress(terrainBuf, gameState);
 

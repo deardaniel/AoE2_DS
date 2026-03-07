@@ -1205,6 +1205,83 @@ void render_build_menu(u8* vram, const GameState& gs) {
 }
 
 // ---------------------------------------------------------------------------
+// Train menu bar — shows trainable unit types when a military building is selected
+// ---------------------------------------------------------------------------
+void render_train_menu(u8* vram, const GameState& gs) {
+    if (gs.buildMenuOpen) return; // build menu takes priority
+    if (gs.selectedBldg < 0) return;
+    if (gs.selectionCount > 0) return; // units selected, not building
+    const Building& b = buildings[gs.selectedBldg];
+    if (!b.alive || b.owner != 0 || !building_is_complete(gs.selectedBldg)) return;
+
+    // Build list of trainable unit types for this building
+    int trainable[UNIT_TYPE_COUNT];
+    int trainCount = 0;
+    for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
+        if (UNIT_STATS[ut].bldgReq == b.type &&
+            gs.players[0].age >= UNIT_STATS[ut].ageReq) {
+            trainable[trainCount++] = ut;
+        }
+    }
+    if (trainCount == 0) return;
+
+    // Fill bar background
+    for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
+        for (int x = 0; x < SCREEN_W; x++) {
+            vram[y * 256 + x] = PAL_DARKBROWN;
+        }
+    }
+
+    // Draw each trainable unit as a 32x32 icon (first frame of standing sheet)
+    for (int s = 0; s < trainCount && s < BUILD_MENU_SLOTS; s++) {
+        int ut = trainable[s];
+        int ix = s * BUILD_MENU_ITEM_W;
+
+        bool affordable = game_can_afford(gs, 0, UNIT_STATS[ut].cost);
+        bool isSelected = (ut == gs.trainUnitType);
+
+        // Blit first frame (top-left 32x32) from standing sprite sheet
+        const u8* sheet = unitStandSheet[ut];
+        if (sheet) {
+            int sheetW = STAND_SHEET_W; // 160px wide (5 cols × 32px)
+            for (int py = 0; py < 32; py++) {
+                int dy = BUILD_MENU_Y + py;
+                if (dy >= SCREEN_H) break;
+                for (int px = 0; px < 32; px++) {
+                    int dx = ix + px;
+                    if (dx >= SCREEN_W) break;
+                    u8 c = sheet[py * sheetW + px];
+                    if (c != 0) {
+                        if (!affordable) c = PAL_DARKBROWN; // dim if can't afford
+                        vram[dy * 256 + dx] = c;
+                    }
+                }
+            }
+        }
+
+        // Highlight border if this is the selected train type
+        if (isSelected) {
+            for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
+                vram[y * 256 + ix] = PAL_YELLOW;
+                int rx = ix + BUILD_MENU_ITEM_W - 1;
+                if (rx < SCREEN_W) vram[y * 256 + rx] = PAL_YELLOW;
+            }
+            for (int x = ix; x < ix + BUILD_MENU_ITEM_W && x < SCREEN_W; x++) {
+                vram[BUILD_MENU_Y * 256 + x] = PAL_YELLOW;
+                int by = BUILD_MENU_Y + BUILD_MENU_H - 1;
+                if (by < SCREEN_H) vram[by * 256 + x] = PAL_YELLOW;
+            }
+        }
+
+        // 1px black border on right edge
+        for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
+            int bx = ix + BUILD_MENU_ITEM_W - 1;
+            if (bx < SCREEN_W) vram[y * 256 + bx] = PAL_BLACK;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Building placement preview — draws diamond-shaped tile highlights
 // under the current touch position when in placement mode
 // ---------------------------------------------------------------------------

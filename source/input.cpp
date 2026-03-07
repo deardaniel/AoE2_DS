@@ -31,6 +31,28 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         return;
     }
 
+    // Train menu check (bottom strip when military building selected)
+    if (screenY >= BUILD_MENU_Y && gs.selectionCount == 0 &&
+        gs.selectedBldg >= 0 && !gs.buildMenuOpen) {
+        const Building& b = buildings[gs.selectedBldg];
+        if (b.alive && b.owner == 0 && building_is_complete(gs.selectedBldg)) {
+            int trainable[UNIT_TYPE_COUNT];
+            int trainCount = 0;
+            for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
+                if (UNIT_STATS[ut].bldgReq == b.type &&
+                    gs.players[0].age >= UNIT_STATS[ut].ageReq) {
+                    trainable[trainCount++] = ut;
+                }
+            }
+            int slot = screenX / BUILD_MENU_ITEM_W;
+            if (slot < trainCount) {
+                gs.trainUnitType = trainable[slot];
+                building_train(gs.selectedBldg, trainable[slot], gs);
+            }
+            return;
+        }
+    }
+
     // Convert screen coords to tile coords via isometric projection
     int tileX, tileY;
     screenToTile(screenX, screenY, gs.camX, gs.camY, tileX, tileY);
