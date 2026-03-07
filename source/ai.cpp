@@ -118,8 +118,11 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         // For food, prefer berries (free) over farms (cost wood)
         u8 terrTypes[] = { TERRAIN_FARM, TERRAIN_FOREST, TERRAIN_GOLD, TERRAIN_STONE };
         if (lowestRes == RES_FOOD) {
-            // Try berries first
-            if (ai_find_resource(tcTX, tcTY, TERRAIN_BERRIES, terrain, resTX, resTY)) {
+            // Try sheep first (closest food), then berries, then farms
+            if (ai_find_resource(tcTX, tcTY, TERRAIN_SHEEP, terrain, resTX, resTY)) {
+                unit_command_gather(vil, resTX, resTY, terrain);
+                assigned = true;
+            } else if (ai_find_resource(tcTX, tcTY, TERRAIN_BERRIES, terrain, resTX, resTY)) {
                 unit_command_gather(vil, resTX, resTY, terrain);
                 assigned = true;
             }

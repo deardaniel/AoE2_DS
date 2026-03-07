@@ -45,7 +45,8 @@ enum TerrainType : u8 {
     TERRAIN_STONE  = 5,
     TERRAIN_FARM    = 6,
     TERRAIN_BERRIES = 7,
-    TERRAIN_COUNT   = 8
+    TERRAIN_SHEEP   = 8,
+    TERRAIN_COUNT   = 9
 };
 
 // Blend priority for terrain edge transitions (-1 = no blending)
@@ -59,6 +60,7 @@ static const s8 TERRAIN_BLEND_PRIORITY[TERRAIN_COUNT] = {
    -1,  // STONE
    -1,  // FARM
    -1,  // BERRIES — no blending
+   -1,  // SHEEP — no blending
 };
 
 // ---------------------------------------------------------------------------
@@ -246,6 +248,7 @@ enum {
     STONE_RESOURCE_AMT  = 350,
     FARM_RESOURCE_AMT   = 300,
     BERRIES_RESOURCE_AMT = 125,
+    SHEEP_RESOURCE_AMT  = 100,
     GATHER_CARRY_MAX    = 10,
     GATHER_RATE         = 20,   // frames per 1 unit gathered
 };

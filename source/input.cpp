@@ -175,7 +175,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     if (gs.selectionCount > 0) {
         u8 tt = terrain.tileAt(tileX, tileY);
         if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE ||
-            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES) {
+            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES || tt == TERRAIN_SHEEP) {
             bool sentGatherer = false;
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (!gs.unitSelected[i]) continue;
