@@ -1,0 +1,19 @@
+CompileFlags:
+  Add:
+    - -std=c++17
+    - -I/opt/devkitpro/libnds/include
+    - -I/opt/devkitpro/calico/include
+    - -I/opt/devkitpro/devkitARM/arm-none-eabi/include
+    - -DARM9
+    - -DNDS
+    - -D__NDS__
+  Remove:
+    - -target
+    - -mthumb
+    - -march=*
+    - -mtune=*
+    - -mfloat-abi=*
+
+Diagnostics:
+  Suppress:
+    - pp_hash_error
