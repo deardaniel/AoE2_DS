@@ -122,6 +122,14 @@ enum VillagerRole {
     VROLE_COUNT      = 6
 };
 
+// Unit stance controls auto-engage behavior
+enum UnitStance {
+    STANCE_AGGRESSIVE = 0, // Attack anything in LOS, chase indefinitely
+    STANCE_DEFENSIVE  = 1, // Attack in LOS but return to position if target flees
+    STANCE_STAND      = 2, // Attack in range only, never move to engage
+    STANCE_NO_ATTACK  = 3, // Never auto-engage
+};
+
 // ---------------------------------------------------------------------------
 // Directions (8 directions for proper isometric sprite mapping)
 // ---------------------------------------------------------------------------

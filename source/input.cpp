@@ -367,8 +367,20 @@ void input_update(GameState& gs, TerrainMap& terrain) {
     bool touchPressed = (keysPressed & KEY_TOUCH) != 0;
     bool touchReleased = (keysReleased & KEY_TOUCH) != 0;
 
-    // SELECT = toggle follow cam
-    if (keysPressed & KEY_SELECT) gs.followCam = !gs.followCam;
+    // SELECT = cycle stance (if military selected), else toggle follow cam
+    if (keysPressed & KEY_SELECT) {
+        bool didStance = false;
+        if (gs.selectionCount > 0) {
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (!gs.unitSelected[i] || !units[i].alive) continue;
+                if (units[i].type != UNIT_VILLAGER && units[i].type != UNIT_SHEEP) {
+                    units[i].stance = (units[i].stance + 1) % 4;
+                    didStance = true;
+                }
+            }
+        }
+        if (!didStance) gs.followCam = !gs.followCam;
+    }
 
     // START = toggle music (when no building selected; training handled in main.cpp)
     // When market selected: execute trade

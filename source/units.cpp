@@ -83,6 +83,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.garrisonTarget = -1;
             u.attackCooldown = 0;
             u.waitCounter = 0;
+            u.stance = STANCE_AGGRESSIVE;
             u.deadTimer = 0;
             u.spriteGfx = NULL;
             u.oamSlot = -1;
@@ -1084,6 +1085,12 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     int rangePx = playerUnitStats[u.owner][u.type].range * TILE_PX;
 
     if (dist2 > rangePx * rangePx) {
+        // Stand ground: don't chase, go idle
+        if (u.stance == STANCE_STAND) {
+            u.attackTarget = -1;
+            u.state = USTATE_IDLE;
+            return;
+        }
         // Move toward target (save target — unit_command_move clears it)
         s8 savedTarget = u.attackTarget;
         int idx = &u - units;
@@ -1220,12 +1227,31 @@ void units_update(GameState& gs, TerrainMap& terrain) {
 
         switch (u.state) {
         case USTATE_IDLE:
-            // Military units: auto-attack nearby enemies
-            if (u.type != UNIT_VILLAGER) {
-                int enemy = unit_find_nearest_enemy(i);
-                if (enemy >= 0) {
-                    u.attackTarget = enemy;
-                    u.state = USTATE_ATTACKING;
+            // Military units: auto-attack nearby enemies (stance-dependent)
+            if (u.type != UNIT_VILLAGER && u.stance != STANCE_NO_ATTACK) {
+                if (u.stance != STANCE_STAND) {
+                    // Aggressive/Defensive: search for enemies in LOS
+                    int enemy = unit_find_nearest_enemy(i);
+                    if (enemy >= 0) {
+                        u.attackTarget = enemy;
+                        u.state = USTATE_ATTACKING;
+                    }
+                }
+                // Stand ground: only attack if enemy is within weapon range
+                if (u.stance == STANCE_STAND) {
+                    int rangePx = playerUnitStats[u.owner][u.type].range * TILE_PX;
+                    for (int e = 0; e < MAX_UNITS; e++) {
+                        if (!units[e].alive || units[e].owner == u.owner) continue;
+                        if (units[e].state == USTATE_DEAD) continue;
+                        if (units[e].type == UNIT_SHEEP) continue;
+                        int edx = units[e].x - u.x;
+                        int edy = units[e].y - u.y;
+                        if (edx * edx + edy * edy <= rangePx * rangePx) {
+                            u.attackTarget = e;
+                            u.state = USTATE_ATTACKING;
+                            break;
+                        }
+                    }
                 }
             }
             // Villagers: auto-flee from nearby enemy military (3 tile range)
@@ -1251,8 +1277,9 @@ void units_update(GameState& gs, TerrainMap& terrain) {
 
         case USTATE_MOVING:
             unit_step_path(u, i, terrain);
-            // Military units auto-engage enemies while moving
+            // Military units auto-engage enemies while moving (aggressive only)
             if (u.state == USTATE_MOVING && u.type != UNIT_VILLAGER &&
+                u.stance == STANCE_AGGRESSIVE &&
                 u.attackTarget < 0 && u.attackBldgTarget < 0) {
                 int enemy = unit_find_nearest_enemy(i);
                 if (enemy >= 0) {

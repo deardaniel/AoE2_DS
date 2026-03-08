@@ -546,6 +546,18 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         default: break;
         }
         font_draw_str_16(minimapVram, 256, 192, TX + 4, ty, stateStr, colGold, gameFont);
+        // Show stance for military units
+        if (u.type != UNIT_VILLAGER && u.type != UNIT_SHEEP) {
+            const char* stanceStr = "";
+            switch (u.stance) {
+            case STANCE_AGGRESSIVE: stanceStr = " [Aggr]"; break;
+            case STANCE_DEFENSIVE:  stanceStr = " [Def]"; break;
+            case STANCE_STAND:      stanceStr = " [Stand]"; break;
+            case STANCE_NO_ATTACK:  stanceStr = " [NoAtk]"; break;
+            }
+            int sx = TX + 4 + 8 * 8; // after state text
+            font_draw_str_16(minimapVram, 256, 192, sx, ty, stanceStr, colText, gameFont);
+        }
         ty += 14;
 
         // HP bar
