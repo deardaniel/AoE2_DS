@@ -1202,13 +1202,16 @@ void units_update(GameState& gs, TerrainMap& terrain) {
         // and every 2 ticks (30fps) for combat/work actions
         u.animTick++;
         int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING ||
-                         u.state == USTATE_SCOUTING) ? 1 : 2;
+                         u.state == USTATE_SCOUTING) ? 1 :
+                        (u.state == USTATE_IDLE) ? 4 : 2;
         if (u.animTick >= animSpeed) {
             u.animTick = 0;
             if (u.state == USTATE_MOVING || u.state == USTATE_ATTACKING ||
                 u.state == USTATE_GATHERING || u.state == USTATE_RETURNING ||
                 u.state == USTATE_BUILDING || u.state == USTATE_SCOUTING) {
                 u.animFrame = (u.animFrame + 1) % 10;
+            } else if (u.state == USTATE_IDLE) {
+                u.animFrame = (u.animFrame + 1) % 5;
             } else {
                 u.animFrame = 0;
             }

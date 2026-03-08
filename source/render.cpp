@@ -181,7 +181,6 @@ static int buildingSprH[BLDG_TYPE_COUNT];
 //   DIR_W(6)  = screen NW -> SLP NW(3)
 //   DIR_NW(7) = screen N  -> SLP N (4)           (away from camera)
 // ---------------------------------------------------------------------------
-static const int DIR_TO_FRAME[DIR_COUNT] = { 3, 2, 1, 0, 1, 2, 3, 4 };
 static const bool DIR_HFLIP[DIR_COUNT] = { true, true, true, false, false, false, false, false };
 
 // For walking/attack sheets (5 dirs x 10 anim frames = 50 frames):
@@ -506,8 +505,9 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
             frameIdx = base + anim;
             hflip = DIR_HFLIP[u.direction];
         } else {
-            // Stand sheet: 5 frames, one per direction
-            frameIdx = DIR_TO_FRAME[u.direction];
+            // Standing sheet: 5 cols × 5 rows, cycle through idle animation
+            int base = DIR_TO_ANIM_BASE[u.direction] / 2;
+            frameIdx = base + (u.animFrame % 5);
             hflip = DIR_HFLIP[u.direction];
         }
 
@@ -951,7 +951,9 @@ static void render_unit_sw(u8* buf, const GameState& gs, int i) {
         frameIdx = base + anim;
         hflip = DIR_HFLIP[u.direction];
     } else {
-        frameIdx = DIR_TO_FRAME[u.direction];
+        // Standing sheet: 5 cols × 5 rows, cycle through idle animation
+        int base = DIR_TO_ANIM_BASE[u.direction] / 2;
+        frameIdx = base + (u.animFrame % 5);
         hflip = DIR_HFLIP[u.direction];
     }
     int sheetCols = animated ? ANIM_SHEET_COLS : STAND_SHEET_COLS;
