@@ -1434,58 +1434,6 @@ void render_move_target(u8* buf, GameState& gs) {
 }
 
 // ---------------------------------------------------------------------------
-// Draw attack visualization — yellow line from building to target
-// ---------------------------------------------------------------------------
-static void draw_line(u8* buf, int x0, int y0, int x1, int y1, u8 color) {
-    int dx = x1 - x0;
-    int dy = y1 - y0;
-    if (dx < 0) dx = -dx;
-    if (dy < 0) dy = -dy;
-    int sx = (x0 < x1) ? 1 : -1;
-    int sy = (y0 < y1) ? 1 : -1;
-    int err = dx - dy;
-
-    for (int steps = 0; steps < 512; steps++) {
-        if (x0 >= 0 && x0 < SCREEN_W && y0 >= 0 && y0 < SCREEN_H)
-            buf[y0 * 256 + x0] = color;
-        if (x0 == x1 && y0 == y1) break;
-        int e2 = err * 2;
-        if (e2 > -dy) { err -= dy; x0 += sx; }
-        if (e2 < dx)  { err += dx; y0 += sy; }
-    }
-}
-
-void render_attack_lines(u8* buf, const GameState& gs) {
-    for (int i = 0; i < MAX_BUILDINGS; i++) {
-        const Building& b = buildings[i];
-        if (!b.alive) continue;
-        if (b.attackTargetUnit < 0) continue;
-        // Only show line briefly after firing (while cooldown is high)
-        int maxCd = 0;
-        if (b.type == BLDG_TOWN_CENTER) maxCd = 60;
-        else if (b.type == BLDG_TOWER) maxCd = 60;
-        else if (b.type == BLDG_CASTLE) maxCd = 45;
-        if (maxCd == 0 || b.attackCooldown < maxCd - 10) continue;
-
-        int targetIdx = b.attackTargetUnit;
-        if (targetIdx < 0 || targetIdx >= MAX_UNITS || !units[targetIdx].alive) continue;
-
-        const BuildingStats& st = BLDG_STATS[b.type];
-        int bIsoX, bIsoY;
-        worldToIso(b.x + st.tileW * TILE_PX / 2, b.y + st.tileH * TILE_PX / 2, bIsoX, bIsoY);
-        int bsx = bIsoX - gs.camX + ISO_TILE_W / 2;
-        int bsy = bIsoY - gs.camY;
-
-        int uIsoX, uIsoY;
-        worldToIso(units[targetIdx].x, units[targetIdx].y, uIsoX, uIsoY);
-        int usx = uIsoX - gs.camX + CELL_W / 2;
-        int usy = uIsoY - gs.camY;
-
-        draw_line(buf, bsx, bsy, usx, usy, PAL_YELLOW);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Draw training progress bars on buildings
 // ---------------------------------------------------------------------------
 void render_training_bars(u8* buf, const GameState& gs) {

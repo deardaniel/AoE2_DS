@@ -28,9 +28,6 @@ void render_drag_box(u8* buf, const GameState& gs);
 // Draw move target marker (flashing yellow diamond)
 void render_move_target(u8* buf, GameState& gs);
 
-// Draw arrow/attack visualization lines from buildings to targets
-void render_attack_lines(u8* buf, const GameState& gs);
-
 // Draw training progress bars on buildings
 void render_training_bars(u8* buf, const GameState& gs);
 

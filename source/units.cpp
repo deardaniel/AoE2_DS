@@ -5,6 +5,7 @@
 #include "tech.h"
 #include "fog.h"
 #include "sound.h"
+#include "projectiles.h"
 #include <string.h>
 
 Unit units[MAX_UNITS];
@@ -1123,8 +1124,18 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     int dmg = atk - arm;
     if (dmg < 1) dmg = 1;
 
-    target.hp -= dmg;
     u.attackCooldown = 30; // ~0.5s between attacks
+
+    // Archers fire a projectile instead of dealing instant damage
+    if (u.type == UNIT_ARCHER) {
+        projectile_spawn(u.x, u.y, target.x, target.y,
+                         10, u.attackTarget, dmg, u.owner);
+        if (u.owner == 0) sound_play(SFX_ARROW_FIRE);
+        return;
+    }
+
+    // Melee: instant damage
+    target.hp -= dmg;
 
     // Trigger "under attack" alert for player 0
     if (target.owner == 0 && gs.underAttackTimer == 0) {
@@ -1133,12 +1144,7 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
         gs.attackAlertTY = target.y / TILE_PX;
     }
 
-    if (u.owner == 0) {
-        if (u.type == UNIT_ARCHER)
-            sound_play(SFX_ARROW_FIRE);
-        else
-            sound_play(SFX_SWORD_HIT);
-    }
+    if (u.owner == 0) sound_play(SFX_SWORD_HIT);
 
     if (target.hp <= 0) {
         unit_kill(u.attackTarget);

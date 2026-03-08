@@ -17,6 +17,7 @@
 #include "ai.h"
 #include "sound.h"
 #include "font.h"
+#include "projectiles.h"
 #include <filesystem.h>
 
 // Global game state (accessible by tech.cpp via extern)
@@ -48,6 +49,7 @@ static void game_start() {
     game_init(gameState);
     units_init();
     buildings_init();
+    projectiles_init();
     fogMap.init();
     tech_init_stats();
     ai_init();
@@ -296,6 +298,7 @@ int main(void) {
         // Game logic
         units_update(gameState, terrain);
         buildings_update(gameState, terrain);
+        projectiles_update(gameState);
         game_update(gameState);
 
         // Fog of war (every other frame for performance)
@@ -403,7 +406,7 @@ int main(void) {
         render_move_target(terrainBuf, gameState);
 
         // Sub screen: attack visualization lines
-        render_attack_lines(terrainBuf, gameState);
+        render_projectiles(terrainBuf, gameState);
 
         // Sub screen: training progress bars
         render_training_bars(terrainBuf, gameState);

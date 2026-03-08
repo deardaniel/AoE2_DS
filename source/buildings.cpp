@@ -3,6 +3,7 @@
 #include "units.h"
 #include "terrain.h"
 #include "sound.h"
+#include "projectiles.h"
 #include <string.h>
 
 Building buildings[MAX_BUILDINGS];
@@ -142,10 +143,12 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
                     }
                 }
                 if (bestEnemy >= 0) {
-                    units[bestEnemy].hp -= bldgDmg;
-                    if (units[bestEnemy].hp <= 0) {
-                        unit_kill(bestEnemy);
-                    }
+                    const BuildingStats& bst = BLDG_STATS[b.type];
+                    s16 bCenterX = b.x + bst.tileW * TILE_PX / 2;
+                    s16 bCenterY = b.y + bst.tileH * TILE_PX / 2;
+                    projectile_spawn(bCenterX, bCenterY,
+                                     units[bestEnemy].x, units[bestEnemy].y,
+                                     15, bestEnemy, bldgDmg, b.owner);
                     b.attackCooldown = bldgCooldown;
                     b.attackTargetUnit = bestEnemy;
                 }
