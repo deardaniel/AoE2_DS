@@ -48,6 +48,18 @@ enum TerrainType : u8 {
     TERRAIN_COUNT   = 8
 };
 
+// Terrain movement speed multiplier (in 8ths: 8 = full speed, 6 = 75%)
+static const u8 TERRAIN_SPEED_MULT[TERRAIN_COUNT] = {
+    8,  // GRASS   — full speed
+    7,  // DIRT    — slightly slower
+    0,  // WATER   — impassable
+    6,  // FOREST  — slow (dense trees)
+    7,  // GOLD    — slightly slower (rocky)
+    7,  // STONE   — slightly slower (rocky)
+    8,  // FARM    — full speed
+    7,  // BERRIES — slightly slower (bushes)
+};
+
 // Blend priority for terrain edge transitions (-1 = no blending)
 // Higher priority bleeds into lower priority neighbors
 static const s8 TERRAIN_BLEND_PRIORITY[TERRAIN_COUNT] = {

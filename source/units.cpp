@@ -368,6 +368,15 @@ static void unit_step_path(Unit& u, int selfIdx, const TerrainMap& terrain) {
     }
 
     int speed = playerUnitStats[u.owner][u.type].speed;
+    // Apply terrain speed multiplier based on current tile
+    {
+        int utx = u.x / TILE_PX, uty = u.y / TILE_PX;
+        if (utx >= 0 && utx < MAP_TILES && uty >= 0 && uty < MAP_TILES) {
+            u8 tt = terrain.tileAt(utx, uty);
+            speed = speed * TERRAIN_SPEED_MULT[tt] / 8;
+            if (speed < 1) speed = 1;
+        }
+    }
     int targetPX = u.stepTX * TILE_PX;
     int targetPY = u.stepTY * TILE_PX;
 
