@@ -18,7 +18,6 @@ extern const u8 spr_tree_bin[];
 extern const u8 spr_gold_mine_bin[];
 extern const u8 spr_stone_mine_bin[];
 extern const u8 spr_berries_bin[];
-extern const u8 spr_sheep_bin[];
 
 u8 tileGfxCache[TERRAIN_COUNT][ISO_TILE_W * ISO_TILE_H];
 u8 grassVariantCache[GRASS_VARIANTS][ISO_TILE_W * ISO_TILE_H];
@@ -193,8 +192,6 @@ void TerrainMap::initTileGfx() {
     }
     // Berries tile reuses grass base tile (berry sprite drawn on top)
     memcpy(tileGfxCache[TERRAIN_BERRIES], tileGfxCache[TERRAIN_GRASS], tileSize);
-    // Sheep tile also reuses grass base (sheep sprite drawn on top)
-    memcpy(tileGfxCache[TERRAIN_SHEEP], tileGfxCache[TERRAIN_GRASS], tileSize);
 
     // Load grass variants (stored after the 7 base tiles)
     for (int v = 0; v < GRASS_VARIANTS; v++) {
@@ -220,7 +217,6 @@ const u8* terrain_get_resource_sprite(u8 ttype) {
     case TERRAIN_GOLD:   return spr_gold_mine_bin;
     case TERRAIN_STONE:  return spr_stone_mine_bin;
     case TERRAIN_BERRIES: return spr_berries_bin;
-    case TERRAIN_SHEEP:   return spr_sheep_bin;
     default: return NULL;
     }
 }
@@ -353,12 +349,6 @@ void TerrainMap::generate(u32 seed) {
     tiles[3][7]  = TERRAIN_BERRIES; resourceAmt[3][7]  = BERRIES_RESOURCE_AMT;
     tiles[4][7]  = TERRAIN_BERRIES; resourceAmt[4][7]  = BERRIES_RESOURCE_AMT;
 
-    // Sheep near player 0 TC (close for immediate food)
-    tiles[5][2]  = TERRAIN_SHEEP; resourceAmt[5][2]  = SHEEP_RESOURCE_AMT;
-    tiles[5][3]  = TERRAIN_SHEEP; resourceAmt[5][3]  = SHEEP_RESOURCE_AMT;
-    tiles[6][2]  = TERRAIN_SHEEP; resourceAmt[6][2]  = SHEEP_RESOURCE_AMT;
-    tiles[6][3]  = TERRAIN_SHEEP; resourceAmt[6][3]  = SHEEP_RESOURCE_AMT;
-
     // Player 1 (bottom-right): mirror resources
     int bx = MAP_TILES - 9, by = MAP_TILES - 3;
     tiles[by][bx]   = TERRAIN_FOREST; resourceAmt[by][bx]   = FOREST_RESOURCE_AMT;
@@ -377,12 +367,6 @@ void TerrainMap::generate(u32 seed) {
     tiles[by-2][bx] = TERRAIN_BERRIES; resourceAmt[by-2][bx] = BERRIES_RESOURCE_AMT;
     tiles[by-3][bx] = TERRAIN_BERRIES; resourceAmt[by-3][bx] = BERRIES_RESOURCE_AMT;
 
-    // Sheep near player 1 TC
-    bx = MAP_TILES - 4; by = MAP_TILES - 6;
-    tiles[by][bx]     = TERRAIN_SHEEP; resourceAmt[by][bx]     = SHEEP_RESOURCE_AMT;
-    tiles[by][bx+1]   = TERRAIN_SHEEP; resourceAmt[by][bx+1]   = SHEEP_RESOURCE_AMT;
-    tiles[by+1][bx]   = TERRAIN_SHEEP; resourceAmt[by+1][bx]   = SHEEP_RESOURCE_AMT;
-    tiles[by+1][bx+1] = TERRAIN_SHEEP; resourceAmt[by+1][bx+1] = SHEEP_RESOURCE_AMT;
 
     // Random berry patches (1-2 neutral patches elsewhere)
     int numBerries = rngRange(1, 2);

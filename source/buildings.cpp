@@ -182,7 +182,7 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
                                         u8 rtt = terrain.tileAt(b.rallyTX, b.rallyTY);
                                         bool isResource = (rtt == TERRAIN_FOREST || rtt == TERRAIN_GOLD ||
                                                            rtt == TERRAIN_STONE || rtt == TERRAIN_FARM ||
-                                                           rtt == TERRAIN_BERRIES || rtt == TERRAIN_SHEEP);
+                                                           rtt == TERRAIN_BERRIES);
                                         int rallyBldg = building_at_tile(b.rallyTX, b.rallyTY);
                                         bool isIncompleteBldg = (rallyBldg >= 0 &&
                                             !building_is_complete(rallyBldg) &&

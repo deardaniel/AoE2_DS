@@ -45,8 +45,7 @@ enum TerrainType : u8 {
     TERRAIN_STONE  = 5,
     TERRAIN_FARM    = 6,
     TERRAIN_BERRIES = 7,
-    TERRAIN_SHEEP   = 8,
-    TERRAIN_COUNT   = 9
+    TERRAIN_COUNT   = 8
 };
 
 // Blend priority for terrain edge transitions (-1 = no blending)
@@ -60,7 +59,6 @@ static const s8 TERRAIN_BLEND_PRIORITY[TERRAIN_COUNT] = {
    -1,  // STONE
    -1,  // FARM
    -1,  // BERRIES — no blending
-   -1,  // SHEEP — no blending
 };
 
 // ---------------------------------------------------------------------------
@@ -73,7 +71,8 @@ enum UnitTypeId {
     UNIT_KNIGHT    = 3,
     UNIT_SPEARMAN  = 4,
     UNIT_SCOUT     = 5,
-    UNIT_TYPE_COUNT = 6
+    UNIT_SHEEP     = 6,
+    UNIT_TYPE_COUNT = 7
 };
 
 // ---------------------------------------------------------------------------
@@ -119,7 +118,8 @@ enum VillagerRole {
     VROLE_MINER      = 2,
     VROLE_BUILDER    = 3,
     VROLE_FARMER     = 4,
-    VROLE_COUNT      = 5
+    VROLE_FORAGER    = 5,
+    VROLE_COUNT      = 6
 };
 
 // ---------------------------------------------------------------------------
@@ -181,6 +181,7 @@ static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
     /* KNIGHT    */ { 100, 10,  2,  1,  2,  4, 1800, { 60,  0, 75,  0}, AGE_CASTLE, BLDG_STABLE },
     /* SPEARMAN  */ {  45,  3,  0,  1,  1,  4, 1320, { 35, 25,  0,  0}, AGE_FEUDAL, BLDG_BARRACKS },
     /* SCOUT     */ {  45,  5,  0,  1,  2,  6,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_STABLE },
+    /* SHEEP     */ {  25,  0,  0,  0,  1,  2,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_TYPE_COUNT },
 };
 
 // ---------------------------------------------------------------------------
@@ -226,7 +227,7 @@ static const int AGE_RESEARCH_TIME[AGE_COUNT] = {
 // Name strings
 // ---------------------------------------------------------------------------
 static const char* const UNIT_NAMES[UNIT_TYPE_COUNT] = {
-    "Villager", "Militia", "Archer", "Knight", "Spearman", "Scout"
+    "Villager", "Militia", "Archer", "Knight", "Spearman", "Scout", "Sheep"
 };
 
 static const char* const BLDG_NAMES[BLDG_TYPE_COUNT] = {
@@ -248,7 +249,7 @@ enum {
     STONE_RESOURCE_AMT  = 350,
     FARM_RESOURCE_AMT   = 300,
     BERRIES_RESOURCE_AMT = 125,
-    SHEEP_RESOURCE_AMT  = 100,
+    SHEEP_FOOD_AMOUNT   = 100,  // food gained when villager gathers from sheep unit
     GATHER_CARRY_MAX    = 10,
     GATHER_RATE         = 20,   // frames per 1 unit gathered
 };

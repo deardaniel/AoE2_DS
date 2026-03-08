@@ -467,7 +467,6 @@ static bool find_nearest_resource(int cx, int cy, u8 carryType, const TerrainMap
             if (carryType == RES_STONE && tt == TERRAIN_STONE)  match = true;
             if (carryType == RES_FOOD  && tt == TERRAIN_FARM)   match = true;
             if (carryType == RES_FOOD  && tt == TERRAIN_BERRIES) match = true;
-            if (carryType == RES_FOOD  && tt == TERRAIN_SHEEP)   match = true;
             if (!match) continue;
             int dx = tx - cx; if (dx < 0) dx = -dx;
             int dy = ty - cy; if (dy < 0) dy = -dy;
@@ -517,7 +516,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
 
     u8 tt = terrain.tileAt(tileTX, tileTY);
     if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE &&
-        tt != TERRAIN_FARM && tt != TERRAIN_BERRIES && tt != TERRAIN_SHEEP)
+        tt != TERRAIN_FARM && tt != TERRAIN_BERRIES)
         return;
 
     u.gatherTX = tileTX;
@@ -532,8 +531,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     else if (tt == TERRAIN_GOLD)   { u.carryType = RES_GOLD;  u.role = VROLE_MINER; }
     else if (tt == TERRAIN_STONE)  { u.carryType = RES_STONE; u.role = VROLE_MINER; }
     else if (tt == TERRAIN_FARM)    { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
-    else if (tt == TERRAIN_BERRIES) { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
-    else if (tt == TERRAIN_SHEEP)   { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
+    else if (tt == TERRAIN_BERRIES) { u.carryType = RES_FOOD;  u.role = VROLE_FORAGER; }
 
     // Find path to nearest adjacent passable tile of the resource
     int sx = u.x / TILE_PX;
@@ -596,6 +594,7 @@ void unit_command_attack(int idx, int targetIdx) {
     u.attackBldgTarget = -1;
     u.gatherTX = -1;
     u.gatherTY = -1;
+    u.state = USTATE_ATTACKING;
 }
 
 void unit_command_attack_building(int idx, int bldgIdx) {
@@ -731,7 +730,8 @@ int unit_at_pixel(s16 px, s16 py, int ignoreOwner) {
 int unit_count(int owner) {
     int c = 0;
     for (int i = 0; i < MAX_UNITS; i++) {
-        if (units[i].alive && units[i].state != USTATE_DEAD && units[i].owner == (u8)owner) c++;
+        if (units[i].alive && units[i].state != USTATE_DEAD &&
+            units[i].owner == (u8)owner && units[i].type != UNIT_SHEEP) c++;
     }
     return c;
 }
@@ -766,6 +766,7 @@ int unit_find_nearest_enemy(int unitIdx) {
     for (int i = 0; i < MAX_UNITS; i++) {
         if (!units[i].alive || units[i].state == USTATE_DEAD || units[i].state == USTATE_GARRISONED) continue;
         if (units[i].owner == u.owner) continue;
+        if (units[i].type == UNIT_SHEEP) continue; // don't target sheep as enemies
         int dx = units[i].x - u.x;
         int dy = units[i].y - u.y;
         int dist = dx * dx + dy * dy;
@@ -805,7 +806,7 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
     // Check if resource still exists
     u8 tt = terrain.tileAt(u.gatherTX, u.gatherTY);
     if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE &&
-        tt != TERRAIN_FARM && tt != TERRAIN_BERRIES && tt != TERRAIN_SHEEP) {
+        tt != TERRAIN_FARM && tt != TERRAIN_BERRIES) {
         // Resource depleted — try to find nearest similar resource
         int newTX, newTY;
         if (u.carryType < RES_COUNT && find_nearest_resource(ux, uy, u.carryType, terrain, newTX, newTY)) {
@@ -1102,6 +1103,17 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     // Deal damage using tech-modified stats
     int atk = playerUnitStats[u.owner][u.type].attack;
     int arm = playerUnitStats[target.owner][target.type].armor;
+
+    // Villager gathering from sheep: kill sheep and gain food
+    if (u.type == UNIT_VILLAGER && target.type == UNIT_SHEEP) {
+        unit_kill(u.attackTarget);
+        u.attackTarget = -1;
+        u.carryType = RES_FOOD;
+        u.carryAmount = SHEEP_FOOD_AMOUNT;
+        u.role = VROLE_FARMER;
+        u.state = USTATE_RETURNING;
+        return;
+    }
 
     // Spearman bonus vs cavalry (+15 in real AoE2)
     if (u.type == UNIT_SPEARMAN && target.type == UNIT_KNIGHT) {

@@ -63,6 +63,15 @@ static void game_start() {
         gameState.players[p].resources[RES_STONE] = 9999;
     }
 
+    // Clear terrain under starting TC positions so building_place succeeds
+    // (resource tiles like sheep/berries block canBuild)
+    for (int dy = 0; dy < 4; dy++) {
+        for (int dx = 0; dx < 4; dx++) {
+            terrain.setTile(2 + dx, 2 + dy, TERRAIN_GRASS, 0);
+            terrain.setTile(MAP_TILES - 6 + dx, MAP_TILES - 6 + dy, TERRAIN_GRASS, 0);
+        }
+    }
+
     // --- Player 0 (human) — top-left corner ---
     // Place Town Center at tile (2,2) — 4x4 building
     int tc0 = building_place(BLDG_TOWN_CENTER, 0, 2, 2, gameState, terrain);
@@ -81,6 +90,11 @@ static void game_start() {
         if (si >= 0) units[si].state = USTATE_SCOUTING;
     }
 
+    // Spawn sheep near player 0 TC (herdable food source)
+    unit_spawn(UNIT_SHEEP, 0, 0 * TILE_PX, 3 * TILE_PX);
+    unit_spawn(UNIT_SHEEP, 0, 1 * TILE_PX, 3 * TILE_PX);
+    unit_spawn(UNIT_SHEEP, 0, 0 * TILE_PX, 4 * TILE_PX);
+    unit_spawn(UNIT_SHEEP, 0, 1 * TILE_PX, 4 * TILE_PX);
 
     // --- Player 1 (AI) — bottom-right corner ---
     int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 6, MAP_TILES - 6, gameState, terrain);
@@ -97,6 +111,12 @@ static void game_start() {
         int si = unit_spawn(UNIT_SCOUT, 1, (MAP_TILES - 1) * TILE_PX, (MAP_TILES - 1) * TILE_PX);
         if (si >= 0) units[si].state = USTATE_SCOUTING;
     }
+
+    // Spawn sheep near AI TC
+    unit_spawn(UNIT_SHEEP, 1, (MAP_TILES - 1) * TILE_PX, (MAP_TILES - 7) * TILE_PX);
+    unit_spawn(UNIT_SHEEP, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 7) * TILE_PX);
+    unit_spawn(UNIT_SHEEP, 1, (MAP_TILES - 1) * TILE_PX, (MAP_TILES - 8) * TILE_PX);
+    unit_spawn(UNIT_SHEEP, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 8) * TILE_PX);
 
     // Reset resources to actual starting values (TC placement was free)
     for (int p = 0; p < NUM_PLAYERS; p++) {

@@ -46,6 +46,7 @@ extern const u8 spr_farmer_bin[];
 extern const u8 spr_farmer_walk_bin[];
 extern const u8 spr_farmer_work_bin[];
 extern const u8 spr_farmer_carry_bin[];
+extern const u8 spr_forager_carry_bin[];
 extern const u8 spr_militia_bin[];
 extern const u8 spr_militia_walk_bin[];
 extern const u8 spr_militia_fight_bin[];
@@ -65,6 +66,7 @@ extern const u8 spr_spearman_die_bin[];
 extern const u8 spr_scout_bin[];
 extern const u8 spr_scout_walk_bin[];
 extern const u8 spr_scout_die_bin[];
+extern const u8 spr_sheep_stand_bin[];
 extern const u8 spr_villager_die_bin[];
 
 // Building sprites (32x32 or 16x16, single frame)
@@ -351,6 +353,7 @@ void render_init() {
     unitStandSheet[UNIT_KNIGHT]    = spr_knight_bin;
     unitStandSheet[UNIT_SPEARMAN]  = spr_spearman_bin;
     unitStandSheet[UNIT_SCOUT]     = spr_scout_bin;
+    unitStandSheet[UNIT_SHEEP]     = spr_sheep_stand_bin;
 
     unitWalkSheet[UNIT_VILLAGER]   = spr_villager_walk_bin;
     unitWalkSheet[UNIT_MILITIA]    = spr_militia_walk_bin;
@@ -358,6 +361,7 @@ void render_init() {
     unitWalkSheet[UNIT_KNIGHT]     = spr_knight_walk_bin;
     unitWalkSheet[UNIT_SPEARMAN]   = spr_spearman_walk_bin;
     unitWalkSheet[UNIT_SCOUT]      = spr_scout_walk_bin;
+    unitWalkSheet[UNIT_SHEEP]      = spr_sheep_stand_bin; // sheep reuse standing for walk
 
     unitFightSheet[UNIT_VILLAGER]  = spr_villager_attack_bin;
     unitFightSheet[UNIT_MILITIA]   = spr_militia_fight_bin;
@@ -365,6 +369,7 @@ void render_init() {
     unitFightSheet[UNIT_KNIGHT]    = spr_knight_fight_bin;
     unitFightSheet[UNIT_SPEARMAN]  = spr_spearman_fight_bin;
     unitFightSheet[UNIT_SCOUT]     = spr_scout_bin;  // scout uses idle for "attack"
+    unitFightSheet[UNIT_SHEEP]     = spr_sheep_stand_bin; // sheep don't fight
 
     unitDeathSheet[UNIT_VILLAGER]  = spr_villager_die_bin;
     unitDeathSheet[UNIT_MILITIA]   = spr_militia_die_bin;
@@ -372,6 +377,7 @@ void render_init() {
     unitDeathSheet[UNIT_KNIGHT]    = spr_knight_die_bin;
     unitDeathSheet[UNIT_SPEARMAN]  = spr_spearman_die_bin;
     unitDeathSheet[UNIT_SCOUT]     = spr_scout_die_bin;
+    unitDeathSheet[UNIT_SHEEP]     = spr_sheep_stand_bin; // sheep reuse standing for death
 
     // Villager role-specific sheets
     villagerRoleStand[VROLE_BASE]       = spr_villager_bin;
@@ -398,6 +404,11 @@ void render_init() {
     villagerRoleWalk[VROLE_FARMER]      = spr_farmer_walk_bin;
     villagerRoleWork[VROLE_FARMER]      = spr_farmer_work_bin;
     villagerRoleCarry[VROLE_FARMER]     = spr_farmer_carry_bin;
+
+    villagerRoleStand[VROLE_FORAGER]    = spr_farmer_bin;
+    villagerRoleWalk[VROLE_FORAGER]     = spr_farmer_walk_bin;
+    villagerRoleWork[VROLE_FORAGER]     = spr_farmer_work_bin;
+    villagerRoleCarry[VROLE_FORAGER]    = spr_forager_carry_bin;
 
     // Set up building sheet lookup tables
     buildingSheet[BLDG_TOWN_CENTER]   = spr_town_center_bin;
@@ -990,7 +1001,8 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
                 if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
                 if (count >= MAX_UNITS + MAX_BUILDINGS + 128) break;
                 u8 ttype = terrain.tileAt(tx, ty);
-                if (ttype != TERRAIN_FOREST && ttype != TERRAIN_GOLD && ttype != TERRAIN_STONE) continue;
+                if (ttype != TERRAIN_FOREST && ttype != TERRAIN_GOLD && ttype != TERRAIN_STONE &&
+                    ttype != TERRAIN_BERRIES) continue;
 
                 // Fog check — don't show resources in unexplored tiles
                 if (!fogMap.isExplored(0, tx, ty)) continue;

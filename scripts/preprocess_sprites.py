@@ -46,6 +46,7 @@ UNIT_SHEETS = [
     ('spr_farmer_walk',      'farmer_walk.png'),
     ('spr_farmer_work',      'farmer_work.png'),
     ('spr_farmer_carry',     'farmer_carry.png'),
+    ('spr_forager_carry',    'forager_carry.png'),
     ('spr_militia',          'militia.png'),
     ('spr_militia_walk',     'militia_walk.png'),
     ('spr_militia_fight',    'militia_fight.png'),
@@ -66,6 +67,7 @@ UNIT_SHEETS = [
     ('spr_scout_walk',       'scout_walk.png'),
     ('spr_scout_die',        'scout_die.png'),
     ('spr_villager_die',     'villager_die.png'),
+    ('spr_sheep_stand',      'sheep_stand.png'),
 ]
 
 # Building sprites: (output_name, filename, target_w, target_h, tileW, tileH, hotspot_y_ratio)
@@ -112,7 +114,7 @@ RESOURCE_SPRITES = [
     ('spr_gold_mine',  'gold_mine.png'),
     ('spr_stone_mine', 'stone_mine.png'),
     ('spr_fire',       'fire_small.png'),
-    ('spr_sheep',      'sheep.png'),
+    ('spr_berries',    'berries.png'),
 ]
 
 

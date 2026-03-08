@@ -118,9 +118,22 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         // For food, prefer berries (free) over farms (cost wood)
         u8 terrTypes[] = { TERRAIN_FARM, TERRAIN_FOREST, TERRAIN_GOLD, TERRAIN_STONE };
         if (lowestRes == RES_FOOD) {
-            // Try sheep first (closest food), then berries, then farms
-            if (ai_find_resource(tcTX, tcTY, TERRAIN_SHEEP, terrain, resTX, resTY)) {
-                unit_command_gather(vil, resTX, resTY, terrain);
+            // Try sheep first (highest food value), then berries, then farms
+            int sheepIdx = -1;
+            int sheepBestDist = 0x7FFFFFFF;
+            for (int si = 0; si < MAX_UNITS; si++) {
+                if (!units[si].alive || units[si].state == USTATE_DEAD) continue;
+                if (units[si].type != UNIT_SHEEP || units[si].owner != AI_PLAYER) continue;
+                int dx = units[si].x / TILE_PX - tcTX;
+                int dy = units[si].y / TILE_PX - tcTY;
+                int dist = dx*dx + dy*dy;
+                if (dist < sheepBestDist) {
+                    sheepBestDist = dist;
+                    sheepIdx = si;
+                }
+            }
+            if (sheepIdx >= 0) {
+                unit_command_attack(vil, sheepIdx);
                 assigned = true;
             } else if (ai_find_resource(tcTX, tcTY, TERRAIN_BERRIES, terrain, resTX, resTY)) {
                 unit_command_gather(vil, resTX, resTY, terrain);

@@ -221,7 +221,6 @@ static u16 terrainMiniColors[TERRAIN_COUNT] = {
     RGB15(16, 16, 16), // stone
     RGB15(12, 20,  4), // farm
     RGB15(24,  4, 12), // berries (reddish-pink)
-    RGB15(28, 28, 28), // sheep (white)
 };
 
 // ---------------------------------------------------------------------------
@@ -699,7 +698,6 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         case TERRAIN_STONE:  tileName = "Stone Mine"; resName = "Stone"; break;
         case TERRAIN_FARM:   tileName = "Farm"; resName = "Food"; break;
         case TERRAIN_BERRIES: tileName = "Berries"; resName = "Food"; break;
-        case TERRAIN_SHEEP:   tileName = "Sheep"; resName = "Food"; break;
         default: break;
         }
         font_draw_str_16(minimapVram, 256, 192, TX, ty, tileName, colText, gameFont);

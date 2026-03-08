@@ -97,6 +97,18 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     }
 
     if (tappedUnit >= 0) {
+        // If villagers selected and tapped on own sheep → gather food from sheep
+        if (units[tappedUnit].type == UNIT_SHEEP && gs.selectionCount > 0) {
+            bool sentGatherer = false;
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (gs.unitSelected[i] && units[i].alive && units[i].type == UNIT_VILLAGER) {
+                    unit_command_attack(i, tappedUnit);
+                    sentGatherer = true;
+                }
+            }
+            if (sentGatherer) return;
+        }
+
         // Double-tap: if tapping already-selected unit, select all visible of same type
         if (gs.unitSelected[tappedUnit]) {
             u8 targetType = units[tappedUnit].type;
@@ -197,7 +209,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     if (gs.selectionCount > 0) {
         u8 tt = terrain.tileAt(tileX, tileY);
         if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE ||
-            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES || tt == TERRAIN_SHEEP) {
+            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES) {
             bool sentGatherer = false;
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (!gs.unitSelected[i]) continue;
@@ -214,7 +226,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     {
         u8 tt = terrain.tileAt(tileX, tileY);
         if (tt == TERRAIN_FOREST || tt == TERRAIN_GOLD || tt == TERRAIN_STONE ||
-            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES || tt == TERRAIN_SHEEP) {
+            tt == TERRAIN_FARM || tt == TERRAIN_BERRIES) {
             // If building selected that can train, set rally to resource
             if (gs.selectionCount == 0 && gs.selectedBldg >= 0 &&
                 buildings[gs.selectedBldg].alive && buildings[gs.selectedBldg].owner == 0 &&
