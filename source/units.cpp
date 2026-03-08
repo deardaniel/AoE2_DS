@@ -828,7 +828,8 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
 
     // Gather tick (uses separate timer to avoid conflict with animation tick)
     u.gatherTick++;
-    if (u.gatherTick >= GATHER_RATE) {
+    u8 rate = (u.carryType < RES_COUNT) ? playerGatherRate[u.owner][u.carryType] : GATHER_RATE;
+    if (u.gatherTick >= rate) {
         u.gatherTick = 0;
         int got = terrain.depleteResource(u.gatherTX, u.gatherTY, 1);
         u.carryAmount += got;
@@ -836,7 +837,7 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
     }
 
     // If carry full, return to drop-off
-    if (u.carryAmount >= GATHER_CARRY_MAX) {
+    if (u.carryAmount >= playerCarryMax[u.owner]) {
         u.state = USTATE_RETURNING;
     }
 }

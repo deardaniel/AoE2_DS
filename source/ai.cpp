@@ -353,6 +353,23 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     }
 
     // ---- Tech research ----
+    // Economy techs (prioritize early)
+    if (!tech_is_researched(gs, AI_PLAYER, TECH_LOOM)) {
+        tech_start_research(gs, AI_PLAYER, TECH_LOOM);
+    }
+    if (p.age >= AGE_FEUDAL && !tech_is_researched(gs, AI_PLAYER, TECH_DOUBLE_BIT)) {
+        tech_start_research(gs, AI_PLAYER, TECH_DOUBLE_BIT);
+    }
+    if (p.age >= AGE_FEUDAL && !tech_is_researched(gs, AI_PLAYER, TECH_WHEELBARROW)) {
+        tech_start_research(gs, AI_PLAYER, TECH_WHEELBARROW);
+    }
+    if (p.age >= AGE_FEUDAL && !tech_is_researched(gs, AI_PLAYER, TECH_GOLD_MINING)) {
+        tech_start_research(gs, AI_PLAYER, TECH_GOLD_MINING);
+    }
+    if (p.age >= AGE_FEUDAL && !tech_is_researched(gs, AI_PLAYER, TECH_STONE_MINING)) {
+        tech_start_research(gs, AI_PLAYER, TECH_STONE_MINING);
+    }
+    // Military techs
     if (p.age >= AGE_FEUDAL && !tech_is_researched(gs, AI_PLAYER, TECH_MAN_AT_ARMS)) {
         tech_start_research(gs, AI_PLAYER, TECH_MAN_AT_ARMS);
     }

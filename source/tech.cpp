@@ -4,10 +4,15 @@
 #include <string.h>
 
 UnitStats playerUnitStats[NUM_PLAYERS][UNIT_TYPE_COUNT];
+u8 playerGatherRate[NUM_PLAYERS][RES_COUNT];
+u8 playerCarryMax[NUM_PLAYERS];
 
 void tech_init_stats() {
     for (int p = 0; p < NUM_PLAYERS; p++) {
         memcpy(playerUnitStats[p], UNIT_STATS, sizeof(UNIT_STATS));
+        for (int r = 0; r < RES_COUNT; r++)
+            playerGatherRate[p][r] = GATHER_RATE;
+        playerCarryMax[p] = GATHER_CARRY_MAX;
     }
 }
 
@@ -49,10 +54,14 @@ bool tech_start_research(GameState& gs, int player, int techId) {
 void tech_apply_bonuses(int player) {
     // Reset to base stats
     memcpy(playerUnitStats[player], UNIT_STATS, sizeof(UNIT_STATS));
+    for (int r = 0; r < RES_COUNT; r++)
+        playerGatherRate[player][r] = GATHER_RATE;
+    playerCarryMax[player] = GATHER_CARRY_MAX;
 
     extern GameState gameState;
     u8 researched = gameState.players[player].techResearched;
 
+    // Military techs
     if (researched & (1 << TECH_MAN_AT_ARMS)) {
         playerUnitStats[player][UNIT_MILITIA].hp += 2;
         playerUnitStats[player][UNIT_MILITIA].attack += 1;
@@ -64,5 +73,26 @@ void tech_apply_bonuses(int player) {
     if (researched & (1 << TECH_CAVALIER)) {
         playerUnitStats[player][UNIT_KNIGHT].hp += 20;
         playerUnitStats[player][UNIT_KNIGHT].attack += 2;
+    }
+
+    // Economy techs
+    if (researched & (1 << TECH_LOOM)) {
+        playerUnitStats[player][UNIT_VILLAGER].hp += 15;
+        playerUnitStats[player][UNIT_VILLAGER].armor += 1;
+    }
+    if (researched & (1 << TECH_WHEELBARROW)) {
+        playerUnitStats[player][UNIT_VILLAGER].speed += 1;
+        playerCarryMax[player] += 5;
+    }
+
+    // Resource-specific gather rate bonuses (lower = faster)
+    if (researched & (1 << TECH_DOUBLE_BIT)) {
+        playerGatherRate[player][RES_WOOD] = GATHER_RATE * 4 / 5; // 20% faster
+    }
+    if (researched & (1 << TECH_GOLD_MINING)) {
+        playerGatherRate[player][RES_GOLD] = GATHER_RATE * 4 / 5; // ~20% faster
+    }
+    if (researched & (1 << TECH_STONE_MINING)) {
+        playerGatherRate[player][RES_STONE] = GATHER_RATE * 4 / 5; // ~20% faster
     }
 }
