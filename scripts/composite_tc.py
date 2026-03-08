@@ -11,7 +11,7 @@ uses hotspot alignment + delta Y offsets:
 
 Layer order from .dat file (RTWC1X graphic 3345 deltas):
   0: SLP 890  (foundation/pillars)    - MISSING, skip
-  1: SLP 889  (shadow/base)           offset Y=0
+  1: SLP 889  (shadow/base)           offset Y=0   ← shadow layer (SLP command 0xB)
   2: SLP 891  (center building)       offset Y=-48
   3: SLP 3596 (right wing roof)       offset Y=0
   4: SLP 4641 (right wing detail)     offset Y=0
@@ -36,10 +36,13 @@ from PIL import Image
 SLP_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics'
 PALETTE = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina'
 
+# Shadow layer — genie-slp renders shadow pixels as (255,0,0).
+# We convert them to semi-transparent black for a proper ground shadow.
+SHADOW_SLP = (889, 0, 0, 'shadow (ground shadow from SLP command 0xB)')
+
 # Layer order: back to front, from RTWC1X graphic 3345 deltas
 # (slp_id, delta_offset_x, delta_offset_y, description)
 TC_LAYERS = [
-    # SLP 889 (layer 5) is a selection/damage outline — skip for normal rendering
     # SLP 890 (layer 10) is foundation — file missing, skip
     # Base layers are all Generic (G suffix) — shared across all architectures
     (891,  0, -48, 'center building (G)'),
@@ -68,6 +71,29 @@ def extract_slp(slp_id, out_dir):
     return img, (0, 0)
 
 
+def shadow_from_red(img, alpha=180):
+    """Convert red shadow pixels (255,0,0) to dark shadow color.
+
+    genie-slp renders SLP shadow commands (0xB) as bright red (255,0,0,255).
+    AoE2 renders these as semi-transparent black overlaid on the terrain.
+    On NDS with indexed palette, we use a dark desaturated green/brown that
+    looks like a shadow on grass terrain. Alpha must be >128 to pass
+    preprocess_sprites.py opaque threshold.
+    """
+    pixels = img.load()
+    w, h = img.size
+    result = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    rpx = result.load()
+    # Dark olive-brown: reads as "darkened grass" after palette quantization
+    shadow_color = (30, 40, 20, alpha)
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = pixels[x, y]
+            if a > 0 and r > 200 and g < 50 and b < 50:
+                rpx[x, y] = shadow_color
+    return result
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--target', default='128x96', help='Target WxH (default: 128x96)')
@@ -77,8 +103,22 @@ def main():
     tw, th = [int(x) for x in args.target.split('x')]
 
     layers = []
+    shadow_layer = None
     tmp_dirs = []
     try:
+        # Extract shadow layer first
+        slp_id, dx, dy, name = SHADOW_SLP
+        tmp = tempfile.mkdtemp(prefix=f'tc_{slp_id}_')
+        tmp_dirs.append(tmp)
+        img, hotspot = extract_slp(slp_id, tmp)
+        if img is not None:
+            shadow_img = shadow_from_red(img, alpha=100)
+            print(f'  SLP {slp_id} ({name}): {img.size}, hotspot {hotspot}, delta ({dx},{dy})')
+            shadow_layer = (shadow_img, hotspot, dx, dy)
+        else:
+            print(f'  Skipping shadow SLP {slp_id}')
+
+        # Extract building layers
         for slp_id, dx, dy, name in TC_LAYERS:
             tmp = tempfile.mkdtemp(prefix=f'tc_{slp_id}_')
             tmp_dirs.append(tmp)
@@ -96,11 +136,17 @@ def main():
         print('No layers extracted!', file=sys.stderr)
         return 1
 
+    # Build draw list: shadow first, then building layers
+    all_layers = []
+    if shadow_layer:
+        all_layers.append(shadow_layer)
+    all_layers.extend(layers)
+
     # Calculate draw position for each layer:
     # drawX = deltaOffsetX - hotspotX
     # drawY = deltaOffsetY - hotspotY
     draw_positions = []
-    for img, (hx, hy), dx, dy in layers:
+    for img, (hx, hy), dx, dy in all_layers:
         draw_x = dx - hx
         draw_y = dy - hy
         draw_positions.append((draw_x, draw_y, img))
