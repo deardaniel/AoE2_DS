@@ -79,7 +79,7 @@ UNIT_SHEETS = [
 # Content is positioned so the hotspot aligns with (ph - footH) in the canvas,
 # making the building rise above the terrain footprint naturally.
 BUILDING_SPRITES = [
-    ('spr_town_center',   'town_center.png',  128,  96, 4, 4, 0.733), # 4x4: TC composite (adjusted for center alignment)
+    ('spr_town_center',   'town_center.png',  128,  96, 4, 4, 0.536), # 4x4: TC composite with shadows
     ('spr_house',         'house.png',          32,  32, 1, 1, 0.613), # 1x1: SLP 2223, hotspot 73/119
     ('spr_barracks',      'barracks.png',       64,  64, 2, 2, 0.681), # 2x2: SLP 2683, hotspot 141/207
     ('spr_archery_range', 'archery_range.png',  64,  80, 2, 2, 0.708), # 2x2: SLP 21, hotspot 179/253
