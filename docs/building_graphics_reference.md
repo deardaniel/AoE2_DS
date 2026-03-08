@@ -80,8 +80,14 @@ Note: Deltas 4/6/8 are architecture-specific (E/W/M mixed in the preview).
 
 ### Current composite_tc.py configuration
 
-Uses SLP 4639 (M) for both wing canopies (user confirmed M looks correct)
-and SLP 4641 (E) for columns (small, barely visible at NDS resolution).
+Uses 7 layers (SLP 889 excluded — contains player-color flags that render as wrong colors):
+- SLPs 891, 3594, 3595, 3596, 4639, 4640, 4641
+- SLP 4639 (M) for both wing canopies (user confirmed M looks correct)
+- SLP 4641 (E) for columns (small, barely visible at NDS resolution)
+- Compositing order: back-to-front by Y offset (y=-48 first as background, y=48 last as foreground)
+- SLP 889 (RTWC1N0G) excluded: contains player-color palette indices 16-23 which render as orange/red when not remapped per-player
+- SLP 890 (RTWC1N1G) excluded: file missing from AoE2 HD game data
+- Hotspot ratio: 0.536 (updated from original 0.733)
 
 ### Annex Sub-Units
 
@@ -130,6 +136,23 @@ Format: `TYPE + AGE + N + PART + SUFFIX`
 - **N**: separator
 - **PART**: NN=standing, N0=shadow, N1=foundation, N2-N6=detail layers
 - **SUFFIX**: G/E/F/M/W/I/X (architecture variant)
+
+## Unit Graphic Name Convention
+
+Format: `VM + ROLE + _ + ANIM + N`
+
+- **VM**: Villager Male prefix
+- **ROLE**: BAS (base), LUM (lumberjack), MIN (miner), BLD (builder), FAR (farmer), FOR (forager), SHE (shepherd)
+- **ANIM suffix**:
+  - `_AN` = action/attack (work animation)
+  - `_TN` = tool/task (alternative work animation)
+  - `_WN` = walking
+  - `_CN` = carry (carrying resource)
+  - `_FN` = face/standing
+  - `_DN` = dying (NOT a work animation!)
+  - `_BN` = basket/berry carry
+
+**IMPORTANT**: `_DN` is the DYING animation. Previous versions incorrectly used farmer_work=1506 (VMFAR_DN) and builder_work=1490 (VMBLD_DN). Correct work SLPs: farmer=1473 (VMBAS_AN), builder=1496 (VMBLD_TN).
 
 ## Player Colors
 

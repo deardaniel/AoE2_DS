@@ -16,11 +16,15 @@
 | 8 | Fog of War | DONE | 3-state fog, checkerboard explored effect |
 | 9 | Technology / Ages | DONE | Tech stats used in combat/spawning/LOS/speed |
 | 10 | AI Opponent | DONE | Attack-move, retreat logic, building attacks |
-| 11 | Sound | PARTIAL | 8 WAV SFX extracted to audio/, not yet wired to maxmod |
+| 11 | Sound | DONE | NitroFS music streaming + 14 SFX via maxmod |
 | 12 | Game Flow & Polish | DONE | Win/lose, restart, age-up, tech research UI |
 | 13 | HD Sprite Extraction | DONE | Palette fixed (50500.bina), 6 unit types + buildings extracted |
 | 14 | HD Sprite Integration | DONE | All procedural sprites replaced with HD art, 32×32 units, player colors |
 | 15 | Unit Collision Avoidance | DONE | Tile occupancy grid, formation spreading, nudge/wait/repath |
+| 16 | Sheep as Units | DONE | Sheep spawn near TCs, gatherable food source, walk/die animations |
+| 17 | Berry/Work Animation Fixes | DONE | Real berry sprite, correct work SLPs, forager carry animation |
+| 18 | Idle Animations | DONE | Units cycle through standing frames when idle |
+| 19 | TC Composite Sprite | DONE | 7-layer SLP composite with correct layer ordering |
 
 ## Bug Fixes Applied
 
@@ -36,6 +40,12 @@
 9. **Gather rate fixed** — Added separate gatherTick field to avoid double-increment with animTick
 10. **Stale selection cleared** — selectedUnit/selectedBldg cleared when entity dies
 11. **Unit collision avoidance** — Tile occupancy grid, movement collision (nudge/wait/repath), formation spreading, pathfinding routes around stationary units
+12. **Sheep as gatherable units** — Sheep spawn near TCs (4 per player), villagers attack to gather food, excluded from pop cap and enemy targeting
+13. **Berry sprite replaced** — Procedural spr_berries.bin replaced with real SLP 2560 game asset
+14. **Work animation SLPs corrected** — farmer_work was SLP 1506 (VMFAR_DN = dying!), fixed to SLP 1473 (VMBAS_AN). builder_work was SLP 1490 (VMBLD_DN = dying!), fixed to SLP 1496 (VMBLD_TN)
+15. **Forager carry animation** — Added VROLE_FORAGER role; berry gatherers carry basket (SLP 2592 VMFOR_CN) distinct from meat carriers
+16. **Idle animations** — Units cycle through 5 standing frames when idle at reduced speed
+17. **TC composite sprite** — Replaced single-SLP TC with 7-layer composite (SLPs 891, 3594-3596, 4639-4641), correct back-to-front layer order
 
 ### Player Controls
 - **START** on selected TC: Age advancement (priority) or train villager
@@ -58,19 +68,20 @@
 - **SLP IDs**: Verified against [openage aoc-slp-list](https://github.com/SFTtech/openage/blob/master/doc/media/aoc-slp-list.md)
 
 ### Correct SLP ID Mapping (openage-verified)
-| Entity | Stand SLP | Fight/Fire SLP | Walk SLP |
-|--------|-----------|----------------|----------|
-| Villager (M) | 1479 | 1473 | 1484 |
-| Villager (F) | 1388 | 1382 | 1392 |
-| Militia | 993 | 987 | 997 |
-| Archer | 708 | 702 | 713 |
-| Knight | 669 | 663 | 673 |
-| Spearman | 873 | 867 | 877 |
-| Scout | 2085 | — | 2089 |
+| Entity | Stand SLP | Fight/Fire SLP | Walk SLP | Death SLP |
+|--------|-----------|----------------|----------|-----------|
+| Villager (M) | 1479 | 1473 | 1484 | — |
+| Villager (F) | 1388 | 1382 | 1392 | — |
+| Militia | 993 | 987 | 997 | — |
+| Archer | 708 | 702 | 713 | — |
+| Knight | 669 | 663 | 673 | — |
+| Spearman | 873 | 867 | 877 | — |
+| Scout | 2085 | — | 2089 | — |
+| Sheep | 3629 | — | 3634 | 3626 |
 
 | Building | SLP | Notes |
 |----------|-----|-------|
-| Town Center | 900 | North European, Feudal |
+| Town Center | composite | 7-layer SLP composite (891, 3594-96, 4639-41) |
 | House | 2232 | North European, Feudal |
 | Barracks | 130 | North European, Feudal |
 | Archery Range | 21 | North European, Feudal |
@@ -87,12 +98,18 @@ Updated config.h to match real AoE2 values:
 - Train times scaled to real seconds × 60fps
 - Building HP scaled up (TC 600, Barracks/etc 350)
 
+### Villager Role Sprites
+| Role | Stand/Walk | Work SLP | Carry SLP | Notes |
+|------|-----------|----------|-----------|-------|
+| Base (VROLE_BASE) | villager_stand/walk | — | — | Default |
+| Lumberjack (VROLE_LUMBERJACK) | lumberjack_stand/walk | 1560 (VMMIN_TN) | lumberjack_carry | Wood gathering |
+| Miner (VROLE_MINER) | miner_stand/walk | 1560 (VMMIN_TN) | miner_carry | Gold/stone mining |
+| Builder (VROLE_BUILDER) | builder_stand/walk | 1496 (VMBLD_TN) | — | Construction |
+| Farmer (VROLE_FARMER) | farmer_stand/walk | 1473 (VMBAS_AN) | farmer_carry | Farm/meat gathering |
+| Forager (VROLE_FORAGER) | farmer_stand/walk | 1473 (VMBAS_AN) | 2592 (VMFOR_CN) | Berry gathering (basket) |
+
 ### Sound Effects
-Extracted 8 candidate WAV files from AoE2 HD (`drs/sounds/`) to `audio/`:
-- sfx_click.wav (0.05s), sfx_arrow.wav (0.07s), sfx_sword.wav (0.23s)
-- sfx_build_place.wav (0.37s), sfx_chop.wav (0.13s)
-- sfx_select.wav (0.57s), sfx_death.wav (0.54s), sfx_complete.wav (0.47s)
-- Total: 128KB — ready for maxmod integration
+14 SFX via maxmod + NitroFS background music streaming. Sound fully integrated.
 
 ### HD Sprite Integration (Phase 14)
 - **Preprocessing pipeline**: `scripts/preprocess_sprites.py` converts all HD sprite PNGs to indexed binary data with shared 256-color palette
@@ -115,10 +132,10 @@ Extracted 8 candidate WAV files from AoE2 HD (`drs/sounds/`) to `audio/`:
 - **Gather/build preference**: Prefer unoccupied adjacent tiles when multiple villagers work the same resource or building
 
 ### Known Limitations (by design)
-- Sound is stubbed (no maxmod integration yet)
 - No Mill building — only TC accepts food
 - Path length capped at 64 steps (re-path needed for very long paths)
 - Tech HP bonus only applies to newly spawned units, not existing ones
+- `--fit` flag scales each sprite sheet independently, so relative unit sizes may be inconsistent
 
 ## File Manifest
 
@@ -136,7 +153,7 @@ source/ui.h/cpp       - Top screen minimap + console HUD, bitmap font rendering
 source/fog.h/cpp      - Fog of war (2-player, 3-state)
 source/tech.h/cpp     - Age advancement + 3 unit upgrades
 source/ai.h/cpp       - AI opponent (economy, military, building, attack)
-source/sound.h/cpp    - Sound stubs (maxmod not yet integrated)
+source/sound.h/cpp    - NitroFS music streaming + 14 SFX via maxmod
 source/font.h/cpp     - Bitmap font (Century Bold 14px) for both screens
 source/iso.h          - Isometric coordinate conversions, diamond mask tables
 source/res_icons.h    - Resource icon pixel data
@@ -158,7 +175,8 @@ assets/manifest_game.json              - Sprite manifest (SLP IDs, layout, group
 scripts/dump_tc_graphics.js            - Inspect TC graphic chain from .dat file
 scripts/dump_building_gfx.js           - Inspect building SLPs by architecture set
 scripts/dump_villager_graphics.js      - Inspect villager graphic IDs from .dat file
-scripts/composite_tc.py                - One-off: composite TC from 7 SLP layers
+scripts/composite_tc.py                - Composite TC from 7 SLP layers with delta Y offsets
+scripts/shared_constants.py            - Shared Python/C++ constants (palette, iso geometry)
 ```
 
 ### Binary Data (generated by `make sprites`)
