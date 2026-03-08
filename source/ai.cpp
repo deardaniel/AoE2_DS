@@ -369,6 +369,16 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (p.age >= AGE_FEUDAL && !tech_is_researched(gs, AI_PLAYER, TECH_STONE_MINING)) {
         tech_start_research(gs, AI_PLAYER, TECH_STONE_MINING);
     }
+    // Castle age economy techs
+    if (p.age >= AGE_CASTLE && !tech_is_researched(gs, AI_PLAYER, TECH_BOW_SAW)) {
+        tech_start_research(gs, AI_PLAYER, TECH_BOW_SAW);
+    }
+    if (p.age >= AGE_CASTLE && !tech_is_researched(gs, AI_PLAYER, TECH_HAND_CART)) {
+        tech_start_research(gs, AI_PLAYER, TECH_HAND_CART);
+    }
+    if (p.age >= AGE_CASTLE && !tech_is_researched(gs, AI_PLAYER, TECH_HORSE_COLLAR)) {
+        tech_start_research(gs, AI_PLAYER, TECH_HORSE_COLLAR);
+    }
     // Military techs
     if (p.age >= AGE_FEUDAL && !tech_is_researched(gs, AI_PLAYER, TECH_MAN_AT_ARMS)) {
         tech_start_research(gs, AI_PLAYER, TECH_MAN_AT_ARMS);
@@ -376,7 +386,16 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (p.age >= AGE_CASTLE && !tech_is_researched(gs, AI_PLAYER, TECH_CROSSBOW)) {
         tech_start_research(gs, AI_PLAYER, TECH_CROSSBOW);
     }
+    if (p.age >= AGE_CASTLE && !tech_is_researched(gs, AI_PLAYER, TECH_BODKIN_ARROW)) {
+        tech_start_research(gs, AI_PLAYER, TECH_BODKIN_ARROW);
+    }
+    if (p.age >= AGE_CASTLE && !tech_is_researched(gs, AI_PLAYER, TECH_PIKE)) {
+        tech_start_research(gs, AI_PLAYER, TECH_PIKE);
+    }
     if (p.age >= AGE_IMPERIAL && !tech_is_researched(gs, AI_PLAYER, TECH_CAVALIER)) {
         tech_start_research(gs, AI_PLAYER, TECH_CAVALIER);
+    }
+    if (p.age >= AGE_IMPERIAL && !tech_is_researched(gs, AI_PLAYER, TECH_BLAST_FURNACE)) {
+        tech_start_research(gs, AI_PLAYER, TECH_BLAST_FURNACE);
     }
 }

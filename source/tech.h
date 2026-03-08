@@ -13,7 +13,13 @@ enum TechId {
     TECH_WHEELBARROW  = 5, // Villager speed +1, carry +5 (Feudal, TC)
     TECH_GOLD_MINING  = 6, // Gold gathering +15% (Feudal, Mining Camp)
     TECH_STONE_MINING = 7, // Stone gathering +15% (Feudal, Mining Camp)
-    TECH_COUNT        = 8
+    TECH_BOW_SAW      = 8, // Wood gathering +20% more (Castle, Lumber Camp)
+    TECH_HAND_CART    = 9, // Villager speed +1, carry +7 (Castle, TC)
+    TECH_HORSE_COLLAR = 10,// Farm food +75 (Castle, TC)
+    TECH_BLAST_FURNACE= 11,// Melee units +2 attack (Imperial, Barracks)
+    TECH_BODKIN_ARROW = 12,// Archer +1 range, +1 pierce attack (Castle, Archery Range)
+    TECH_PIKE         = 13,// Spearman +30 HP, +5 bonus vs cav (Castle, Barracks)
+    TECH_COUNT        = 14
 };
 
 struct TechInfo {
@@ -33,6 +39,12 @@ static const TechInfo TECH_TABLE[TECH_COUNT] = {
     /* WHEELBARROW   */ { "Wheelbarrow", {175, 50,  0, 0}, 1200, AGE_FEUDAL,   BLDG_TOWN_CENTER },
     /* GOLD_MINING   */ { "Gold Mining", {100, 75,  0, 0}, 1200, AGE_FEUDAL,   BLDG_MINING_CAMP },
     /* STONE_MINING  */ { "Stone Mining",{100, 75,  0, 0}, 1200, AGE_FEUDAL,   BLDG_MINING_CAMP },
+    /* BOW_SAW       */ { "Bow Saw",     {150,100,  0, 0}, 1500, AGE_CASTLE,   BLDG_LUMBER_CAMP },
+    /* HAND_CART     */ { "Hand Cart",   {300,200,  0, 0}, 1500, AGE_CASTLE,   BLDG_TOWN_CENTER },
+    /* HORSE_COLLAR  */ { "HorseCollar", {  0, 75,  0, 0},  900, AGE_CASTLE,   BLDG_TOWN_CENTER },
+    /* BLAST_FURNACE */ { "BlastFurnce", {275,  0,100, 0}, 1800, AGE_IMPERIAL, BLDG_BARRACKS },
+    /* BODKIN_ARROW  */ { "BodkinArrow", {200,  0,100, 0}, 1500, AGE_CASTLE,   BLDG_ARCHERY_RANGE },
+    /* PIKE          */ { "Pikeman",     {215,  0, 90, 0}, 1500, AGE_CASTLE,   BLDG_BARRACKS },
 };
 
 bool tech_is_researched(const GameState& gs, int player, int techId);
@@ -45,5 +57,6 @@ extern UnitStats playerUnitStats[NUM_PLAYERS][UNIT_TYPE_COUNT];
 // Per-player economy bonuses (set by tech_apply_bonuses)
 extern u8 playerGatherRate[NUM_PLAYERS][RES_COUNT]; // frames per gather tick per resource
 extern u8 playerCarryMax[NUM_PLAYERS];              // max carry amount
+extern s16 playerFarmFood[NUM_PLAYERS];             // farm food amount (base + tech bonus)
 
 void tech_init_stats();

@@ -4,6 +4,7 @@
 #include "terrain.h"
 #include "sound.h"
 #include "projectiles.h"
+#include "tech.h"
 #include <string.h>
 
 Building buildings[MAX_BUILDINGS];
@@ -78,7 +79,7 @@ int building_place(u8 type, u8 owner, int tileX, int tileY, GameState& gs, Terra
     b.rallyTX = -1;
     b.rallyTY = -1;
     if (type == BLDG_FARM) {
-        terrain.setTile(tileX, tileY, TERRAIN_FARM, FARM_RESOURCE_AMT);
+        terrain.setTile(tileX, tileY, TERRAIN_FARM, playerFarmFood[owner]);
     }
 
     if (owner == 0) sound_play(SFX_BUILDING_PLACE);
@@ -113,7 +114,7 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
             if (terrain.tileAt(tx, ty) != TERRAIN_FARM) {
                 if (game_can_afford(gs, b.owner, BLDG_STATS[BLDG_FARM].cost)) {
                     game_deduct_cost(gs, b.owner, BLDG_STATS[BLDG_FARM].cost);
-                    terrain.setTile(tx, ty, TERRAIN_FARM, FARM_RESOURCE_AMT);
+                    terrain.setTile(tx, ty, TERRAIN_FARM, playerFarmFood[b.owner]);
                 }
             }
         }

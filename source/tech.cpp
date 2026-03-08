@@ -6,6 +6,7 @@
 UnitStats playerUnitStats[NUM_PLAYERS][UNIT_TYPE_COUNT];
 u8 playerGatherRate[NUM_PLAYERS][RES_COUNT];
 u8 playerCarryMax[NUM_PLAYERS];
+s16 playerFarmFood[NUM_PLAYERS];
 
 void tech_init_stats() {
     for (int p = 0; p < NUM_PLAYERS; p++) {
@@ -13,6 +14,7 @@ void tech_init_stats() {
         for (int r = 0; r < RES_COUNT; r++)
             playerGatherRate[p][r] = GATHER_RATE;
         playerCarryMax[p] = GATHER_CARRY_MAX;
+        playerFarmFood[p] = FARM_RESOURCE_AMT;
     }
 }
 
@@ -57,9 +59,10 @@ void tech_apply_bonuses(int player) {
     for (int r = 0; r < RES_COUNT; r++)
         playerGatherRate[player][r] = GATHER_RATE;
     playerCarryMax[player] = GATHER_CARRY_MAX;
+    playerFarmFood[player] = FARM_RESOURCE_AMT;
 
     extern GameState gameState;
-    u8 researched = gameState.players[player].techResearched;
+    u16 researched = gameState.players[player].techResearched;
 
     // Military techs
     if (researched & (1 << TECH_MAN_AT_ARMS)) {
@@ -90,10 +93,40 @@ void tech_apply_bonuses(int player) {
     if (researched & (1 << TECH_DOUBLE_BIT)) {
         playerGatherRate[player][RES_WOOD] = GATHER_RATE * 4 / 5; // 20% faster
     }
+    if (researched & (1 << TECH_BOW_SAW)) {
+        // Stacks: if double-bit already applied, reduce further
+        int base = (researched & (1 << TECH_DOUBLE_BIT))
+                   ? (GATHER_RATE * 4 / 5) : GATHER_RATE;
+        playerGatherRate[player][RES_WOOD] = base * 4 / 5; // another 20%
+    }
     if (researched & (1 << TECH_GOLD_MINING)) {
         playerGatherRate[player][RES_GOLD] = GATHER_RATE * 4 / 5; // ~20% faster
     }
     if (researched & (1 << TECH_STONE_MINING)) {
         playerGatherRate[player][RES_STONE] = GATHER_RATE * 4 / 5; // ~20% faster
+    }
+
+    // Castle/Imperial techs
+    if (researched & (1 << TECH_HAND_CART)) {
+        playerUnitStats[player][UNIT_VILLAGER].speed += 1;
+        playerCarryMax[player] += 7;
+    }
+    if (researched & (1 << TECH_HORSE_COLLAR)) {
+        playerFarmFood[player] += 75;
+    }
+    if (researched & (1 << TECH_BLAST_FURNACE)) {
+        // +2 melee attack to all melee units
+        playerUnitStats[player][UNIT_MILITIA].attack[DMG_MELEE] += 2;
+        playerUnitStats[player][UNIT_KNIGHT].attack[DMG_MELEE] += 2;
+        playerUnitStats[player][UNIT_SPEARMAN].attack[DMG_MELEE] += 2;
+        playerUnitStats[player][UNIT_SCOUT].attack[DMG_MELEE] += 2;
+    }
+    if (researched & (1 << TECH_BODKIN_ARROW)) {
+        playerUnitStats[player][UNIT_ARCHER].range += 1;
+        playerUnitStats[player][UNIT_ARCHER].attack[DMG_PIERCE] += 1;
+    }
+    if (researched & (1 << TECH_PIKE)) {
+        playerUnitStats[player][UNIT_SPEARMAN].hp += 30;
+        playerUnitStats[player][UNIT_SPEARMAN].attack[DMG_BONUS_CAV] += 5;
     }
 }

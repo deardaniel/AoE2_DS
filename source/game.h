@@ -14,7 +14,7 @@ struct Player {
     u8  age;
     u8  popCount;
     u8  popCap;
-    u8  techResearched; // bitfield for upgrades (up to 8)
+    u16 techResearched; // bitfield for upgrades (up to 16)
     s16 ageProgress;    // frames into age research (-1 = not researching)
 };
 
