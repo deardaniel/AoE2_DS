@@ -1040,9 +1040,9 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
 
         if (u.attackCooldown > 0) { u.attackCooldown--; return; }
 
-        // Damage building (no armor on buildings)
-        int atk = playerUnitStats[u.owner][u.type].attack;
-        int dmg = atk;
+        // Damage building (buildings have no armor classes)
+        const s16* atk = playerUnitStats[u.owner][u.type].attack;
+        int dmg = atk[DMG_MELEE] + atk[DMG_PIERCE]; // sum base damage classes
         if (dmg < 1) dmg = 1;
 
         building_damage(u.attackBldgTarget, dmg);
@@ -1102,9 +1102,9 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
         return;
     }
 
-    // Deal damage using tech-modified stats
-    int atk = playerUnitStats[u.owner][u.type].attack;
-    int arm = playerUnitStats[target.owner][target.type].armor;
+    // Deal damage using class-based system
+    const s16* atkClass = playerUnitStats[u.owner][u.type].attack;
+    const s16* defClass = playerUnitStats[target.owner][target.type].armor;
 
     // Villager gathering from sheep: kill sheep and gain food
     if (u.type == UNIT_VILLAGER && target.type == UNIT_SHEEP) {
@@ -1117,13 +1117,7 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
         return;
     }
 
-    // Spearman bonus vs cavalry (+15 in real AoE2)
-    if (u.type == UNIT_SPEARMAN && target.type == UNIT_KNIGHT) {
-        atk += 15;
-    }
-
-    int dmg = atk - arm;
-    if (dmg < 1) dmg = 1;
+    int dmg = calc_damage(atkClass, defClass, target.type);
 
     u.attackCooldown = 30; // ~0.5s between attacks
 

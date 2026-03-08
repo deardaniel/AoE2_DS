@@ -138,12 +138,61 @@ enum Direction {
 };
 
 // ---------------------------------------------------------------------------
+// Damage classes (simplified from AoE2's full system)
+// Each unit has attack values per class and armor values per class.
+// Damage = sum of max(attack[class] - armor[class], 0) for each class, min 1.
+// ---------------------------------------------------------------------------
+enum DamageClass {
+    DMG_MELEE    = 0,  // Class 4 in AoE2 — base melee damage
+    DMG_PIERCE   = 1,  // Class 3 in AoE2 — ranged/arrow damage
+    DMG_BONUS_CAV = 2, // Class 8 in AoE2 — bonus vs cavalry
+    DMG_BONUS_INF = 3, // Class 1 in AoE2 — bonus vs infantry (unique units etc.)
+    DMG_CLASS_COUNT = 4
+};
+
+// Unit class tags for bonus damage matching
+enum UnitClass {
+    UCLASS_NONE     = 0,
+    UCLASS_INFANTRY = 1,
+    UCLASS_CAVALRY  = 2,
+};
+
+// Which unit types belong to which class (for bonus damage)
+static const u8 UNIT_CLASS[UNIT_TYPE_COUNT] = {
+    /* VILLAGER  */ UCLASS_NONE,
+    /* MILITIA   */ UCLASS_INFANTRY,
+    /* ARCHER    */ UCLASS_NONE,      // archers are "archer" class but we don't have bonus vs archer
+    /* KNIGHT    */ UCLASS_CAVALRY,
+    /* SPEARMAN  */ UCLASS_INFANTRY,
+    /* SCOUT     */ UCLASS_CAVALRY,
+    /* SHEEP     */ UCLASS_NONE,
+};
+
+// Calculate total damage from attacker stats vs defender stats
+// Sums max(atk[class] - def[class], 0) for each class, min total 1
+// Only applies bonus_cav if defender is cavalry, bonus_inf if infantry
+static inline int calc_damage(const s16 atk[DMG_CLASS_COUNT],
+                               const s16 def[DMG_CLASS_COUNT],
+                               u8 defenderType) {
+    int total = 0;
+    for (int c = 0; c < DMG_CLASS_COUNT; c++) {
+        if (atk[c] <= 0) continue;
+        // Only apply bonus damage if defender has matching class
+        if (c == DMG_BONUS_CAV && UNIT_CLASS[defenderType] != UCLASS_CAVALRY) continue;
+        if (c == DMG_BONUS_INF && UNIT_CLASS[defenderType] != UCLASS_INFANTRY) continue;
+        int d = atk[c] - def[c];
+        if (d > 0) total += d;
+    }
+    return (total > 0) ? total : 1;
+}
+
+// ---------------------------------------------------------------------------
 // Unit stat table
 // ---------------------------------------------------------------------------
 struct UnitStats {
     s16 hp;
-    s16 attack;
-    s16 armor;
+    s16 attack[DMG_CLASS_COUNT];  // damage per class
+    s16 armor[DMG_CLASS_COUNT];   // armor per class
     s16 range;      // in tiles (1 = melee)
     s16 speed;      // pixels per update tick
     s16 los;        // line of sight in tiles
@@ -172,16 +221,16 @@ struct BuildingStats {
 // - Speed: 1 px/tick ≈ 0.8-1.0 game speed, 2 px/tick ≈ 1.35 (cavalry)
 // - Range: tiles (1 = melee, 4 = archer)
 // - Train time: scaled to 60fps (real seconds × 60)
-// - Armor: combined melee+pierce for simplicity
-//                                hp  atk arm rng spd los  train   F    W    G    S   age  bldg
+// - Attack/Armor: per damage class {melee, pierce, bonus_cav, bonus_inf}
+//                                hp  atk{mel,prc,cav,inf} arm{mel,prc,cav,inf} rng spd los  train   F    W    G    S   age  bldg
 static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
-    /* VILLAGER  */ {  25,  3,  0,  1,  1,  4, 1500, { 50,  0,  0,  0}, AGE_DARK,   BLDG_TOWN_CENTER },
-    /* MILITIA   */ {  40,  4,  1,  1,  1,  4, 1260, { 60,  0, 20,  0}, AGE_DARK,   BLDG_BARRACKS },
-    /* ARCHER    */ {  30,  4,  0,  4,  1,  6, 2100, {  0, 25, 45,  0}, AGE_FEUDAL, BLDG_ARCHERY_RANGE },
-    /* KNIGHT    */ { 100, 10,  2,  1,  2,  4, 1800, { 60,  0, 75,  0}, AGE_CASTLE, BLDG_STABLE },
-    /* SPEARMAN  */ {  45,  3,  0,  1,  1,  4, 1320, { 35, 25,  0,  0}, AGE_FEUDAL, BLDG_BARRACKS },
-    /* SCOUT     */ {  45,  5,  0,  1,  2,  6,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_STABLE },
-    /* SHEEP     */ {  25,  0,  0,  0,  1,  2,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_TYPE_COUNT },
+    /* VILLAGER  */ {  25, {3,0,0,0}, {0,0,0,0},  1,  1,  4, 1500, { 50,  0,  0,  0}, AGE_DARK,   BLDG_TOWN_CENTER },
+    /* MILITIA   */ {  40, {4,0,0,0}, {0,1,0,0},  1,  1,  4, 1260, { 60,  0, 20,  0}, AGE_DARK,   BLDG_BARRACKS },
+    /* ARCHER    */ {  30, {0,4,0,0}, {0,0,0,0},  4,  1,  6, 2100, {  0, 25, 45,  0}, AGE_FEUDAL, BLDG_ARCHERY_RANGE },
+    /* KNIGHT    */ { 100, {10,0,0,0},{2,2,0,0},  1,  2,  4, 1800, { 60,  0, 75,  0}, AGE_CASTLE, BLDG_STABLE },
+    /* SPEARMAN  */ {  45, {3,0,15,0},{0,0,0,0},  1,  1,  4, 1320, { 35, 25,  0,  0}, AGE_FEUDAL, BLDG_BARRACKS },
+    /* SCOUT     */ {  45, {5,0,0,0}, {0,2,0,0},  1,  2,  6,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_STABLE },
+    /* SHEEP     */ {  25, {0,0,0,0}, {0,0,0,0},  0,  1,  2,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_TYPE_COUNT },
 };
 
 // ---------------------------------------------------------------------------

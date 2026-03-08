@@ -556,11 +556,13 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         font_draw_num_16(minimapVram, 256, 192, x, ty - 1, st.hp, colText, gameFont);
         ty += 10;
 
-        // ATK / ARM
+        // ATK / ARM — show primary attack class and melee+pierce armor
+        int mainAtk = st.attack[DMG_MELEE] + st.attack[DMG_PIERCE];
+        int mainArm = st.armor[DMG_MELEE] + st.armor[DMG_PIERCE];
         x = font_draw_str_16(minimapVram, 256, 192, TX, ty, "ATK:", colText, gameFont);
-        x = font_draw_num_16(minimapVram, 256, 192, x, ty, st.attack, colText, gameFont);
+        x = font_draw_num_16(minimapVram, 256, 192, x, ty, mainAtk, colText, gameFont);
         x = font_draw_str_16(minimapVram, 256, 192, x + 4, ty, "ARM:", colText, gameFont);
-        font_draw_num_16(minimapVram, 256, 192, x, ty, st.armor, colText, gameFont);
+        font_draw_num_16(minimapVram, 256, 192, x, ty, mainArm, colText, gameFont);
         ty += 12;
 
         // RNG / SPD

@@ -64,21 +64,22 @@ void tech_apply_bonuses(int player) {
     // Military techs
     if (researched & (1 << TECH_MAN_AT_ARMS)) {
         playerUnitStats[player][UNIT_MILITIA].hp += 2;
-        playerUnitStats[player][UNIT_MILITIA].attack += 1;
+        playerUnitStats[player][UNIT_MILITIA].attack[DMG_MELEE] += 1;
     }
     if (researched & (1 << TECH_CROSSBOW)) {
         playerUnitStats[player][UNIT_ARCHER].range += 1;
-        playerUnitStats[player][UNIT_ARCHER].attack += 2;
+        playerUnitStats[player][UNIT_ARCHER].attack[DMG_PIERCE] += 2;
     }
     if (researched & (1 << TECH_CAVALIER)) {
         playerUnitStats[player][UNIT_KNIGHT].hp += 20;
-        playerUnitStats[player][UNIT_KNIGHT].attack += 2;
+        playerUnitStats[player][UNIT_KNIGHT].attack[DMG_MELEE] += 2;
     }
 
     // Economy techs
     if (researched & (1 << TECH_LOOM)) {
         playerUnitStats[player][UNIT_VILLAGER].hp += 15;
-        playerUnitStats[player][UNIT_VILLAGER].armor += 1;
+        playerUnitStats[player][UNIT_VILLAGER].armor[DMG_MELEE] += 1;
+        playerUnitStats[player][UNIT_VILLAGER].armor[DMG_PIERCE] += 1;
     }
     if (researched & (1 << TECH_WHEELBARROW)) {
         playerUnitStats[player][UNIT_VILLAGER].speed += 1;
