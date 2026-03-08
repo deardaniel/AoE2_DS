@@ -1,134 +1,139 @@
 # AoE2 DSi
 
-Age of Empires 2 port for Nintendo DSi.
+Age of Empires 2 demake for Nintendo DS/DSi. A from-scratch implementation featuring isometric terrain, resource gathering, building construction, unit combat, AI opponent, tech research, and age advancement — all running on NDS hardware.
+
+## Screenshots
+
+*(Run in melonDS emulator)*
+
+## Features
+
+- **Isometric terrain** with procedurally varied grass, dirt, forests, gold, stone, and berry bushes
+- **Resource gathering** — villagers auto-gather wood, food, gold, stone; forage berries; herd sheep
+- **Building construction** — Town Center, Houses, Barracks, Archery Range, Stable, Farms, Mining/Lumber Camps, Market, Towers, Walls, Castle
+- **Unit training** — Villagers, Militia, Archers, Knights, Spearmen, Scouts
+- **Age advancement** — Dark Age through Imperial Age with progressive unlocks
+- **Technology research** — Man-at-Arms, Crossbow, Cavalier upgrades
+- **AI opponent** — need-based economy, building priorities, army composition, attack decisions
+- **Fog of war** — explored/unexplored/visible states per tile
+- **Market trading** — sell resources at 70% exchange rate
+- **Rally points** — set spawn destinations for trained units
+- **TC garrison** — shelter villagers from attacks
+- **Multi-unit selection** — drag-select and double-tap-to-select-all-of-type
+- **Under attack alerts** — flashing warning text and minimap indicator
+- **Background music** — streamed from NitroFS
 
 ## Build
 
+Requires [devkitPro](https://devkitpro.org/) with devkitARM and libnds.
+
 ```bash
-# Set up devkitPro (add to ~/.zshrc)
 export DEVKITPRO=/opt/devkitpro
 export DEVKITARM=$DEVKITPRO/devkitARM
 
-# Build
-cd aoe2_dsi
-make
+make          # build ROM
+make sprites  # regenerate sprite/terrain binaries (requires AoE2 HD assets)
 ```
 
 ## Run
 
-The resulting `.nds` file can be run in:
-- [melonDS](https://melonds.kuribo64.net/) emulator
-- On real hardware via a flash cart
+The output `aoe2_dsi.nds` runs in:
+- [melonDS](https://melonds.kuribo64.net/) emulator (recommended)
+- Real NDS/DSi hardware via flash cart
 
 ## Controls
 
-- D-pad: Move units
-- Map and villager sprites render on the **bottom screen** (touch-driven).
-- Touch: Tap villager on the map to select/deselect
-- Touch: Tap ground to move (when selected; water is blocked)
-- Touch: Tap build button (top-left) to enter build mode
-- Touch: Tap ground to place building (when in build mode + selected; water is blocked)
-- A 1px marker shows the villager/building position on the map.
-- When selected, a ghost marker follows the stylus for build preview.
-- SELECT: Toggle camera follow
-- L/R: Scroll background (Y axis) when camera follow is off
-- A/Y: Scroll background (X axis) when camera follow is off
-- START: Exit
+### Touch Screen (Bottom)
+| Action | Input |
+|--------|-------|
+| Select unit/building | Tap on it |
+| Move selected units | Tap ground |
+| Gather resource | Tap resource tile with villager selected |
+| Attack enemy | Tap enemy unit with military selected |
+| Gather sheep | Tap own sheep with villager selected |
+| Drag-select units | Touch and drag |
+| Select all of type | Double-tap a selected unit |
+| Set rally point | Tap map with building selected |
+| Place building | Tap ground in build mode |
 
-## Assets
+### Buttons
+| Button | Action |
+|--------|--------|
+| D-pad | Scroll camera (double-tap direction for fast scroll) |
+| D-pad Up/Down | Cycle train unit type (when military building selected) |
+| D-pad Left/Right | Cycle market trade (when market selected) |
+| SELECT | Toggle camera follow on selected unit |
+| START | Train unit / research tech / age up (building selected) or toggle music |
+| X | Open/cycle build menu pages |
+| B | Cancel build mode / cancel training queue |
+| A | Ungarrison TC / select first military unit |
+| Y | Center camera on Town Center |
+| L/R | Cycle to next/first idle villager |
 
-- Sample sprites from devkitPro (`sprites/man.png`, `woman.png`)
-- Original AoE2:DE assets available in: `C:\Program Files (x86)\Steam\steamapps\common\AoE2DE`
+### Top Screen
+Minimap display with resource/unit info HUD.
 
-## Asset Pipeline (HD / SLP)
+## Asset Pipeline
 
-This project can extract AoE2 HD (`Age2HD`) `.slp` sprites and pack them into NDS-ready sprite sheets.
+Sprites are extracted from AoE2 HD (Steam) SLP files and preprocessed into NDS-ready indexed binary data.
 
-### 1) Extract frames from an SLP
-
+### Extract SLP frames
 ```bash
-# Example: extract frame 0 from 2.slp using the HD palette
-node extract-slp.js \\
-  "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/2.slp" \\
-  test_output \\
-  0 \\
-  "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal"
+node extract-slp.js <path-to-slp> <output-dir> [frame-index]
 ```
 
-Omit the frame index to export all frames.
-
-### 2) Pack frames into a sprite sheet
-
+### Pack into sprite sheet
 ```bash
-# Pack extracted frames into a 32x32 grid sprite sheet
-python3 scripts/pack_frames.py test_output sprites/villager.png --cell 32x32 --cols 4 --fit
+python3 scripts/pack_frames.py <frames-dir> <output.png> \
+  --cell 32x32 --cols 10 --dirs 5 --fpd 10 --fit
 ```
 
-Notes:
-- `--fit` scales frames down to fit within the cell.
-- The output sheet can be used directly by `grit` via the existing Makefile rule.
+**Note:** The `--fit` flag computes a uniform scale factor from the largest frame to fit all frames within cells. This may affect relative sprite sizes across different sheets — consider using `--scale` with an explicit factor for consistent sizing.
 
-### 3) One-shot extract + pack
-
+### Preprocess for NDS
 ```bash
-python3 scripts/build_sprite_sheet.py \\
-  "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/2.slp" \\
-  sprites/villager.png \\
-  --palette "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal" \\
-  --cell 32x32 \\
-  --cols 4 \\
-  --fit
+make sprites  # runs preprocess_sprites.py then preprocess_terrain.py
 ```
 
-Or use the Makefile helper:
+This generates:
+- `data/sprite_pal.bin` — shared 256-color BGR555 palette
+- `data/sprite_remap.bin` — player color remap table (blue → red)
+- `data/spr_*.bin` — indexed pixel data for each sprite sheet
+- `data/terrain_*.bin` — terrain tile graphics and palette
 
+### Batch extract via manifest
 ```bash
-make assets \\
-  SLP="/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/2.slp" \\
-  OUT="sprites/villager.png" \\
-  PALETTE="/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/pal_5.pal" \\
-  CELL=32x32 \\
-  COLS=4 \\
-  FIT=1
-```
-
-### 4) Batch build via manifest
-
-Edit `assets/manifest.json` and then run:
-
-```bash
+# Edit assets/manifest_game.json, then:
 make assets-batch
 ```
 
-You can auto-generate a starter HD manifest and build it:
+## Architecture
 
-```bash
-python3 scripts/gen_manifest_hd.py
-make assets-batch-hd
-```
+| File | Purpose |
+|------|---------|
+| `source/main.cpp` | Game loop, phase management, rendering pipeline |
+| `source/terrain.cpp` | Map generation, isometric tile rendering |
+| `source/render.cpp` | Software sprite rendering, depth sorting |
+| `source/units.cpp` | Unit AI, pathfinding, combat, gathering |
+| `source/buildings.cpp` | Building placement, training, garrison |
+| `source/input.cpp` | Touch/button input, drag-select, build menu |
+| `source/ai.cpp` | AI economy, building, military decisions |
+| `source/ui.cpp` | Top screen minimap + console HUD |
+| `source/game.cpp` | Game state, selection helpers, win/lose |
+| `source/fog.cpp` | Fog of war visibility |
+| `source/tech.cpp` | Technology research and stat modifiers |
+| `source/sound.cpp` | NitroFS music streaming |
+| `source/font.cpp` | Bitmap font rendering |
+| `source/config.h` | All constants, stat tables, palette indices |
+| `source/iso.h` | Isometric coordinate conversions |
+| `scripts/preprocess_sprites.py` | PNG → indexed binary sprite data |
+| `scripts/preprocess_terrain.py` | Terrain tile generation from HD textures |
+| `scripts/shared_constants.py` | Shared Python/C++ constants |
 
-Generate a quick preview page for the generated sheets:
+## Technical Notes
 
-```bash
-python3 scripts/gen_sprite_index.py
-```
-
-Open `sprites/index.html` in a browser to review the sheets.
-
-## Development
-
-See [PLAN.md](./PLAN.md) for the development roadmap.
-
-## Terrain System
-
-The terrain is now managed by a dedicated module:
-- `source/terrain.h`, `source/terrain.cpp`: owns the tile grid, provides passability/buildability checks, and renders tiles into the bitmap BG.
-- `TerrainMap::init()` builds a simple starter layout (grass + dirt band + water patch).
-- `TerrainMap::render()` stamps 16x16 tiles from `grass.png`, `dirt.png`, `water.png` into the bottom-screen bitmap BG.
-
-## Notes / Learnings
-
-- **Grass background**: Use a bitmap BG (BG2) with `BgType_Bmp8` and put it in VRAM bank A (`VRAM_A_MAIN_BG`). Sprites must be moved to a different bank (e.g. `VRAM_B_MAIN_SPRITE`) or the BG will be black.
-- **Grass pipeline**: `sprites/grass.png` is generated from HD terrain textures in `Age2HD/resources/_common/terrain/textures/`. See `scripts/make_grass_from_texture.py`.
-- **Villager frame order**: Packed sheets are treated as a 4x3 grid (columns = directions, rows = frames). Animation index = `dir + frame * 4`.
-- **Terrain variety**: `sprites/dirt.png` is generated from `g_des_00_color.png` via `scripts/make_texture_from_hd.py` and stamped onto the bitmap.
+- **NDS VRAM does not support byte writes** — all bitmap rendering goes to a main RAM buffer (`terrainBuf`), then `dmaCopy()` to VRAM each frame
+- Bottom screen uses 8-bit indexed bitmap mode (Mode 5, BG2)
+- Top screen uses 16-bit bitmap for minimap + text console overlay
+- Units and buildings are software-rendered into the bitmap buffer (not OAM sprites) for unlimited count and flexible depth sorting
+- Isometric diamond tile rendering with per-pixel fog of war overlay
