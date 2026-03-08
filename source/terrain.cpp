@@ -533,8 +533,8 @@ int TerrainMap::depleteResource(int tx, int ty, int amount) {
     resourceAmt[ty][tx] -= gathered;
 
     if (resourceAmt[ty][tx] <= 0) {
-        // Resource exhausted — revert to grass
-        tiles[ty][tx] = TERRAIN_GRASS;
+        // Resource exhausted — show dirt patch (was grass before)
+        tiles[ty][tx] = TERRAIN_DIRT;
         resourceAmt[ty][tx] = 0;
     }
 
