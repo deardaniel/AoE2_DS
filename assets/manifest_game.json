@@ -125,7 +125,7 @@
     {
       "name": "builder_work",
       "group": "builder",
-      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1490.slp",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1496.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/builder_work.png",
       "cell": "32x32",
@@ -157,7 +157,7 @@
     {
       "name": "farmer_work",
       "group": "farmer",
-      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1506.slp",
+      "slp": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics/1473.slp",
       "palette": "/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina",
       "out": "sprites/farmer_work.png",
       "cell": "32x32",
