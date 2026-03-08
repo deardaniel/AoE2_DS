@@ -67,6 +67,8 @@ extern const u8 spr_scout_bin[];
 extern const u8 spr_scout_walk_bin[];
 extern const u8 spr_scout_die_bin[];
 extern const u8 spr_sheep_stand_bin[];
+extern const u8 spr_sheep_walk_bin[];
+extern const u8 spr_sheep_die_bin[];
 extern const u8 spr_villager_die_bin[];
 
 // Building sprites (32x32 or 16x16, single frame)
@@ -361,7 +363,7 @@ void render_init() {
     unitWalkSheet[UNIT_KNIGHT]     = spr_knight_walk_bin;
     unitWalkSheet[UNIT_SPEARMAN]   = spr_spearman_walk_bin;
     unitWalkSheet[UNIT_SCOUT]      = spr_scout_walk_bin;
-    unitWalkSheet[UNIT_SHEEP]      = spr_sheep_stand_bin; // sheep reuse standing for walk
+    unitWalkSheet[UNIT_SHEEP]      = spr_sheep_walk_bin;
 
     unitFightSheet[UNIT_VILLAGER]  = spr_villager_attack_bin;
     unitFightSheet[UNIT_MILITIA]   = spr_militia_fight_bin;
@@ -377,7 +379,7 @@ void render_init() {
     unitDeathSheet[UNIT_KNIGHT]    = spr_knight_die_bin;
     unitDeathSheet[UNIT_SPEARMAN]  = spr_spearman_die_bin;
     unitDeathSheet[UNIT_SCOUT]     = spr_scout_die_bin;
-    unitDeathSheet[UNIT_SHEEP]     = spr_sheep_stand_bin; // sheep reuse standing for death
+    unitDeathSheet[UNIT_SHEEP]     = spr_sheep_die_bin;
 
     // Villager role-specific sheets
     villagerRoleStand[VROLE_BASE]       = spr_villager_bin;

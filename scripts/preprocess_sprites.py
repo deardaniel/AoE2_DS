@@ -68,6 +68,8 @@ UNIT_SHEETS = [
     ('spr_scout_die',        'scout_die.png'),
     ('spr_villager_die',     'villager_die.png'),
     ('spr_sheep_stand',      'sheep_stand.png'),
+    ('spr_sheep_walk',       'sheep_walk.png'),
+    ('spr_sheep_die',        'sheep_die.png'),
 ]
 
 # Building sprites: (output_name, filename, target_w, target_h, tileW, tileH, hotspot_y_ratio)
