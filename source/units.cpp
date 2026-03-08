@@ -55,6 +55,7 @@ void units_init() {
         units[i].oamSlot = -1;
         units[i].carryType = RES_COUNT;
         units[i].role = VROLE_BASE;
+        units[i].cmdQueueLen = 0;
     }
 }
 
@@ -89,6 +90,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.oamSlot = -1;
             u.pathLen = 0;
             u.pathIdx = 0;
+            u.cmdQueueLen = 0;
             return i;
         }
     }
@@ -489,6 +491,7 @@ static bool find_nearest_resource(int cx, int cy, u8 carryType, const TerrainMap
 void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     Unit& u = units[idx];
+    u.cmdQueueLen = 0; // new direct command clears queue
 
     int sx = u.x / TILE_PX;
     int sy = u.y / TILE_PX;
@@ -515,6 +518,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     Unit& u = units[idx];
     if (u.type != UNIT_VILLAGER) return;
+    u.cmdQueueLen = 0;
 
     u8 tt = terrain.tileAt(tileTX, tileTY);
     if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE &&
@@ -592,6 +596,7 @@ void unit_command_attack(int idx, int targetIdx) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     if (targetIdx < 0 || targetIdx >= MAX_UNITS || !units[targetIdx].alive) return;
     Unit& u = units[idx];
+    u.cmdQueueLen = 0;
     u.attackTarget = targetIdx;
     u.attackBldgTarget = -1;
     u.gatherTX = -1;
@@ -603,6 +608,7 @@ void unit_command_attack_building(int idx, int bldgIdx) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
     Unit& u = units[idx];
+    u.cmdQueueLen = 0;
     u.attackBldgTarget = bldgIdx;
     u.attackTarget = -1;
     u.buildTarget = -1;
@@ -615,6 +621,7 @@ void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
     if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
     Unit& u = units[idx];
     if (u.type != UNIT_VILLAGER) return;
+    u.cmdQueueLen = 0;
 
     u.buildTarget = bldgIdx;
     u.attackTarget = -1;
@@ -669,6 +676,7 @@ void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
 void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
+    units[idx].cmdQueueLen = 0;
     Building& b = buildings[bldgIdx];
     if (!building_is_complete(bldgIdx)) return;
     if (b.type != BLDG_TOWN_CENTER) return;
@@ -1163,6 +1171,59 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Command queue helpers
+// ---------------------------------------------------------------------------
+void unit_queue_command(int idx, Unit::CmdType type, s16 x, s16 y, s8 target) {
+    Unit& u = units[idx];
+    if (u.cmdQueueLen >= Unit::CMD_QUEUE_MAX) return;
+    Unit::QueuedCmd& cmd = u.cmdQueue[u.cmdQueueLen++];
+    cmd.type = type;
+    cmd.x = x;
+    cmd.y = y;
+    cmd.target = target;
+}
+
+// Pop the front command from queue (shift remaining forward)
+static bool unit_pop_command(Unit& u, Unit::QueuedCmd& out) {
+    if (u.cmdQueueLen == 0) return false;
+    out = u.cmdQueue[0];
+    u.cmdQueueLen--;
+    for (int i = 0; i < u.cmdQueueLen; i++)
+        u.cmdQueue[i] = u.cmdQueue[i + 1];
+    return true;
+}
+
+// Execute next queued command. Returns true if a command was dispatched.
+static bool unit_exec_next_command(int idx, TerrainMap& terrain) {
+    Unit& u = units[idx];
+    Unit::QueuedCmd cmd;
+    if (!unit_pop_command(u, cmd)) return false;
+
+    switch (cmd.type) {
+    case Unit::CMD_MOVE:
+        unit_command_move(idx, cmd.x, cmd.y, terrain);
+        break;
+    case Unit::CMD_ATTACK:
+        if (cmd.target >= 0 && cmd.target < MAX_UNITS && units[cmd.target].alive)
+            unit_command_attack(idx, cmd.target);
+        else return false;
+        break;
+    case Unit::CMD_ATTACK_BLDG:
+        unit_command_attack_building(idx, cmd.target);
+        break;
+    case Unit::CMD_GATHER:
+        unit_command_gather(idx, cmd.x, cmd.y, terrain);
+        break;
+    case Unit::CMD_BUILD:
+        unit_command_build(idx, cmd.target, terrain);
+        break;
+    default:
+        return false;
+    }
+    return true;
+}
+
 void units_update(GameState& gs, TerrainMap& terrain) {
     rebuild_occupancy();
 
@@ -1227,6 +1288,11 @@ void units_update(GameState& gs, TerrainMap& terrain) {
 
         switch (u.state) {
         case USTATE_IDLE:
+            // Process command queue before auto-engage
+            if (u.cmdQueueLen > 0) {
+                if (unit_exec_next_command(i, terrain))
+                    break;
+            }
             // Military units: auto-attack nearby enemies (stance-dependent)
             if (u.type != UNIT_VILLAGER && u.stance != STANCE_NO_ATTACK) {
                 if (u.stance != STANCE_STAND) {

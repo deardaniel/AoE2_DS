@@ -40,6 +40,17 @@ struct Unit {
     u8   pathDirs[64]; // direction sequence
     s8   pathDestTX, pathDestTY; // final destination tile
     s8   stepTX, stepTY;         // target tile for current path step
+
+    // Command queue (for shift-click waypoints)
+    enum { CMD_QUEUE_MAX = 4 };
+    enum CmdType : u8 { CMD_NONE = 0, CMD_MOVE, CMD_ATTACK, CMD_ATTACK_BLDG, CMD_GATHER, CMD_BUILD };
+    struct QueuedCmd {
+        u8  type;    // CmdType
+        s16 x, y;    // target position or tile coords
+        s8  target;  // unit/building index for attack/build (-1 = none)
+    };
+    QueuedCmd cmdQueue[CMD_QUEUE_MAX];
+    u8 cmdQueueLen;
 };
 
 // ---------------------------------------------------------------------------
@@ -65,6 +76,9 @@ int  unit_count(int owner);
 int  unit_count_type(int owner, int type);
 int  unit_find_idle_villager(int owner, int startFrom = 0);
 int  unit_find_nearest_enemy(int unitIdx);
+
+// Command queue: append a waypoint command (shift-click style)
+void unit_queue_command(int idx, Unit::CmdType type, s16 x, s16 y, s8 target = -1);
 
 // A* pathfinding on tile grid.
 // selfIdx: index of the pathfinding unit (excluded from the passability map

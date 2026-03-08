@@ -16,7 +16,7 @@ enum { DRAG_THRESHOLD = 8 };
 // ---------------------------------------------------------------------------
 // Process a single tap at screen position (called on touch release if not drag)
 // ---------------------------------------------------------------------------
-static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int screenY) {
+static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int screenY, bool queue = false) {
     // Build menu check (bottom strip)
     if (gs.buildMenuOpen && screenY >= BUILD_MENU_Y) {
         int slot = screenX / BUILD_MENU_ITEM_W;
@@ -102,7 +102,10 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
             bool sentGatherer = false;
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (gs.unitSelected[i] && units[i].alive && units[i].type == UNIT_VILLAGER) {
-                    unit_command_attack(i, tappedUnit);
+                    if (queue)
+                        unit_queue_command(i, Unit::CMD_ATTACK, 0, 0, tappedUnit);
+                    else
+                        unit_command_attack(i, tappedUnit);
                     sentGatherer = true;
                 }
             }
@@ -190,8 +193,12 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     }
     if (enemyUnit >= 0 && gs.selectionCount > 0) {
         for (int i = 0; i < MAX_UNITS; i++) {
-            if (gs.unitSelected[i] && units[i].alive)
-                unit_command_attack(i, enemyUnit);
+            if (gs.unitSelected[i] && units[i].alive) {
+                if (queue)
+                    unit_queue_command(i, Unit::CMD_ATTACK, 0, 0, enemyUnit);
+                else
+                    unit_command_attack(i, enemyUnit);
+            }
         }
         return;
     }
@@ -199,8 +206,12 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     // Check if tapped on enemy building (attack command)
     if (tappedBldg >= 0 && buildings[tappedBldg].owner != 0 && gs.selectionCount > 0) {
         for (int i = 0; i < MAX_UNITS; i++) {
-            if (gs.unitSelected[i] && units[i].alive)
-                unit_command_attack_building(i, tappedBldg);
+            if (gs.unitSelected[i] && units[i].alive) {
+                if (queue)
+                    unit_queue_command(i, Unit::CMD_ATTACK_BLDG, 0, 0, tappedBldg);
+                else
+                    unit_command_attack_building(i, tappedBldg);
+            }
         }
         return;
     }
@@ -214,7 +225,10 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (!gs.unitSelected[i]) continue;
                 if (units[i].alive && units[i].type == UNIT_VILLAGER) {
-                    unit_command_gather(i, tileX, tileY, terrain);
+                    if (queue)
+                        unit_queue_command(i, Unit::CMD_GATHER, tileX, tileY);
+                    else
+                        unit_command_gather(i, tileX, tileY, terrain);
                     sentGatherer = true;
                 }
             }
@@ -326,8 +340,13 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                 }
             }
 
-            unit_command_move(i, destTX * TILE_PX + TILE_PX / 2,
-                              destTY * TILE_PX + TILE_PX / 2, terrain);
+            if (queue)
+                unit_queue_command(i, Unit::CMD_MOVE,
+                                   destTX * TILE_PX + TILE_PX / 2,
+                                   destTY * TILE_PX + TILE_PX / 2);
+            else
+                unit_command_move(i, destTX * TILE_PX + TILE_PX / 2,
+                                  destTY * TILE_PX + TILE_PX / 2, terrain);
         }
     }
 }
@@ -469,7 +488,8 @@ void input_update(GameState& gs, TerrainMap& terrain) {
             gs.followCam = true;
         }
     }
-    if (keysPressed & KEY_R) {
+    // R: cycle idle villagers (only when not touching — R held = queue modifier)
+    if ((keysPressed & KEY_R) && !touchDown) {
         int vil = unit_find_idle_villager(0, 0);
         if (vil >= 0) {
             game_select_unit(gs, vil);
@@ -560,7 +580,8 @@ void input_update(GameState& gs, TerrainMap& terrain) {
                 process_drag_select(gs, gs.dragStartX, gs.dragStartY,
                                     gs.dragEndX, gs.dragEndY);
             } else {
-                process_tap(gs, terrain, gs.dragStartX, gs.dragStartY);
+                bool queueCmd = (keys & KEY_R) != 0;
+                process_tap(gs, terrain, gs.dragStartX, gs.dragStartY, queueCmd);
             }
             gs.isDragging = false;
         } else if (!touchDown) {
