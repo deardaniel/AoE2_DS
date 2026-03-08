@@ -41,6 +41,10 @@ struct Unit {
     s8   pathDestTX, pathDestTY; // final destination tile
     s8   stepTX, stepTY;         // target tile for current path step
 
+    // Patrol waypoints (pixel coords; patrolling = patrolAX >= 0)
+    s16  patrolAX, patrolAY;     // first waypoint (-1 = not patrolling)
+    s16  patrolBX, patrolBY;     // second waypoint
+
     // Command queue (for shift-click waypoints)
     enum { CMD_QUEUE_MAX = 4 };
     enum CmdType : u8 { CMD_NONE = 0, CMD_MOVE, CMD_ATTACK, CMD_ATTACK_BLDG, CMD_GATHER, CMD_BUILD };
@@ -71,6 +75,7 @@ void unit_command_attack(int idx, int targetIdx);
 void unit_command_attack_building(int idx, int bldgIdx);
 void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain);
 void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain);
+void unit_command_patrol(int idx, s16 px, s16 py, TerrainMap& terrain);
 int  unit_at_pixel(s16 px, s16 py, int ignoreOwner = -1);
 int  unit_count(int owner);
 int  unit_count_type(int owner, int type);

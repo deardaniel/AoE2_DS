@@ -537,7 +537,7 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         const char* stateStr = "";
         switch (u.state) {
         case USTATE_IDLE:      stateStr = "Idle"; break;
-        case USTATE_MOVING:    stateStr = "Moving"; break;
+        case USTATE_MOVING:    stateStr = (u.patrolAX >= 0) ? "Patrol" : "Moving"; break;
         case USTATE_GATHERING: stateStr = "Gathering"; break;
         case USTATE_RETURNING: stateStr = "Returning"; break;
         case USTATE_BUILDING:  stateStr = "Building"; break;

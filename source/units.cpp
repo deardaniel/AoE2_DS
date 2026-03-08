@@ -56,6 +56,7 @@ void units_init() {
         units[i].carryType = RES_COUNT;
         units[i].role = VROLE_BASE;
         units[i].cmdQueueLen = 0;
+        units[i].patrolAX = -1;
     }
 }
 
@@ -91,6 +92,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.pathLen = 0;
             u.pathIdx = 0;
             u.cmdQueueLen = 0;
+            u.patrolAX = -1;
             return i;
         }
     }
@@ -501,6 +503,7 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     Unit& u = units[idx];
     u.cmdQueueLen = 0; // new direct command clears queue
+    u.patrolAX = -1;   // cancel patrol
 
     int sx = u.x / TILE_PX;
     int sy = u.y / TILE_PX;
@@ -528,6 +531,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     Unit& u = units[idx];
     if (u.type != UNIT_VILLAGER) return;
     u.cmdQueueLen = 0;
+    u.patrolAX = -1;
 
     u8 tt = terrain.tileAt(tileTX, tileTY);
     if (tt != TERRAIN_FOREST && tt != TERRAIN_GOLD && tt != TERRAIN_STONE &&
@@ -606,6 +610,7 @@ void unit_command_attack(int idx, int targetIdx) {
     if (targetIdx < 0 || targetIdx >= MAX_UNITS || !units[targetIdx].alive) return;
     Unit& u = units[idx];
     u.cmdQueueLen = 0;
+    u.patrolAX = -1;
     u.attackTarget = targetIdx;
     u.attackBldgTarget = -1;
     u.gatherTX = -1;
@@ -618,6 +623,7 @@ void unit_command_attack_building(int idx, int bldgIdx) {
     if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
     Unit& u = units[idx];
     u.cmdQueueLen = 0;
+    u.patrolAX = -1;
     u.attackBldgTarget = bldgIdx;
     u.attackTarget = -1;
     u.buildTarget = -1;
@@ -631,7 +637,7 @@ void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
     Unit& u = units[idx];
     if (u.type != UNIT_VILLAGER) return;
     u.cmdQueueLen = 0;
-
+    u.patrolAX = -1;
     u.buildTarget = bldgIdx;
     u.attackTarget = -1;
     u.attackBldgTarget = -1;
@@ -686,6 +692,7 @@ void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
     units[idx].cmdQueueLen = 0;
+    units[idx].patrolAX = -1;
     Building& b = buildings[bldgIdx];
     if (!building_is_complete(bldgIdx)) return;
     if (b.type != BLDG_TOWN_CENTER) return;
@@ -730,6 +737,25 @@ void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
             }
         }
     }
+}
+
+void unit_command_patrol(int idx, s16 px, s16 py, TerrainMap& terrain) {
+    if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
+    Unit& u = units[idx];
+    u.cmdQueueLen = 0;
+    u.patrolAX = u.x; u.patrolAY = u.y; // start from current position
+    u.patrolBX = px;  u.patrolBY = py;   // patrol to target
+    u.attackTarget = -1;
+    u.attackBldgTarget = -1;
+    u.buildTarget = -1;
+    u.gatherTX = -1;
+    u.gatherTY = -1;
+    u.garrisonTarget = -1;
+    // Start moving to patrol point B
+    unit_command_move(idx, px, py, terrain);
+    // Restore patrol fields (command_move clears them via cmdQueueLen)
+    u.patrolAX = u.x; u.patrolAY = u.y;
+    u.patrolBX = px;  u.patrolBY = py;
 }
 
 // ---------------------------------------------------------------------------
@@ -1297,6 +1323,17 @@ void units_update(GameState& gs, TerrainMap& terrain) {
 
         switch (u.state) {
         case USTATE_IDLE:
+            // Patrol: swap waypoints and move to the other end
+            if (u.patrolAX >= 0) {
+                s16 pAX = u.patrolAX, pAY = u.patrolAY;
+                s16 pBX = u.patrolBX, pBY = u.patrolBY;
+                // Swap: next leg goes to B (current A becomes new B)
+                unit_command_move(i, pBX, pBY, terrain);
+                // Restore patrol (unit_command_move clears it)
+                u.patrolAX = pBX; u.patrolAY = pBY;
+                u.patrolBX = pAX; u.patrolBY = pAY;
+                break;
+            }
             // Process command queue before auto-engage
             if (u.cmdQueueLen > 0) {
                 if (unit_exec_next_command(i, terrain))
@@ -1352,9 +1389,9 @@ void units_update(GameState& gs, TerrainMap& terrain) {
 
         case USTATE_MOVING:
             unit_step_path(u, i, terrain);
-            // Military units auto-engage enemies while moving (aggressive only)
+            // Military units auto-engage enemies while moving (aggressive or patrol)
             if (u.state == USTATE_MOVING && u.type != UNIT_VILLAGER &&
-                u.stance == STANCE_AGGRESSIVE &&
+                (u.stance == STANCE_AGGRESSIVE || u.patrolAX >= 0) &&
                 u.attackTarget < 0 && u.attackBldgTarget < 0) {
                 int enemy = unit_find_nearest_enemy(i);
                 if (enemy >= 0) {

@@ -540,8 +540,8 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         gs.inputMode = 0;
     }
 
-    // Y: center on TC
-    if (keysPressed & KEY_Y) {
+    // Y: center on TC (only when not touching — Y held = patrol modifier)
+    if ((keysPressed & KEY_Y) && !touchDown) {
         int tc = building_nearest(0, BLDG_TOWN_CENTER, 0, 0);
         if (tc >= 0) {
             int isoX, isoY;
@@ -581,7 +581,20 @@ void input_update(GameState& gs, TerrainMap& terrain) {
                                     gs.dragEndX, gs.dragEndY);
             } else {
                 bool queueCmd = (keys & KEY_R) != 0;
-                process_tap(gs, terrain, gs.dragStartX, gs.dragStartY, queueCmd);
+                bool patrolCmd = (keys & KEY_Y) != 0;
+                if (patrolCmd && gs.selectionCount > 0) {
+                    // Patrol: Y held + tap = patrol between current pos and target
+                    int tileX, tileY;
+                    screenToTile(gs.dragStartX, gs.dragStartY, gs.camX, gs.camY, tileX, tileY);
+                    int mapX = tileX * TILE_PX + TILE_PX / 2;
+                    int mapY = tileY * TILE_PX + TILE_PX / 2;
+                    for (int i = 0; i < MAX_UNITS; i++) {
+                        if (gs.unitSelected[i] && units[i].alive)
+                            unit_command_patrol(i, mapX, mapY, terrain);
+                    }
+                } else {
+                    process_tap(gs, terrain, gs.dragStartX, gs.dragStartY, queueCmd);
+                }
             }
             gs.isDragging = false;
         } else if (!touchDown) {
