@@ -1102,6 +1102,9 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
         // Damage building (buildings have no armor classes)
         const s16* atk = playerUnitStats[u.owner][u.type].attack;
         int dmg = atk[DMG_MELEE] + atk[DMG_PIERCE]; // sum base damage classes
+        // Siege units deal massive bonus damage to buildings
+        if (u.type == UNIT_RAM) dmg += 125;
+        else if (u.type == UNIT_MANGONEL) dmg += 35;
         if (dmg < 1) dmg = 1;
 
         building_damage(u.attackBldgTarget, dmg);
@@ -1186,11 +1189,17 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
 
     u.attackCooldown = 30; // ~0.5s between attacks
 
-    // Archers fire a projectile instead of dealing instant damage
+    // Ranged units fire projectiles instead of dealing instant damage
     if (u.type == UNIT_ARCHER) {
         projectile_spawn(u.x, u.y, target.x, target.y,
                          10, u.attackTarget, dmg, u.owner);
         if (u.owner == 0) sound_play(SFX_ARROW_FIRE);
+        return;
+    }
+    if (u.type == UNIT_MANGONEL) {
+        projectile_spawn(u.x, u.y, target.x, target.y,
+                         20, u.attackTarget, dmg, u.owner);
+        u.attackCooldown = 60; // mangonels fire slower
         return;
     }
 

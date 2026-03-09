@@ -324,6 +324,13 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         case BLDG_STABLE:
             building_train(i, UNIT_KNIGHT, gs);
             break;
+        case BLDG_CASTLE:
+            // Alternate between ram and mangonel
+            if (unit_count_type(AI_PLAYER, UNIT_RAM) <= unit_count_type(AI_PLAYER, UNIT_MANGONEL))
+                building_train(i, UNIT_RAM, gs);
+            else
+                building_train(i, UNIT_MANGONEL, gs);
+            break;
         default:
             break;
         }

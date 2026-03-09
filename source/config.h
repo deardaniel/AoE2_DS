@@ -84,7 +84,9 @@ enum UnitTypeId {
     UNIT_SPEARMAN  = 4,
     UNIT_SCOUT     = 5,
     UNIT_SHEEP     = 6,
-    UNIT_TYPE_COUNT = 7
+    UNIT_RAM       = 7,
+    UNIT_MANGONEL  = 8,
+    UNIT_TYPE_COUNT = 9
 };
 
 // ---------------------------------------------------------------------------
@@ -178,6 +180,11 @@ enum UnitClass {
 };
 
 // Which unit types belong to which class (for bonus damage)
+// Unit class tags
+enum {
+    UCLASS_SIEGE    = 3,
+};
+
 static const u8 UNIT_CLASS[UNIT_TYPE_COUNT] = {
     /* VILLAGER  */ UCLASS_NONE,
     /* MILITIA   */ UCLASS_INFANTRY,
@@ -186,6 +193,8 @@ static const u8 UNIT_CLASS[UNIT_TYPE_COUNT] = {
     /* SPEARMAN  */ UCLASS_INFANTRY,
     /* SCOUT     */ UCLASS_CAVALRY,
     /* SHEEP     */ UCLASS_NONE,
+    /* RAM       */ UCLASS_SIEGE,
+    /* MANGONEL  */ UCLASS_SIEGE,
 };
 
 // Calculate total damage from attacker stats vs defender stats
@@ -251,6 +260,8 @@ static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
     /* SPEARMAN  */ {  45, {3,0,15,0},{0,0,0,0},  1,  1,  4, 1320, { 35, 25,  0,  0}, AGE_FEUDAL, BLDG_BARRACKS },
     /* SCOUT     */ {  45, {5,0,0,0}, {0,2,0,0},  1,  2,  6,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_STABLE },
     /* SHEEP     */ {  25, {0,0,0,0}, {0,0,0,0},  0,  1,  2,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_TYPE_COUNT },
+    /* RAM       */ { 175, {2,0,0,0},{-3,180,0,0}, 1,  1,  3, 2400, {  0,  0,  0, 75}, AGE_CASTLE, BLDG_CASTLE },
+    /* MANGONEL  */ {  50, {0,40,0,0},{0,6,0,0},   7,  1,  7, 2700, {  0, 160, 0,  0}, AGE_CASTLE, BLDG_CASTLE },
 };
 
 // ---------------------------------------------------------------------------
@@ -296,7 +307,8 @@ static const int AGE_RESEARCH_TIME[AGE_COUNT] = {
 // Name strings
 // ---------------------------------------------------------------------------
 static const char* const UNIT_NAMES[UNIT_TYPE_COUNT] = {
-    "Villager", "Militia", "Archer", "Knight", "Spearman", "Scout", "Sheep"
+    "Villager", "Militia", "Archer", "Knight", "Spearman", "Scout", "Sheep",
+    "Bat. Ram", "Mangonel"
 };
 
 static const char* const BLDG_NAMES[BLDG_TYPE_COUNT] = {
