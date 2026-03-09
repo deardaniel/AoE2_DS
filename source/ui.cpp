@@ -462,6 +462,16 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         ty += 12;
     }
 
+    // Difficulty indicator
+    {
+        static const char* DIFF_NAMES[] = {"Easy", "Normal", "Hard"};
+        u8 d = gs.aiDifficulty;
+        if (d > 2) d = 1;
+        x = font_draw_str_16(minimapVram, 256, 192, TX, ty, "AI:", colText, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, x, ty, DIFF_NAMES[d], colGold, gameFont);
+        ty += 12;
+    }
+
     // Idle villager warning
     {
         int idleVils = 0;

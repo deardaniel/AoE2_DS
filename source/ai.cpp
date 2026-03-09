@@ -8,6 +8,14 @@
 static const int AI_PLAYER = 1;
 static int aiTimer = 0;
 
+// Difficulty scaling tables [easy, normal, hard]
+static const int AI_TICK_RATE[]    = {90, 60, 45};  // frames between AI ticks
+static const int AI_VIL_BASE[]     = {6, 8, 10};    // base villager target
+static const int AI_VIL_PER_AGE[]  = {2, 4, 5};     // additional vils per age
+static const int AI_ARMY_BASE[]    = {4, 3, 2};      // base army threshold (lower = attacks sooner)
+static const int AI_ARMY_PER_AGE[] = {1, 2, 3};      // additional threshold per age
+static const int AI_RES_BONUS[]    = {0, 0, 50};     // extra starting resources per type (hard)
+
 void ai_init() {
     aiTimer = 0;
 }
@@ -69,9 +77,11 @@ static int ai_place_and_build(int type, int bx, int by, GameState& gs, TerrainMa
 }
 
 void ai_update(GameState& gs, TerrainMap& terrain) {
-    // Only update once per second (60 frames)
+    int diff = gs.aiDifficulty;
+    if (diff < 0 || diff > 2) diff = 1;
+
     aiTimer++;
-    if (aiTimer < 60) return;
+    if (aiTimer < AI_TICK_RATE[diff]) return;
     aiTimer = 0;
 
     if (gs.phase != PHASE_PLAYING) return;
@@ -90,8 +100,8 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
 
     // ---- Economy phase ----
 
-    // Train villagers if under target (scale with age)
-    int vilTarget = 8 + p.age * 4;  // Dark=8, Feudal=12, Castle=16, Imperial=20
+    // Train villagers if under target (scale with age and difficulty)
+    int vilTarget = AI_VIL_BASE[diff] + p.age * AI_VIL_PER_AGE[diff];
     if (vilCount < vilTarget && tcIdx >= 0 && building_is_complete(tcIdx)) {
         building_train(tcIdx, UNIT_VILLAGER, gs);
     }
@@ -235,8 +245,8 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
-    // Tower near TC if feudal and none, and have stone
-    if (p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_TOWER) == 0 &&
+    // Tower near TC if feudal and none, and have stone (not on easy)
+    if (diff >= AI_NORMAL && p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_TOWER) == 0 &&
         p.resources[RES_STONE] >= 50) {
         int bx, by;
         if (ai_find_build_spot(tcTX - 1, tcTY - 1, 1, 1, terrain, bx, by)) {
@@ -260,8 +270,8 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
-    // Castle if imperial and none, and have stone
-    if (p.age >= AGE_IMPERIAL && building_count(AI_PLAYER, BLDG_CASTLE) == 0 &&
+    // Castle if imperial and none, and have stone (not on easy)
+    if (diff >= AI_NORMAL && p.age >= AGE_IMPERIAL && building_count(AI_PLAYER, BLDG_CASTLE) == 0 &&
         p.resources[RES_STONE] >= 650) {
         int bx, by;
         if (ai_find_build_spot(tcTX + 2, tcTY - 2, 3, 3, terrain, bx, by)) {
@@ -306,7 +316,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     }
 
     // ---- Attack decision ----
-    int armyThreshold = 3 + p.age * 2;  // Dark=3, Feudal=5, Castle=7, Imperial=9
+    int armyThreshold = AI_ARMY_BASE[diff] + p.age * AI_ARMY_PER_AGE[diff];
 
     // Retreat: if army too small and under pressure, pull back to TC
     if (militaryCount > 0 && militaryCount < 2) {

@@ -46,7 +46,9 @@ static void game_start() {
         }
     }
 
+    u8 savedDiff = gameState.aiDifficulty;
     game_init(gameState);
+    gameState.aiDifficulty = savedDiff;
     units_init();
     buildings_init();
     projectiles_init();
@@ -128,6 +130,12 @@ static void game_start() {
         gameState.players[p].resources[RES_STONE] = 200;
     }
 
+    // Hard AI gets extra starting resources
+    if (gameState.aiDifficulty == AI_HARD) {
+        for (int r = 0; r < RES_COUNT; r++)
+            gameState.players[1].resources[r] += 100;
+    }
+
     // Update initial fog and pop caps
     fogMap.update();
     game_update_pop_cap(gameState, 0);
@@ -190,7 +198,8 @@ int main(void) {
     TIMER0_CR = TIMER_ENABLE | TIMER_DIV_1;
     TIMER1_CR = TIMER_ENABLE | TIMER_CASCADE;
 
-    // Start first game
+    // Start first game (default: Normal difficulty)
+    gameState.aiDifficulty = AI_NORMAL;
     game_start();
 
     // === Main Loop ===
@@ -198,8 +207,16 @@ int main(void) {
         // Handle game-over touch-to-restart
         if (gameState.phase != PHASE_PLAYING) {
             scanKeys();
-            if (keysDown() & KEY_TOUCH) {
+            int kd = keysDown();
+            if (kd & KEY_TOUCH) {
                 game_start();
+            }
+            // L/R cycle AI difficulty on game-over screen
+            if (kd & KEY_R) {
+                gameState.aiDifficulty = (gameState.aiDifficulty + 1) % 3;
+            }
+            if (kd & KEY_L) {
+                gameState.aiDifficulty = (gameState.aiDifficulty + 2) % 3;
             }
 
             // Render game world frozen underneath
@@ -240,6 +257,16 @@ int main(void) {
 
                 font_draw_str_8(terrainBuf, 256, 192, lx, sy, "Bldgs razed:", sc, gameFont);
                 font_draw_num_8(terrainBuf, 256, 192, lx + 95, sy, gameState.bldgsDestroyed[0], sc, gameFont);
+                sy += 20;
+
+                // Difficulty selector
+                static const char* DIFF_NAMES[] = {"Easy", "Normal", "Hard"};
+                u8 d = gameState.aiDifficulty;
+                if (d > 2) d = 1;
+                int dx = font_draw_str_8(terrainBuf, 256, 192, lx, sy, "AI: ", sc, gameFont);
+                font_draw_str_8(terrainBuf, 256, 192, dx, sy, DIFF_NAMES[d], PAL_YELLOW, gameFont);
+                sy += 14;
+                font_draw_str_8(terrainBuf, 256, 192, lx, sy, "L/R:Change", sc, gameFont);
                 sy += 20;
 
                 const char* hint = "Touch to restart";

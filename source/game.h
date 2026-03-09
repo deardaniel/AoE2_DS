@@ -27,6 +27,12 @@ enum GamePhase {
     PHASE_DEFEAT  = 2,
 };
 
+enum AIDifficulty {
+    AI_EASY   = 0,
+    AI_NORMAL = 1,
+    AI_HARD   = 2,
+};
+
 // ---------------------------------------------------------------------------
 // Game state — holds everything
 // ---------------------------------------------------------------------------
@@ -71,6 +77,9 @@ struct GameState {
 
     // Training unit type selection (-1 = auto/first available)
     s8    trainUnitType;
+
+    // AI difficulty
+    u8    aiDifficulty;  // AIDifficulty enum
 
     // End-game stats
     u16   unitsKilled[NUM_PLAYERS];   // enemy units killed by each player

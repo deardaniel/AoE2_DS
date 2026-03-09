@@ -43,6 +43,7 @@ void game_init(GameState& gs) {
     gs.attackAlertTX = -1;
     gs.attackAlertTY = -1;
     gs.trainUnitType = -1;
+    // aiDifficulty preserved across restarts (set by menu, default AI_NORMAL)
     for (int p = 0; p < NUM_PLAYERS; p++) {
         gs.unitsKilled[p] = 0;
         gs.unitsLost[p] = 0;
