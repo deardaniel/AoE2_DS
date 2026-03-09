@@ -496,9 +496,27 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
 
     if (gs.phase == PHASE_VICTORY) {
         font_draw_str_16(minimapVram, 256, 192, TX + 10, ty, "VICTORY!", colGold, gameFont);
+        ty += 16;
+        font_draw_str_16(minimapVram, 256, 192, TX, ty, "Kills:", colText, gameFont);
+        font_draw_num_16(minimapVram, 256, 192, TX + 50, ty, gs.unitsKilled[0], colText, gameFont);
+        ty += 12;
+        font_draw_str_16(minimapVram, 256, 192, TX, ty, "Lost:", colText, gameFont);
+        font_draw_num_16(minimapVram, 256, 192, TX + 50, ty, gs.unitsLost[0], colText, gameFont);
+        ty += 12;
+        font_draw_str_16(minimapVram, 256, 192, TX, ty, "Razed:", colText, gameFont);
+        font_draw_num_16(minimapVram, 256, 192, TX + 50, ty, gs.bldgsDestroyed[0], colText, gameFont);
         return;
     } else if (gs.phase == PHASE_DEFEAT) {
         font_draw_str_16(minimapVram, 256, 192, TX + 10, ty, "DEFEAT!", colRed, gameFont);
+        ty += 16;
+        font_draw_str_16(minimapVram, 256, 192, TX, ty, "Kills:", colText, gameFont);
+        font_draw_num_16(minimapVram, 256, 192, TX + 50, ty, gs.unitsKilled[0], colText, gameFont);
+        ty += 12;
+        font_draw_str_16(minimapVram, 256, 192, TX, ty, "Lost:", colText, gameFont);
+        font_draw_num_16(minimapVram, 256, 192, TX + 50, ty, gs.unitsLost[0], colText, gameFont);
+        ty += 12;
+        font_draw_str_16(minimapVram, 256, 192, TX, ty, "Razed:", colText, gameFont);
+        font_draw_num_16(minimapVram, 256, 192, TX + 50, ty, gs.bldgsDestroyed[0], colText, gameFont);
         return;
     }
 

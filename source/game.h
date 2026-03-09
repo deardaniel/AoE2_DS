@@ -71,6 +71,11 @@ struct GameState {
 
     // Training unit type selection (-1 = auto/first available)
     s8    trainUnitType;
+
+    // End-game stats
+    u16   unitsKilled[NUM_PLAYERS];   // enemy units killed by each player
+    u16   unitsLost[NUM_PLAYERS];     // units lost by each player
+    u16   bldgsDestroyed[NUM_PLAYERS]; // enemy buildings destroyed
 };
 
 // ---------------------------------------------------------------------------

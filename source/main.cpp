@@ -201,8 +201,60 @@ int main(void) {
             if (keysDown() & KEY_TOUCH) {
                 game_start();
             }
-            // Still update UI to show victory/defeat
+
+            // Render game world frozen underneath
+            terrain.renderViewport(terrainBuf, gameState.camX, gameState.camY);
+            render_sprites_sw(terrainBuf, gameState, terrain);
+
+            // Darken the entire bottom screen with checkerboard
+            for (int py = 0; py < SCREEN_H; py++) {
+                for (int px = 0; px < SCREEN_W; px++) {
+                    if ((px + py) & 1)
+                        terrainBuf[py * 256 + px] = PAL_BLACK;
+                }
+            }
+
+            // Draw centered result text on bottom screen
+            {
+                bool victory = (gameState.phase == PHASE_VICTORY);
+                const char* title = victory ? "VICTORY!" : "DEFEAT!";
+                u8 titleCol = victory ? PAL_YELLOW : PAL_RED;
+
+                // Center the title text
+                int tw = font_string_width(gameFont, title);
+                int tx = (SCREEN_W - tw) / 2;
+                font_draw_str_8(terrainBuf, 256, 192, tx, 60, title, titleCol, gameFont);
+
+                // Stats
+                int sy = 84;
+                u8 sc = PAL_WHITE;
+                int lx = 60;
+
+                font_draw_str_8(terrainBuf, 256, 192, lx, sy, "Units killed:", sc, gameFont);
+                font_draw_num_8(terrainBuf, 256, 192, lx + 95, sy, gameState.unitsKilled[0], sc, gameFont);
+                sy += 14;
+
+                font_draw_str_8(terrainBuf, 256, 192, lx, sy, "Units lost:", sc, gameFont);
+                font_draw_num_8(terrainBuf, 256, 192, lx + 95, sy, gameState.unitsLost[0], sc, gameFont);
+                sy += 14;
+
+                font_draw_str_8(terrainBuf, 256, 192, lx, sy, "Bldgs razed:", sc, gameFont);
+                font_draw_num_8(terrainBuf, 256, 192, lx + 95, sy, gameState.bldgsDestroyed[0], sc, gameFont);
+                sy += 20;
+
+                const char* hint = "Touch to restart";
+                int hw = font_string_width(gameFont, hint);
+                int hx = (SCREEN_W - hw) / 2;
+                // Flash the hint text
+                if ((gameState.frameCount >> 4) & 1)
+                    font_draw_str_8(terrainBuf, 256, 192, hx, sy, hint, PAL_WHITE, gameFont);
+            }
+
+            dmaCopy(terrainBuf, subVram, 256 * 192);
+
+            // Still update UI to show victory/defeat on top screen
             ui_update(gameState, terrain);
+            gameState.frameCount++;
             swiWaitForVBlank();
             continue;
         }

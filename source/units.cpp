@@ -102,6 +102,11 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
 void unit_kill(int idx) {
     if (idx < 0 || idx >= MAX_UNITS) return;
     Unit& u = units[idx];
+    // Track end-game stats
+    extern GameState gameState;
+    gameState.unitsLost[u.owner]++;
+    // The opposing player gets credit for the kill
+    gameState.unitsKilled[1 - u.owner]++;
     u.state = USTATE_DEAD;
     u.deadTimer = 300; // ~5 seconds: death animation + corpse linger
     u.animFrame = 0;

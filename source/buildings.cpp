@@ -239,6 +239,9 @@ void building_damage(int idx, int amount) {
 void building_destroy(int idx, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_BUILDINGS || !buildings[idx].alive) return;
     Building& b = buildings[idx];
+    // Track end-game stats — opposing player gets credit
+    extern GameState gameState;
+    gameState.bldgsDestroyed[1 - b.owner]++;
 
     // Eject garrisoned units before destroying
     if (b.garrisonCount > 0) {

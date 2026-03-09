@@ -43,6 +43,11 @@ void game_init(GameState& gs) {
     gs.attackAlertTX = -1;
     gs.attackAlertTY = -1;
     gs.trainUnitType = -1;
+    for (int p = 0; p < NUM_PLAYERS; p++) {
+        gs.unitsKilled[p] = 0;
+        gs.unitsLost[p] = 0;
+        gs.bldgsDestroyed[p] = 0;
+    }
 }
 
 bool game_can_afford(const GameState& gs, int player, const int cost[RES_COUNT]) {
