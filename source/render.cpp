@@ -732,6 +732,36 @@ static void draw_ellipse_buf(u8* buf, int cx, int cy, int rx, int ry, u8 color) 
     #undef EPLOT
 }
 
+// Dithered filled ellipse for ground shadows (every other pixel)
+static void draw_shadow_ellipse(u8* buf, int cx, int cy, int rx, int ry, u8 color) {
+    for (int y = -ry; y <= ry; y++) {
+        int sy = cy + y;
+        if (sy < 0 || sy >= SCREEN_H) continue;
+        // Ellipse half-width at this y
+        long hw = (long)rx * rx * ((long)ry * ry - (long)y * y);
+        if (hw < 0) continue;
+        // Integer sqrt approximation
+        long r2 = (long)ry * ry;
+        int xw = 0;
+        if (r2 > 0) {
+            // xw = rx * sqrt(1 - y^2/ry^2)
+            long num = (long)ry * ry - (long)y * y;
+            // Fast integer sqrt
+            long val = (long)rx * rx * num / r2;
+            int s = 0;
+            while ((long)s * s < val) s++;
+            xw = s;
+        }
+        for (int x = -xw; x <= xw; x++) {
+            int sx = cx + x;
+            if (sx < 0 || sx >= SCREEN_W) continue;
+            // Checkerboard dither for semi-transparent look
+            if ((sx + sy) & 1) continue;
+            buf[sy * 256 + sx] = color;
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Draw a Bresenham line into the bitmap buffer
 // ---------------------------------------------------------------------------
@@ -1094,6 +1124,26 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
 
     // Sort by Y (back-to-front)
     sort_render_list(renderList, count);
+
+    // --- Pre-render pass: building ground shadows ---
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        Building& b = buildings[i];
+        if (!b.alive) continue;
+        if (b.type == BLDG_WALL || b.type == BLDG_FARM) continue; // walls/farms too small
+        int tileW = BLDG_STATS[b.type].tileW;
+        int tileH = BLDG_STATS[b.type].tileH;
+        // Shadow center at building footprint center in iso
+        int bIsoX, bIsoY;
+        worldToIso(b.x + tileW * TILE_PX / 2, b.y + tileH * TILE_PX / 2, bIsoX, bIsoY);
+        int cx = bIsoX - gs.camX + ISO_TILE_W / 2;
+        int cy = bIsoY - gs.camY + ISO_TILE_H / 2;
+        // Shadow size proportional to building footprint
+        int rx = tileW * ISO_TILE_W / 2 - 2;
+        int ry = tileH * ISO_TILE_H / 2 - 1;
+        if (rx < 8) rx = 8;
+        if (ry < 4) ry = 4;
+        draw_shadow_ellipse(buf, cx, cy, rx, ry, PAL_DARKBROWN);
+    }
 
     // --- Pre-render pass: draw selection indicators UNDER sprites ---
     // Selection circles for units
