@@ -157,14 +157,18 @@ static int heuristic(int ax, int ay, int bx, int by) {
 // block its own starting tile. Moving/scouting units are also excluded
 // since they'll likely clear their tile before the pathing unit arrives.
 // skipUnits: if true, don't mark any units as blockers (used for scouts).
-static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1, bool skipUnits = false) {
+static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1, bool skipUnits = false, int friendlyPlayer = -1) {
     for (int y = 0; y < MAP_TILES; y++)
         for (int x = 0; x < MAP_TILES; x++)
             passMap[y][x] = terrain.passable(x, y);
 
     // Mark building tiles as impassable
+    // Friendly walls act as gates — passable for the owning player
     for (int i = 0; i < MAX_BUILDINGS; i++) {
         if (!buildings[i].alive) continue;
+        // Friendly walls are passable (gate mechanic)
+        if (buildings[i].type == BLDG_WALL && buildings[i].owner == friendlyPlayer)
+            continue;
         int bx = buildings[i].x / TILE_PX;
         int by = buildings[i].y / TILE_PX;
         int bw = BLDG_STATS[buildings[i].type].tileW;
@@ -201,8 +205,14 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
     if (ty < 0) ty = 0;
     if (ty >= MAP_TILES) ty = MAP_TILES - 1;
 
+    // Infer friendly player from the pathfinding unit (for gate mechanic)
+    int friendlyPlayer = -1;
+    if (selfIdx >= 0 && selfIdx < MAX_UNITS && units[selfIdx].alive)
+        friendlyPlayer = units[selfIdx].owner;
+
     // Build combined passability map (terrain + buildings + optionally units)
-    build_pass_map(terrain, selfIdx, skipUnits);
+    // friendlyPlayer's walls are passable (gate mechanic)
+    build_pass_map(terrain, selfIdx, skipUnits, friendlyPlayer);
 
     // Ensure start tile is passable (unit might be on a building tile)
     passMap[sy][sx] = true;
