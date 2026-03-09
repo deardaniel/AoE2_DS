@@ -7,6 +7,7 @@
 
 static const int AI_PLAYER = 1;
 static int aiTimer = 0;
+static int aiStrategy = AI_STRAT_BALANCED;
 
 // Difficulty scaling tables [easy, normal, hard]
 static const int AI_TICK_RATE[]    = {90, 60, 45};  // frames between AI ticks
@@ -14,10 +15,27 @@ static const int AI_VIL_BASE[]     = {6, 8, 10};    // base villager target
 static const int AI_VIL_PER_AGE[]  = {2, 4, 5};     // additional vils per age
 static const int AI_ARMY_BASE[]    = {4, 3, 2};      // base army threshold (lower = attacks sooner)
 static const int AI_ARMY_PER_AGE[] = {1, 2, 3};      // additional threshold per age
-static const int AI_RES_BONUS[]    = {0, 0, 50};     // extra starting resources per type (hard)
+
+// Strategy modifiers [balanced, rush, boom, turtle]
+static const int STRAT_VIL_MOD[]   = {0, -3, 4, 0};    // villager target modifier
+static const int STRAT_ARMY_MOD[]  = {0, -2, 3, 1};    // army threshold modifier (lower = earlier attack)
+static const int STRAT_FARM_MOD[]  = {0, -1, 2, 0};    // farm target modifier
 
 void ai_init() {
     aiTimer = 0;
+    // Pick random strategy
+    extern GameState gameState;
+    u32 seed = (u32)gameState.frameCount ^ 0xDEAD;
+    aiStrategy = seed % AI_STRAT_COUNT;
+}
+
+void ai_set_strategy(int strat) {
+    if (strat >= 0 && strat < AI_STRAT_COUNT)
+        aiStrategy = strat;
+}
+
+int ai_get_strategy() {
+    return aiStrategy;
 }
 
 // Find a buildable tile near a given position
@@ -100,8 +118,9 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
 
     // ---- Economy phase ----
 
-    // Train villagers if under target (scale with age and difficulty)
-    int vilTarget = AI_VIL_BASE[diff] + p.age * AI_VIL_PER_AGE[diff];
+    // Train villagers if under target (scale with age, difficulty, and strategy)
+    int vilTarget = AI_VIL_BASE[diff] + p.age * AI_VIL_PER_AGE[diff] + STRAT_VIL_MOD[aiStrategy];
+    if (vilTarget < 3) vilTarget = 3;
     if (vilCount < vilTarget && tcIdx >= 0 && building_is_complete(tcIdx)) {
         building_train(tcIdx, UNIT_VILLAGER, gs);
     }
@@ -198,16 +217,17 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
-    // Barracks if none
-    if (building_count(AI_PLAYER, BLDG_BARRACKS) == 0) {
+    // Barracks (rush builds 2, others build 1)
+    int maxBarracks = (aiStrategy == AI_STRAT_RUSH) ? 2 : 1;
+    if (building_count(AI_PLAYER, BLDG_BARRACKS) < maxBarracks) {
         int bx, by;
         if (ai_find_build_spot(tcTX + 2, tcTY, 2, 2, terrain, bx, by)) {
             ai_place_and_build(BLDG_BARRACKS, bx, by, gs, terrain);
         }
     }
 
-    // Farms if low on food (scale with age)
-    int farmTarget = 3 + p.age * 2;
+    // Farms if low on food (scale with age and strategy)
+    int farmTarget = 3 + p.age * 2 + STRAT_FARM_MOD[aiStrategy];
     if (p.resources[RES_FOOD] < 150 && building_count(AI_PLAYER, BLDG_FARM) < farmTarget) {
         int bx, by;
         if (ai_find_build_spot(tcTX - 1, tcTY + 2, 1, 1, terrain, bx, by)) {
@@ -245,8 +265,11 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
-    // Tower near TC if feudal and none, and have stone (not on easy)
-    if (diff >= AI_NORMAL && p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_TOWER) == 0 &&
+    // Turtle strategy: build extra tower
+    int maxTowers = (aiStrategy == AI_STRAT_TURTLE) ? 3 : 1;
+
+    // Tower near TC if feudal (not on easy)
+    if (diff >= AI_NORMAL && p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_TOWER) < maxTowers &&
         p.resources[RES_STONE] >= 50) {
         int bx, by;
         if (ai_find_build_spot(tcTX - 1, tcTY - 1, 1, 1, terrain, bx, by)) {
@@ -316,7 +339,8 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     }
 
     // ---- Attack decision ----
-    int armyThreshold = AI_ARMY_BASE[diff] + p.age * AI_ARMY_PER_AGE[diff];
+    int armyThreshold = AI_ARMY_BASE[diff] + p.age * AI_ARMY_PER_AGE[diff] + STRAT_ARMY_MOD[aiStrategy];
+    if (armyThreshold < 1) armyThreshold = 1;
 
     // Retreat: if army too small and under pressure, pull back to TC
     if (militaryCount > 0 && militaryCount < 2) {

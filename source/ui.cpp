@@ -8,6 +8,7 @@
 #include "fog.h"
 #include "tech.h"
 #include "font.h"
+#include "ai.h"
 #include <stdio.h>
 
 // Access tech-modified stats
@@ -462,13 +463,18 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         ty += 12;
     }
 
-    // Difficulty indicator
+    // Difficulty + strategy indicator
     {
         static const char* DIFF_NAMES[] = {"Easy", "Normal", "Hard"};
+        static const char* STRAT_NAMES[] = {"Bal", "Rush", "Boom", "Trtl"};
         u8 d = gs.aiDifficulty;
         if (d > 2) d = 1;
+        int s = ai_get_strategy();
+        if (s < 0 || s >= AI_STRAT_COUNT) s = 0;
         x = font_draw_str_16(minimapVram, 256, 192, TX, ty, "AI:", colText, gameFont);
-        font_draw_str_16(minimapVram, 256, 192, x, ty, DIFF_NAMES[d], colGold, gameFont);
+        x = font_draw_str_16(minimapVram, 256, 192, x, ty, DIFF_NAMES[d], colGold, gameFont);
+        x = font_draw_str_16(minimapVram, 256, 192, x, ty, "/", colText, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, x, ty, STRAT_NAMES[s], colGold, gameFont);
         ty += 12;
     }
 
