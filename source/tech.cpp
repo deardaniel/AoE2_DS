@@ -62,7 +62,7 @@ void tech_apply_bonuses(int player) {
     playerFarmFood[player] = FARM_RESOURCE_AMT;
 
     extern GameState gameState;
-    u16 researched = gameState.players[player].techResearched;
+    u32 researched = gameState.players[player].techResearched;
 
     // Military techs
     if (researched & (1 << TECH_MAN_AT_ARMS)) {
@@ -129,4 +129,15 @@ void tech_apply_bonuses(int player) {
         playerUnitStats[player][UNIT_SPEARMAN].hp += 30;
         playerUnitStats[player][UNIT_SPEARMAN].attack[DMG_BONUS_CAV] += 5;
     }
+
+    // University techs
+    if (researched & (1 << TECH_BALLISTICS)) {
+        playerUnitStats[player][UNIT_ARCHER].range += 1;
+        playerUnitStats[player][UNIT_MANGONEL].range += 1;
+    }
+    if (researched & (1 << TECH_CHEMISTRY)) {
+        playerUnitStats[player][UNIT_ARCHER].attack[DMG_PIERCE] += 1;
+        playerUnitStats[player][UNIT_MANGONEL].attack[DMG_PIERCE] += 1;
+    }
+    // Masonry: building HP bonus applied at research time (no per-frame effect needed)
 }

@@ -310,6 +310,14 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
+    // University if castle age and none
+    if (p.age >= AGE_CASTLE && building_count(AI_PLAYER, BLDG_UNIVERSITY) == 0) {
+        int bx, by;
+        if (ai_find_build_spot(tcTX + 3, tcTY - 2, 2, 2, terrain, bx, by)) {
+            ai_place_and_build(BLDG_UNIVERSITY, bx, by, gs, terrain);
+        }
+    }
+
     // ---- Military phase ----
 
     // Train military units from available buildings

@@ -96,6 +96,7 @@ extern const u8 spr_tower_bin[];
 extern const u8 spr_market_bin[];
 extern const u8 spr_castle_bin[];
 extern const u8 spr_monastery_bin[];
+extern const u8 spr_university_bin[];
 
 // Fire overlay sprite (16x16, 4 animation frames stacked = 1024 bytes)
 extern const u8 spr_fire_bin[];
@@ -114,6 +115,7 @@ extern const u8 icon_tower_bin[];
 extern const u8 icon_market_bin[];
 extern const u8 icon_castle_bin[];
 extern const u8 icon_monastery_bin[];
+extern const u8 icon_university_bin[];
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -144,6 +146,7 @@ static const u8* buildingIcon[BLDG_TYPE_COUNT] = {
     icon_market_bin,        // BLDG_MARKET
     icon_castle_bin,        // BLDG_CASTLE
     icon_monastery_bin,     // BLDG_MONASTERY
+    icon_university_bin,    // BLDG_UNIVERSITY
 };
 
 // Sprite sheet dimensions
@@ -458,6 +461,7 @@ void render_init() {
     buildingSheet[BLDG_MARKET]        = spr_market_bin;
     buildingSheet[BLDG_CASTLE]        = spr_castle_bin;
     buildingSheet[BLDG_MONASTERY]     = spr_monastery_bin;
+    buildingSheet[BLDG_UNIVERSITY]    = spr_university_bin;
 
     // Building sprite pixel sizes (must match preprocessing target sizes)
     // Isometric: footW = (tileW+tileH)*16, sprH = footH + 16 above-ground
@@ -474,6 +478,7 @@ void render_init() {
     buildingSprW[BLDG_MARKET]        = 64;  buildingSprH[BLDG_MARKET]        = 80;
     buildingSprW[BLDG_CASTLE]        = 96;  buildingSprH[BLDG_CASTLE]        = 128;
     buildingSprW[BLDG_MONASTERY]     = 64;  buildingSprH[BLDG_MONASTERY]     = 80;
+    buildingSprW[BLDG_UNIVERSITY]    = 64;  buildingSprH[BLDG_UNIVERSITY]    = 80;
 }
 
 // ---------------------------------------------------------------------------

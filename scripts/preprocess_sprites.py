@@ -103,6 +103,7 @@ BUILDING_SPRITES = [
     ('spr_market',        'market.png',         64,  80, 2, 2, 0.714), # 2x2: SLP 2278, hotspot 220/308
     ('spr_castle',        'castle.png',         96, 128, 3, 3, 0.798), # 3x3: SLP 305, hotspot 280/351
     ('spr_monastery',     'monastery.png',      64,  80, 2, 2, 0.801), # 2x2: SLP 278, hotspot 266/332
+    ('spr_university',    'university.png',     64,  80, 2, 2, 0.663), # 2x2: SLP 3836, hotspot 185/279
 ]
 
 # Icon sprites for build menu: (output_name, filename, target_w, target_h, cols, rows, scale)
@@ -121,6 +122,7 @@ ICON_SPRITES = [
     ('icon_market',        'icon_market.png',        32, 32, 1, 1, 0.889),
     ('icon_castle',        'icon_castle.png',        32, 32, 1, 1, 0.889),
     ('icon_monastery',     'icon_monastery.png',     32, 32, 1, 1, 0.889),
+    ('icon_university',    'icon_university.png',    32, 32, 1, 1, 0.889),
 ]
 
 # Resource object sprites: (output_name, filename)

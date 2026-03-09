@@ -11,7 +11,7 @@
 
 static const char SAVE_PATH[] = "fat:/aoe2dsi.sav";
 static const u32  SAVE_MAGIC  = 0xA0E2D51;
-static const u16  SAVE_VERSION = 2;
+static const u16  SAVE_VERSION = 3;
 
 extern GameState gameState;
 

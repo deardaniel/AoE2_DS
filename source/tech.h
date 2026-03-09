@@ -19,7 +19,10 @@ enum TechId {
     TECH_BLAST_FURNACE= 11,// Melee units +2 attack (Imperial, Barracks)
     TECH_BODKIN_ARROW = 12,// Archer +1 range, +1 pierce attack (Castle, Archery Range)
     TECH_PIKE         = 13,// Spearman +30 HP, +5 bonus vs cav (Castle, Barracks)
-    TECH_COUNT        = 14
+    TECH_BALLISTICS   = 14,// Ranged units +1 range (Castle, University)
+    TECH_MASONRY      = 15,// Buildings +10% HP (Castle, University)
+    TECH_CHEMISTRY    = 16,// Ranged units +1 pierce attack (Imperial, University)
+    TECH_COUNT        = 17
 };
 
 struct TechInfo {
@@ -45,6 +48,9 @@ static const TechInfo TECH_TABLE[TECH_COUNT] = {
     /* BLAST_FURNACE */ { "BlastFurnce", {275,  0,100, 0}, 1800, AGE_IMPERIAL, BLDG_BARRACKS },
     /* BODKIN_ARROW  */ { "BodkinArrow", {200,  0,100, 0}, 1500, AGE_CASTLE,   BLDG_ARCHERY_RANGE },
     /* PIKE          */ { "Pikeman",     {215,  0, 90, 0}, 1500, AGE_CASTLE,   BLDG_BARRACKS },
+    /* BALLISTICS   */ { "Ballistics", {300,  0,175, 0}, 1500, AGE_CASTLE,   BLDG_UNIVERSITY },
+    /* MASONRY      */ { "Masonry",    {150,  0,175, 0}, 1200, AGE_CASTLE,   BLDG_UNIVERSITY },
+    /* CHEMISTRY    */ { "Chemistry",  {300,  0,200, 0}, 1800, AGE_IMPERIAL, BLDG_UNIVERSITY },
 };
 
 bool tech_is_researched(const GameState& gs, int player, int techId);

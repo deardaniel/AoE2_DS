@@ -107,7 +107,8 @@ enum BuildingTypeId {
     BLDG_MARKET        = 10,
     BLDG_CASTLE        = 11,
     BLDG_MONASTERY     = 12,
-    BLDG_TYPE_COUNT    = 13
+    BLDG_UNIVERSITY    = 13,
+    BLDG_TYPE_COUNT    = 14
 };
 
 // ---------------------------------------------------------------------------
@@ -289,6 +290,7 @@ static const BuildingStats BLDG_STATS[BLDG_TYPE_COUNT] = {
     /* MARKET        */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  2, 2 },
     /* CASTLE        */ {1000, 900, {  0,   0,  0, 650}, AGE_IMPERIAL,0,  3, 3 },
     /* MONASTERY     */ { 350, 300, {  0, 175,  0,   0}, AGE_CASTLE,  0,  2, 2 },
+    /* UNIVERSITY    */ { 350, 300, {  0, 200,  0,   0}, AGE_CASTLE,  0,  2, 2 },
 };
 
 // ---------------------------------------------------------------------------
@@ -319,7 +321,7 @@ static const char* const UNIT_NAMES[UNIT_TYPE_COUNT] = {
 static const char* const BLDG_NAMES[BLDG_TYPE_COUNT] = {
     "Town Center", "House", "Barracks", "Archery Range",
     "Stable", "Farm", "Mining Camp", "Lumber Camp",
-    "Wall", "Tower", "Market", "Castle", "Monastery"
+    "Wall", "Tower", "Market", "Castle", "Monastery", "University"
 };
 
 static const char* const AGE_NAMES[AGE_COUNT] = {
