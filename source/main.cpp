@@ -18,7 +18,9 @@
 #include "sound.h"
 #include "font.h"
 #include "projectiles.h"
+#include "save.h"
 #include <filesystem.h>
+#include <fat.h>
 
 // Global game state (accessible by tech.cpp via extern)
 GameState gameState;
@@ -185,6 +187,9 @@ int main(void) {
     // Init bitmap font
     font_init();
 
+    // Init FAT filesystem (for save/load to SD card)
+    fatInitDefault();
+
     // Init NitroFS (for streaming music from ROM filesystem)
     nitroFSInit(NULL);
 
@@ -210,6 +215,10 @@ int main(void) {
             int kd = keysDown();
             if (kd & KEY_TOUCH) {
                 game_start();
+            }
+            // START: load saved game
+            if ((kd & KEY_START) && save_exists()) {
+                load_game(terrain);
             }
             // L/R cycle AI difficulty on game-over screen
             if (kd & KEY_R) {
@@ -267,6 +276,9 @@ int main(void) {
                 font_draw_str_8(terrainBuf, 256, 192, dx, sy, DIFF_NAMES[d], PAL_YELLOW, gameFont);
                 sy += 14;
                 font_draw_str_8(terrainBuf, 256, 192, lx, sy, "L/R:Change", sc, gameFont);
+                sy += 14;
+                if (save_exists())
+                    font_draw_str_8(terrainBuf, 256, 192, lx, sy, "START:Load", sc, gameFont);
                 sy += 20;
 
                 const char* hint = "Touch to restart";
@@ -288,6 +300,15 @@ int main(void) {
 
         // Input
         input_update(gameState, terrain);
+
+        // Save game: L+R held, press SELECT
+        {
+            int kh = keysHeld();
+            int kd2 = keysDown();
+            if ((kh & (KEY_L | KEY_R)) == (KEY_L | KEY_R) && (kd2 & KEY_SELECT)) {
+                save_game(terrain);
+            }
+        }
 
         // Handle training/research from selected building via START
         // Note: scanKeys() already called in input_update() — reuse keysDown()
