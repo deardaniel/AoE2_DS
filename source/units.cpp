@@ -893,7 +893,10 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
         u.gatherTick = 0;
         int got = terrain.depleteResource(u.gatherTX, u.gatherTY, 1);
         u.carryAmount += got;
-        if (u.owner == 0 && tt == TERRAIN_FOREST) sound_play(SFX_CHOP);
+        if (u.owner == 0) {
+            if (tt == TERRAIN_FOREST) sound_play(SFX_CHOP);
+            else if (tt == TERRAIN_GOLD || tt == TERRAIN_STONE) sound_play(SFX_MINE);
+        }
     }
 
     // If carry full, return to drop-off

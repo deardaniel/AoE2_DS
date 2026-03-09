@@ -121,7 +121,7 @@ void game_update(GameState& gs) {
             if (nextAge < AGE_COUNT && gs.players[p].ageProgress >= AGE_RESEARCH_TIME[nextAge]) {
                 gs.players[p].age = nextAge;
                 gs.players[p].ageProgress = -1;
-                if (p == 0) sound_play(SFX_BUILDING_COMPLETE);
+                if (p == 0) sound_play(SFX_AGE_UP);
             }
         }
     }

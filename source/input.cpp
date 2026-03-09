@@ -135,7 +135,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         if (units[tappedUnit].type == UNIT_VILLAGER)
             sound_play_random(SFX_VILL_SEL_FIRST, SFX_VILL_SEL_COUNT);
         else
-            sound_play(SFX_CLICK);
+            sound_play_random(SFX_MIL_SEL_FIRST, SFX_MIL_SEL_COUNT);
         return;
     }
 

@@ -262,6 +262,8 @@ void building_destroy(int idx, TerrainMap& terrain) {
     }
     b.oamSlot = -1;
 
+    sound_play(SFX_DESTROY);
+
     // Clear stale selection
     extern GameState gameState;
     if (gameState.selectedBldg == idx) gameState.selectedBldg = -1;
