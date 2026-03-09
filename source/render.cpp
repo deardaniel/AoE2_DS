@@ -78,6 +78,10 @@ extern const u8 spr_mango_stand_bin[];
 extern const u8 spr_mango_walk_bin[];
 extern const u8 spr_mango_fight_bin[];
 extern const u8 spr_mango_die_bin[];
+extern const u8 spr_monk_stand_bin[];
+extern const u8 spr_monk_walk_bin[];
+extern const u8 spr_monk_fight_bin[];
+extern const u8 spr_monk_die_bin[];
 
 // Building sprites (32x32 or 16x16, single frame)
 extern const u8 spr_town_center_bin[];
@@ -91,6 +95,7 @@ extern const u8 spr_wall_bin[];
 extern const u8 spr_tower_bin[];
 extern const u8 spr_market_bin[];
 extern const u8 spr_castle_bin[];
+extern const u8 spr_monastery_bin[];
 
 // Fire overlay sprite (16x16, 4 animation frames stacked = 1024 bytes)
 extern const u8 spr_fire_bin[];
@@ -108,6 +113,7 @@ extern const u8 icon_wall_bin[];
 extern const u8 icon_tower_bin[];
 extern const u8 icon_market_bin[];
 extern const u8 icon_castle_bin[];
+extern const u8 icon_monastery_bin[];
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -137,6 +143,7 @@ static const u8* buildingIcon[BLDG_TYPE_COUNT] = {
     icon_tower_bin,         // BLDG_TOWER
     icon_market_bin,        // BLDG_MARKET
     icon_castle_bin,        // BLDG_CASTLE
+    icon_monastery_bin,     // BLDG_MONASTERY
 };
 
 // Sprite sheet dimensions
@@ -147,6 +154,12 @@ static const int STAND_SHEET_COLS = 5;
 static const int SHEET_ROWS = 5;      // max 5 rows
 static const int CELL_W = 32;
 static const int CELL_H = 32;
+
+// Per-unit-type animation columns (5 for compact sheets, 10 for full)
+static const int UNIT_ANIM_COLS[UNIT_TYPE_COUNT] = {
+    10, 10, 10, 10, 10, 10, 10,  // villager..sheep
+    5, 5, 5                       // ram, mangonel, monk (compact)
+};
 
 // ---------------------------------------------------------------------------
 // Sprite sheet table — maps unit type + state to sheet data pointer
@@ -365,6 +378,7 @@ void render_init() {
     unitStandSheet[UNIT_SHEEP]     = spr_sheep_stand_bin;
     unitStandSheet[UNIT_RAM]       = spr_ram_stand_bin;
     unitStandSheet[UNIT_MANGONEL]  = spr_mango_stand_bin;
+    unitStandSheet[UNIT_MONK]      = spr_monk_stand_bin;
 
     unitWalkSheet[UNIT_VILLAGER]   = spr_villager_walk_bin;
     unitWalkSheet[UNIT_MILITIA]    = spr_militia_walk_bin;
@@ -375,6 +389,7 @@ void render_init() {
     unitWalkSheet[UNIT_SHEEP]      = spr_sheep_walk_bin;
     unitWalkSheet[UNIT_RAM]        = spr_ram_walk_bin;
     unitWalkSheet[UNIT_MANGONEL]   = spr_mango_walk_bin;
+    unitWalkSheet[UNIT_MONK]       = spr_monk_walk_bin;
 
     unitFightSheet[UNIT_VILLAGER]  = spr_villager_attack_bin;
     unitFightSheet[UNIT_MILITIA]   = spr_militia_fight_bin;
@@ -385,6 +400,7 @@ void render_init() {
     unitFightSheet[UNIT_SHEEP]     = spr_sheep_stand_bin; // sheep don't fight
     unitFightSheet[UNIT_RAM]       = spr_ram_fight_bin;
     unitFightSheet[UNIT_MANGONEL]  = spr_mango_fight_bin;
+    unitFightSheet[UNIT_MONK]      = spr_monk_fight_bin;
 
     unitDeathSheet[UNIT_VILLAGER]  = spr_villager_die_bin;
     unitDeathSheet[UNIT_MILITIA]   = spr_militia_die_bin;
@@ -395,6 +411,7 @@ void render_init() {
     unitDeathSheet[UNIT_SHEEP]     = spr_sheep_die_bin;
     unitDeathSheet[UNIT_RAM]       = spr_ram_die_bin;
     unitDeathSheet[UNIT_MANGONEL]  = spr_mango_die_bin;
+    unitDeathSheet[UNIT_MONK]      = spr_monk_die_bin;
 
     // Villager role-specific sheets
     villagerRoleStand[VROLE_BASE]       = spr_villager_bin;
@@ -440,6 +457,7 @@ void render_init() {
     buildingSheet[BLDG_TOWER]         = spr_tower_bin;
     buildingSheet[BLDG_MARKET]        = spr_market_bin;
     buildingSheet[BLDG_CASTLE]        = spr_castle_bin;
+    buildingSheet[BLDG_MONASTERY]     = spr_monastery_bin;
 
     // Building sprite pixel sizes (must match preprocessing target sizes)
     // Isometric: footW = (tileW+tileH)*16, sprH = footH + 16 above-ground
@@ -455,6 +473,7 @@ void render_init() {
     buildingSprW[BLDG_TOWER]         = 32;  buildingSprH[BLDG_TOWER]         = 64;
     buildingSprW[BLDG_MARKET]        = 64;  buildingSprH[BLDG_MARKET]        = 80;
     buildingSprW[BLDG_CASTLE]        = 96;  buildingSprH[BLDG_CASTLE]        = 128;
+    buildingSprW[BLDG_MONASTERY]     = 64;  buildingSprH[BLDG_MONASTERY]     = 80;
 }
 
 // ---------------------------------------------------------------------------
@@ -515,8 +534,11 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
         bool animated = is_animated_sheet(sheet, u);
         if (animated) {
             bool carry = is_carry_sheet(sheet, u);
-            int base = carry ? DIR_TO_ANIM_BASE[u.direction] / 2 : DIR_TO_ANIM_BASE[u.direction];
-            int fpd = carry ? 5 : 10;
+            int unitCols = UNIT_ANIM_COLS[u.type];
+            bool compact = (unitCols == 5);
+            // Compact sheets (5 cols) or carry sheets use halved base
+            int base = (carry || compact) ? DIR_TO_ANIM_BASE[u.direction] / 2 : DIR_TO_ANIM_BASE[u.direction];
+            int fpd = (carry || compact) ? 5 : 10;
             int anim = u.animFrame % fpd;
             frameIdx = base + anim;
             hflip = DIR_HFLIP[u.direction];
@@ -527,8 +549,9 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
             hflip = DIR_HFLIP[u.direction];
         }
 
-        int sheetCols = animated ? ANIM_SHEET_COLS : STAND_SHEET_COLS;
-        int sheetW = animated ? ANIM_SHEET_W : STAND_SHEET_W;
+        int unitCols2 = UNIT_ANIM_COLS[u.type];
+        int sheetCols = animated ? unitCols2 : STAND_SHEET_COLS;
+        int sheetW = sheetCols * CELL_W;
 
         // Clamp frame index to valid range
         if (frameIdx >= sheetCols * SHEET_ROWS) frameIdx = 0;
@@ -991,8 +1014,10 @@ static void render_unit_sw(u8* buf, const GameState& gs, int i) {
     bool animated = is_animated_sheet(sheet, u);
     if (animated) {
         bool carry = is_carry_sheet(sheet, u);
-        int base = carry ? DIR_TO_ANIM_BASE[u.direction] / 2 : DIR_TO_ANIM_BASE[u.direction];
-        int fpd = carry ? 5 : 10;
+        int unitCols = UNIT_ANIM_COLS[u.type];
+        bool compact = (unitCols == 5);
+        int base = (carry || compact) ? DIR_TO_ANIM_BASE[u.direction] / 2 : DIR_TO_ANIM_BASE[u.direction];
+        int fpd = (carry || compact) ? 5 : 10;
         int anim = u.animFrame % fpd;
         frameIdx = base + anim;
         hflip = DIR_HFLIP[u.direction];
@@ -1002,8 +1027,9 @@ static void render_unit_sw(u8* buf, const GameState& gs, int i) {
         frameIdx = base + (u.animFrame % 5);
         hflip = DIR_HFLIP[u.direction];
     }
-    int sheetCols = animated ? ANIM_SHEET_COLS : STAND_SHEET_COLS;
-    int sheetW = animated ? ANIM_SHEET_W : STAND_SHEET_W;
+    int unitCols2 = UNIT_ANIM_COLS[u.type];
+    int sheetCols = animated ? unitCols2 : STAND_SHEET_COLS;
+    int sheetW = sheetCols * CELL_W;
     if (frameIdx >= sheetCols * SHEET_ROWS) frameIdx = 0;
 
     u8 frame[CELL_W * CELL_H];

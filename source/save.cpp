@@ -11,7 +11,7 @@
 
 static const char SAVE_PATH[] = "fat:/aoe2dsi.sav";
 static const u32  SAVE_MAGIC  = 0xA0E2D51;
-static const u16  SAVE_VERSION = 1;
+static const u16  SAVE_VERSION = 2;
 
 extern GameState gameState;
 
@@ -66,6 +66,7 @@ bool save_game(TerrainMap& terrain) {
         ok = ok && write_all(f, &u.attackBldgTarget, 1);
         ok = ok && write_all(f, &u.buildTarget, 1);
         ok = ok && write_all(f, &u.stance, 1);
+        ok = ok && write_all(f, &u.convertProgress, 1);
         ok = ok && write_all(f, &u.deadTimer, sizeof(u16));
         ok = ok && write_all(f, &u.patrolAX, sizeof(s16));
         ok = ok && write_all(f, &u.patrolAY, sizeof(s16));
@@ -175,6 +176,7 @@ bool load_game(TerrainMap& terrain) {
         ok = ok && read_all(f, &u.attackBldgTarget, 1);
         ok = ok && read_all(f, &u.buildTarget, 1);
         ok = ok && read_all(f, &u.stance, 1);
+        ok = ok && read_all(f, &u.convertProgress, 1);
         ok = ok && read_all(f, &u.deadTimer, sizeof(u16));
         ok = ok && read_all(f, &u.patrolAX, sizeof(s16));
         ok = ok && read_all(f, &u.patrolAY, sizeof(s16));

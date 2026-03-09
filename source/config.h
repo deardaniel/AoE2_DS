@@ -86,7 +86,8 @@ enum UnitTypeId {
     UNIT_SHEEP     = 6,
     UNIT_RAM       = 7,
     UNIT_MANGONEL  = 8,
-    UNIT_TYPE_COUNT = 9
+    UNIT_MONK      = 9,
+    UNIT_TYPE_COUNT = 10
 };
 
 // ---------------------------------------------------------------------------
@@ -105,7 +106,8 @@ enum BuildingTypeId {
     BLDG_TOWER         = 9,
     BLDG_MARKET        = 10,
     BLDG_CASTLE        = 11,
-    BLDG_TYPE_COUNT    = 12
+    BLDG_MONASTERY     = 12,
+    BLDG_TYPE_COUNT    = 13
 };
 
 // ---------------------------------------------------------------------------
@@ -195,6 +197,7 @@ static const u8 UNIT_CLASS[UNIT_TYPE_COUNT] = {
     /* SHEEP     */ UCLASS_NONE,
     /* RAM       */ UCLASS_SIEGE,
     /* MANGONEL  */ UCLASS_SIEGE,
+    /* MONK      */ UCLASS_NONE,
 };
 
 // Calculate total damage from attacker stats vs defender stats
@@ -262,6 +265,7 @@ static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
     /* SHEEP     */ {  25, {0,0,0,0}, {0,0,0,0},  0,  1,  2,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_TYPE_COUNT },
     /* RAM       */ { 175, {2,0,0,0},{-3,180,0,0}, 1,  1,  3, 2400, {  0,  0,  0, 75}, AGE_CASTLE, BLDG_CASTLE },
     /* MANGONEL  */ {  50, {0,40,0,0},{0,6,0,0},   7,  1,  7, 2700, {  0, 160, 0,  0}, AGE_CASTLE, BLDG_CASTLE },
+    /* MONK      */ {  30, {0,0,0,0},{0,0,0,0},   9,  1,  7, 3600, {  0,   0,100, 0}, AGE_CASTLE, BLDG_MONASTERY },
 };
 
 // ---------------------------------------------------------------------------
@@ -284,6 +288,7 @@ static const BuildingStats BLDG_STATS[BLDG_TYPE_COUNT] = {
     /* TOWER         */ { 200, 300, {  0,  50,  0,  25}, AGE_FEUDAL,  0,  1, 1 },
     /* MARKET        */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  2, 2 },
     /* CASTLE        */ {1000, 900, {  0,   0,  0, 650}, AGE_IMPERIAL,0,  3, 3 },
+    /* MONASTERY     */ { 350, 300, {  0, 175,  0,   0}, AGE_CASTLE,  0,  2, 2 },
 };
 
 // ---------------------------------------------------------------------------
@@ -308,13 +313,13 @@ static const int AGE_RESEARCH_TIME[AGE_COUNT] = {
 // ---------------------------------------------------------------------------
 static const char* const UNIT_NAMES[UNIT_TYPE_COUNT] = {
     "Villager", "Militia", "Archer", "Knight", "Spearman", "Scout", "Sheep",
-    "Bat. Ram", "Mangonel"
+    "Bat. Ram", "Mangonel", "Monk"
 };
 
 static const char* const BLDG_NAMES[BLDG_TYPE_COUNT] = {
     "Town Center", "House", "Barracks", "Archery Range",
     "Stable", "Farm", "Mining Camp", "Lumber Camp",
-    "Wall", "Tower", "Market", "Castle"
+    "Wall", "Tower", "Market", "Castle", "Monastery"
 };
 
 static const char* const AGE_NAMES[AGE_COUNT] = {

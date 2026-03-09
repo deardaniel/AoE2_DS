@@ -78,6 +78,10 @@ UNIT_SHEETS = [
     ('spr_mango_walk',       'mango_walk.png'),
     ('spr_mango_fight',      'mango_fight.png'),
     ('spr_mango_die',        'mango_death.png'),
+    ('spr_monk_stand',       'monk_stand.png'),
+    ('spr_monk_walk',        'monk_walk.png'),
+    ('spr_monk_fight',       'monk_fight.png'),
+    ('spr_monk_die',         'monk_death.png'),
 ]
 
 # Building sprites: (output_name, filename, target_w, target_h, tileW, tileH, hotspot_y_ratio)
@@ -98,6 +102,7 @@ BUILDING_SPRITES = [
     ('spr_tower',         'tower.png',          32,  64, 1, 1, 0.894), # 1x1: SLP 2652, hotspot 202/226
     ('spr_market',        'market.png',         64,  80, 2, 2, 0.714), # 2x2: SLP 2278, hotspot 220/308
     ('spr_castle',        'castle.png',         96, 128, 3, 3, 0.798), # 3x3: SLP 305, hotspot 280/351
+    ('spr_monastery',     'monastery.png',      64,  80, 2, 2, 0.801), # 2x2: SLP 278, hotspot 266/332
 ]
 
 # Icon sprites for build menu: (output_name, filename, target_w, target_h, cols, rows, scale)
@@ -115,6 +120,7 @@ ICON_SPRITES = [
     ('icon_tower',         'icon_tower.png',         32, 32, 1, 1, 0.889),
     ('icon_market',        'icon_market.png',        32, 32, 1, 1, 0.889),
     ('icon_castle',        'icon_castle.png',        32, 32, 1, 1, 0.889),
+    ('icon_monastery',     'icon_monastery.png',     32, 32, 1, 1, 0.889),
 ]
 
 # Resource object sprites: (output_name, filename)

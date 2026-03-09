@@ -630,6 +630,7 @@ void unit_command_attack(int idx, int targetIdx) {
     u.attackBldgTarget = -1;
     u.gatherTX = -1;
     u.gatherTY = -1;
+    u.convertProgress = 0;
     u.state = USTATE_ATTACKING;
 }
 
@@ -1069,6 +1070,12 @@ static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
 static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     // --- Attacking a building ---
     if (u.attackBldgTarget >= 0) {
+        // Monks can't attack buildings
+        if (u.type == UNIT_MONK) {
+            u.attackBldgTarget = -1;
+            u.state = USTATE_IDLE;
+            return;
+        }
         if (u.attackBldgTarget >= MAX_BUILDINGS || !buildings[u.attackBldgTarget].alive) {
             u.attackBldgTarget = -1;
             u.state = USTATE_IDLE;
@@ -1182,6 +1189,27 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
         u.carryAmount = SHEEP_FOOD_AMOUNT;
         u.role = VROLE_FARMER;
         u.state = USTATE_RETURNING;
+        return;
+    }
+
+    // Monk conversion: gradually convert enemy unit to own side
+    if (u.type == UNIT_MONK) {
+        // Can't convert monks, siege units, or sheep
+        if (target.type == UNIT_MONK || target.type == UNIT_RAM ||
+            target.type == UNIT_MANGONEL || target.type == UNIT_SHEEP) {
+            u.attackTarget = -1;
+            u.convertProgress = 0;
+            u.state = USTATE_IDLE;
+            return;
+        }
+        u.convertProgress++;
+        if (u.convertProgress >= 240) { // ~4 seconds at 60fps
+            // Convert the target unit
+            target.owner = u.owner;
+            u.attackTarget = -1;
+            u.convertProgress = 0;
+            u.state = USTATE_IDLE;
+        }
         return;
     }
 

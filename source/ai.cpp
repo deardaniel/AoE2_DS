@@ -302,6 +302,14 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
 
+    // Monastery if castle age and none
+    if (p.age >= AGE_CASTLE && building_count(AI_PLAYER, BLDG_MONASTERY) == 0) {
+        int bx, by;
+        if (ai_find_build_spot(tcTX - 3, tcTY - 2, 2, 2, terrain, bx, by)) {
+            ai_place_and_build(BLDG_MONASTERY, bx, by, gs, terrain);
+        }
+    }
+
     // ---- Military phase ----
 
     // Train military units from available buildings
@@ -330,6 +338,10 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
                 building_train(i, UNIT_RAM, gs);
             else
                 building_train(i, UNIT_MANGONEL, gs);
+            break;
+        case BLDG_MONASTERY:
+            if (unit_count_type(AI_PLAYER, UNIT_MONK) < 2)
+                building_train(i, UNIT_MONK, gs);
             break;
         default:
             break;
