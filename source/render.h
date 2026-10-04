@@ -13,6 +13,20 @@ int render_pick_unit(const GameState& gs, int screenX, int screenY, int owner, b
 // Building under a screen pixel, by its sprite (-1 = none)
 int render_pick_building(const GameState& gs, int screenX, int screenY);
 
+// Scrolling without redrawing: the cached layers are moved by the camera's
+// step and only the strips that came into view are drawn. scroll_strips()
+// gives those strips (one or two, never overlapping); render_shift() moves a
+// 256x192 buffer; render_static_scroll() does both for the static layer once
+// the ground has been done.
+struct ClipRect { int x0, y0, x1, y1; };
+int  scroll_strips(int dx, int dy, ClipRect out[2]);
+void render_shift(u8* buf, int dx, int dy);
+void render_static_scroll(const u8* ground, const GameState& gs, const TerrainMap& terrain, int dx, int dy);
+// Redraw rectangles of the static layer after the ground under them changed;
+// relist = something new came into view (a tile was explored)
+void render_static_refresh(const u8* ground, const GameState& gs, const TerrainMap& terrain,
+                           const ClipRect* rects, int count, bool relist);
+
 // Draw the scene into buf: the cached static layer (ground, resources,
 // buildings) and then the units. `ground` is the terrain + fog layer;
 // groundVersion must change whenever its contents do.

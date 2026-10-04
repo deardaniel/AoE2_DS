@@ -9,6 +9,7 @@ FogMap fogMap;
 void FogMap::init() {
     memset(state, FOG_UNEXPLORED, sizeof(state));
     version++;
+    memset(changed, FOG_CHANGED_NEW, sizeof(changed));
 }
 
 void FogMap::update() {
@@ -66,19 +67,18 @@ void FogMap::update() {
         }
     }
 
-    if (memcmp(before, state[0], sizeof(before)) != 0) version++;
-}
-
-u32 FogMap::viewHash(int minTX, int minTY, int maxTX, int maxTY) const {
-    if (minTX < 0) minTX = 0;
-    if (minTY < 0) minTY = 0;
-    if (maxTX >= MAP_TILES) maxTX = MAP_TILES - 1;
-    if (maxTY >= MAP_TILES) maxTY = MAP_TILES - 1;
-    u32 h = 2166136261u;
-    for (int ty = minTY; ty <= maxTY; ty++)
-        for (int tx = minTX; tx <= maxTX; tx++)
-            h = (h ^ state[0][ty][tx]) * 16777619u;
-    return h;
+    // Which tiles of player 0's view changed, and how
+    bool any = false;
+    for (int ty = 0; ty < MAP_TILES; ty++) {
+        if (memcmp(before[ty], state[0][ty], MAP_TILES) == 0) continue;
+        any = true;
+        for (int tx = 0; tx < MAP_TILES; tx++) {
+            if (before[ty][tx] == state[0][ty][tx]) continue;
+            u8 kind = (before[ty][tx] == FOG_UNEXPLORED) ? FOG_CHANGED_NEW : FOG_CHANGED_SHADE;
+            if (kind > changed[ty][tx]) changed[ty][tx] = kind;
+        }
+    }
+    if (any) version++;
 }
 
 bool FogMap::isVisible(int player, int tx, int ty) const {
@@ -96,5 +96,6 @@ void FogMap::forceExplore(int player, int tx, int ty) {
     if (state[player][ty][tx] == FOG_UNEXPLORED) {
         state[player][ty][tx] = FOG_EXPLORED;
         version++;
+        if (player == 0) changed[ty][tx] = FOG_CHANGED_NEW;
     }
 }

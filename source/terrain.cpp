@@ -451,35 +451,25 @@ void TerrainMap::generate(u32 seed) {
 // ---------------------------------------------------------------------------
 // Render visible portion of map into 256x192 VRAM bitmap
 // ---------------------------------------------------------------------------
-void TerrainMap::renderViewport(u8* vram, int camX, int camY) const {
-    // Clear buffer to black (off-map areas will show as black)
-    memset(vram, PAL_BLACK, SCREEN_W * SCREEN_H);
+void TerrainMap::renderViewport(u8* vram, int camX, int camY,
+                                int cx0, int cy0, int cx1, int cy1) const {
+    if (cx0 >= cx1 || cy0 >= cy1) return;
+    // Clear to black (off-map areas will show as black)
+    for (int y = cy0; y < cy1; y++) memset(vram + y * 256 + cx0, PAL_BLACK, cx1 - cx0);
 
-    // Determine visible tile range by converting screen corners to tile coords
+    // Tile range under the clip rectangle, from its four corners
     int minTX, minTY, maxTX, maxTY;
     int tmpTX, tmpTY;
-
-    // Check all 4 corners of screen with margin for tile overhang
-    screenToTile(0, 0, camX, camY, minTX, minTY);
+    screenToTile(cx0, cy0, camX, camY, minTX, minTY);
     maxTX = minTX; maxTY = minTY;
-
-    screenToTile(SCREEN_W, 0, camX, camY, tmpTX, tmpTY);
-    if (tmpTX < minTX) minTX = tmpTX;
-    if (tmpTX > maxTX) maxTX = tmpTX;
-    if (tmpTY < minTY) minTY = tmpTY;
-    if (tmpTY > maxTY) maxTY = tmpTY;
-
-    screenToTile(0, SCREEN_H, camX, camY, tmpTX, tmpTY);
-    if (tmpTX < minTX) minTX = tmpTX;
-    if (tmpTX > maxTX) maxTX = tmpTX;
-    if (tmpTY < minTY) minTY = tmpTY;
-    if (tmpTY > maxTY) maxTY = tmpTY;
-
-    screenToTile(SCREEN_W, SCREEN_H, camX, camY, tmpTX, tmpTY);
-    if (tmpTX < minTX) minTX = tmpTX;
-    if (tmpTX > maxTX) maxTX = tmpTX;
-    if (tmpTY < minTY) minTY = tmpTY;
-    if (tmpTY > maxTY) maxTY = tmpTY;
+    const int corner[3][2] = { { cx1, cy0 }, { cx0, cy1 }, { cx1, cy1 } };
+    for (int c = 0; c < 3; c++) {
+        screenToTile(corner[c][0], corner[c][1], camX, camY, tmpTX, tmpTY);
+        if (tmpTX < minTX) minTX = tmpTX;
+        if (tmpTX > maxTX) maxTX = tmpTX;
+        if (tmpTY < minTY) minTY = tmpTY;
+        if (tmpTY > maxTY) maxTY = tmpTY;
+    }
 
     // Expand range by 1 tile on each side for partial tiles
     minTX -= 1; minTY -= 1;
@@ -500,10 +490,6 @@ void TerrainMap::renderViewport(u8* vram, int camX, int camY) const {
 
             // For grass/dirt tiles, select a variant based on tile position
             // Uses a simple hash to pick deterministically
-            const u8* src = getTileGfx(tx, ty, ttype);
-            // On a border with a higher-priority terrain: the blended version
-            const u8* blended = blendedTile(tx, ty, ttype, src, *this);
-            if (blended) src = blended;
 
             // Compute screen position of this tile's top-left corner
             int isoX, isoY;
@@ -511,14 +497,19 @@ void TerrainMap::renderViewport(u8* vram, int camX, int camY) const {
             int dstX = isoX - camX;
             int dstY = isoY - camY;
 
-            // Quick bounds check (tile is 32x16)
-            if (dstX + ISO_TILE_W <= 0 || dstX >= SCREEN_W) continue;
-            if (dstY + ISO_TILE_H <= 0 || dstY >= SCREEN_H) continue;
+            // Quick bounds check (tile is 32x16, drawn a pixel wider each side)
+            if (dstX + ISO_TILE_W + 1 <= cx0 || dstX - 1 >= cx1) continue;
+            if (dstY + ISO_TILE_H <= cy0 || dstY >= cy1) continue;
+
+            const u8* src = getTileGfx(tx, ty, ttype);
+            // On a border with a higher-priority terrain: the blended version
+            const u8* blended = blendedTile(tx, ty, ttype, src, *this);
+            if (blended) src = blended;
 
             // Draw diamond pixels using mask table
             for (int py = 0; py < ISO_TILE_H; py++) {
                 int screenY = dstY + py;
-                if (screenY < 0 || screenY >= SCREEN_H) continue;
+                if (screenY < cy0 || screenY >= cy1) continue;
 
                 int xs = ISO_DIAMOND_XSTART[py];
                 int xe = ISO_DIAMOND_XEND[py];
@@ -536,8 +527,8 @@ void TerrainMap::renderViewport(u8* vram, int camX, int camY) const {
                 int drawXs = dstX + renderXs;
                 int drawXe = dstX + renderXe;
                 int srcOff = renderXs;
-                if (drawXs < 0) { srcOff -= drawXs; drawXs = 0; }
-                if (drawXe > SCREEN_W) drawXe = SCREEN_W;
+                if (drawXs < cx0) { srcOff += cx0 - drawXs; drawXs = cx0; }
+                if (drawXe > cx1) drawXe = cx1;
                 if (drawXs >= drawXe) continue;
 
                 // A tile is the whole 32x16 rectangle of its ground texture, so

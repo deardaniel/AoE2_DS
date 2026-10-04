@@ -26,12 +26,30 @@
 #ifdef SHOWCASE
 // Profiling for debug builds: how much of a 1/60 s frame each part of the
 // loop takes, in percent, shown under the minimap (ui.cpp).
-int profPct[8];  // units, ai, ground, sprites, ui, buildings+projectiles, fog
+// What is shown is the worst frame of the last second for each part (a
+// spike is what gets felt, and a screenshot can't catch a single frame),
+// and in profTotal the worst and the average whole frame.
+int profPct[10];  // units, ai, ground, sprites, ui, buildings+projectiles, fog, path, overlays+copy
+int profTotal[2];   // worst frame, average frame
+int dbgFulls, dbgRects;
+int dbgG[5], dbgGW[5];   // worst per second: shift+strips, static scroll, fog ground, fog static, full
+#define G_T0() gT = cpuGetTiming()
+#define G_LAP(n) do { u32 nowT = cpuGetTiming(); int pc = (int)((u64)(nowT - gT) * 100 / 560190); \
+    if (pc > dbgGW[n]) dbgGW[n] = pc; gT = nowT; } while (0)
+static int profNow[10], profWorst[10], profFrameSum, profFrameWorst, profFrames, profSumAll;
 static u32 profMark;
-#define PROF_BEGIN() do { cpuStartTiming(2); profMark = 0; } while (0)
+#define PROF_BEGIN() do { cpuStartTiming(2); profMark = 0; profFrameSum = 0; } while (0)
 #define PROF_LAP(slot) do { u32 now = cpuGetTiming(); \
-    profPct[slot] = (int)((u64)(now - profMark) * 100 / 560190); profMark = now; } while (0)
-#define PROF_END() cpuEndTiming()
+    profNow[slot] = (int)((u64)(now - profMark) * 100 / 560190); profMark = now; \
+    profFrameSum += profNow[slot]; \
+    if (profNow[slot] > profWorst[slot]) profWorst[slot] = profNow[slot]; } while (0)
+#define PROF_END() do { cpuEndTiming(); \
+    if (profFrameSum > profFrameWorst) profFrameWorst = profFrameSum; \
+    profSumAll += profFrameSum; \
+    if (++profFrames == 60) { \
+        for (int s = 0; s < 9; s++) { if (s == 7) continue; profPct[s] = profWorst[s]; profWorst[s] = 0; } \
+        profTotal[0] = profFrameWorst; profTotal[1] = profSumAll / 60; \
+        profFrames = 0; profFrameWorst = 0; profSumAll = 0; } } while (0)
 #else
 #define PROF_BEGIN()
 #define PROF_LAP(slot)
@@ -235,6 +253,65 @@ static void game_start() {
 }
 
 // ---------------------------------------------------------------------------
+// Draw the ground (terrain, then the fog over it) into groundBuf, inside a
+// rectangle of the screen
+// ---------------------------------------------------------------------------
+static void draw_ground(int cx0, int cy0, int cx1, int cy1) {
+    if (cx0 >= cx1 || cy0 >= cy1) return;
+    terrain.renderViewport(groundBuf, gameState.camX, gameState.camY, cx0, cy0, cx1, cy1);
+
+    // Tile range under the rectangle, from its corners
+    int minTX, minTY, maxTX, maxTY, tmpTX, tmpTY;
+    screenToTile(cx0, cy0, gameState.camX, gameState.camY, minTX, minTY);
+    maxTX = minTX; maxTY = minTY;
+    const int corner[3][2] = { { cx1, cy0 }, { cx0, cy1 }, { cx1, cy1 } };
+    for (int c = 0; c < 3; c++) {
+        screenToTile(corner[c][0], corner[c][1], gameState.camX, gameState.camY, tmpTX, tmpTY);
+        if (tmpTX < minTX) minTX = tmpTX;
+        if (tmpTX > maxTX) maxTX = tmpTX;
+        if (tmpTY < minTY) minTY = tmpTY;
+        if (tmpTY > maxTY) maxTY = tmpTY;
+    }
+    minTX -= 1; minTY -= 1;
+    maxTX += 1; maxTY += 1;
+
+    for (int tx = minTX; tx <= maxTX; tx++) {
+        for (int ty = minTY; ty <= maxTY; ty++) {
+            if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
+            u8 fogState = fogMap.state[0][ty][tx];
+            if (fogState == FOG_VISIBLE) continue;
+
+            int isoFX, isoFY;
+            tileToIso(tx, ty, isoFX, isoFY);
+            int dstX = isoFX - gameState.camX;
+            int dstY = isoFY - gameState.camY;
+            if (dstX + ISO_TILE_W + 1 <= cx0 || dstX - 1 >= cx1) continue;
+            if (dstY + ISO_TILE_H <= cy0 || dstY >= cy1) continue;
+
+            for (int py = 0; py < ISO_TILE_H; py++) {
+                int screenY = dstY + py;
+                if (screenY < cy0 || screenY >= cy1) continue;
+                int xs = ISO_DIAMOND_XSTART[py];
+                int xe = ISO_DIAMOND_XEND[py];
+                // Match the extended diamond used in renderViewport
+                if (!terrain.showTileGrid) {
+                    if (xs > 0) xs--;
+                    if (xe < ISO_TILE_W) xe++;
+                }
+                for (int px = xs; px < xe; px++) {
+                    int screenX = dstX + px;
+                    if (screenX < cx0 || screenX >= cx1) continue;
+                    // Unexplored: black. Explored but out of sight: a
+                    // checkerboard of black, fixed to the map
+                    if (fogState == FOG_UNEXPLORED || ((px + py) & 1))
+                        groundBuf[screenY * 256 + screenX] = PAL_BLACK;
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 int main(void) {
@@ -297,7 +374,10 @@ int main(void) {
             scanKeys();
             PauseResult r = pause_frame(terrainBuf, gameState, terrain);
             if (r == PAUSE_NEW_GAME) game_start();
-            if (r == PAUSE_STAY) dmaCopy(terrainBuf, subVram, 256 * 192);
+            if (r == PAUSE_STAY) {
+                DC_FlushRange(terrainBuf, 256 * 192);
+                dmaCopy(terrainBuf, subVram, 256 * 192);
+            }
             sound_music_update();
             swiWaitForVBlank();
             continue;
@@ -383,6 +463,7 @@ int main(void) {
                     font_draw_str_8(terrainBuf, 256, 192, hx, sy, hint, PAL_WHITE, gameFont);
             }
 
+            DC_FlushRange(terrainBuf, 256 * 192);
             dmaCopy(terrainBuf, subVram, 256 * 192);
 
             // Still update UI to show victory/defeat on top screen
@@ -455,8 +536,8 @@ int main(void) {
         game_update(gameState);
         PROF_LAP(5);
 
-        // Fog of war (every other frame for performance)
-        if ((gameState.frameCount & 1) == 0) {
+        // Fog of war (every fourth frame, between the top screen redraws)
+        if ((gameState.frameCount & 3) == 1) {
             fogMap.update();
         }
         PROF_LAP(6);
@@ -495,126 +576,155 @@ int main(void) {
         // Sub screen: render terrain to main RAM buffer
         // (NDS VRAM doesn't support byte writes — STRB is silently dropped)
         PROF_LAP(1);
-        // The ground (terrain plus fog) only changes when the camera moves or
-        // the fog or a tile changes, and drawing it costs more than a frame —
-        // so it is drawn into groundBuf when one of those happens and copied
-        // from there every frame.
+        // The ground (terrain plus fog) is kept in groundBuf. When only the
+        // camera moved, the picture is shifted and just the strips that came
+        // into view are drawn — scrolling used to redraw the whole ground and
+        // everything standing on it, more than a frame's work, every frame.
+        // A change to the terrain or to the fog in view redraws it all.
         {
-            static int gCamX = -1, gCamY = -1;
-            static u32 gFog = 0xFFFFFFFF, gFogVersion = 0xFFFFFFFF, gTerrain = 0xFFFFFFFF;
-            static bool gGrid = false;
-            bool memsetFog = false;
-#if defined(SHOWCASE) && SHOWCASE == 5
-            memsetFog = true;  // fog is forced visible every frame, version never moves
+            static int gCamX = 0, gCamY = 0;
+            static u32 gTerrain = 0;
+            static bool gGrid = false, gHave = false;
+
+            int x0, y0, x1, y1, tx, ty;
+            screenToTile(0, 0, gameState.camX, gameState.camY, x0, y0);
+            x1 = x0; y1 = y0;
+            static const int CORNER[3][2] = { { SCREEN_W, 0 }, { 0, SCREEN_H }, { SCREEN_W, SCREEN_H } };
+            for (int c = 0; c < 3; c++) {
+                screenToTile(CORNER[c][0], CORNER[c][1], gameState.camX, gameState.camY, tx, ty);
+                if (tx < x0) x0 = tx;
+                if (tx > x1) x1 = tx;
+                if (ty < y0) y0 = ty;
+                if (ty > y1) y1 = ty;
+            }
+            bool full = !gHave || gTerrain != terrain.version || gGrid != terrain.showTileGrid;
+#ifdef SHOWCASE
+            if (keysHeld() & KEY_X) full = true;   // debug: compare a scrolled picture with a fresh one
 #endif
-            // Only the fog on screen matters: a scout exploring the far side
-            // of the map changes the fog constantly but not this picture.
+            int dx = gameState.camX - gCamX, dy = gameState.camY - gCamY;
+            if (!full && (dx != 0 || dy != 0)) {
+                if (dx <= -96 || dx >= 96 || dy <= -64 || dy >= 64) {
+                    full = true;
+                } else {
+#ifdef SHOWCASE
+                    u32 G_T0();
+#endif
+                    render_shift(groundBuf, dx, dy);
+                    ClipRect strips[2];
+                    int n = scroll_strips(dx, dy, strips);
+                    for (int k = 0; k < n; k++)
+                        draw_ground(strips[k].x0, strips[k].y0, strips[k].x1, strips[k].y1);
+#ifdef SHOWCASE
+                    G_LAP(0);
+#endif
+                    render_static_scroll(groundBuf, gameState, terrain, dx, dy);
+#ifdef SHOWCASE
+                    G_LAP(1);
+#endif
+                }
+            }
+
+            // Fog: the tiles in view whose shading changed are redrawn one by
+            // one (a unit walking moves a ring of them every few frames) —
+            // a few per frame, the rest left flagged for the next, so the
+            // work is spread out instead of landing on one frame. With a
+            // long backlog the whole picture is cheaper.
             // (Trees reach up from a few rows below the screen, hence +5.)
-            u32 viewFog = gFog;
-            if (gFogVersion != fogMap.version || gCamX != gameState.camX || gCamY != gameState.camY) {
-                int x0, y0, x1, y1, tx, ty;
-                screenToTile(0, 0, gameState.camX, gameState.camY, x0, y0);
-                x1 = x0; y1 = y0;
-                static const int CORNER[3][2] = { { SCREEN_W, 0 }, { 0, SCREEN_H }, { SCREEN_W, SCREEN_H } };
-                for (int c = 0; c < 3; c++) {
-                    screenToTile(CORNER[c][0], CORNER[c][1], gameState.camX, gameState.camY, tx, ty);
-                    if (tx < x0) x0 = tx;
-                    if (tx > x1) x1 = tx;
-                    if (ty < y0) y0 = ty;
-                    if (ty > y1) y1 = ty;
-                }
-                viewFog = fogMap.viewHash(x0 - 1, y0 - 1, x1 + 5, y1 + 5);
-                gFogVersion = fogMap.version;
-            }
-            if (gCamX != gameState.camX || gCamY != gameState.camY || gFog != viewFog ||
-                gTerrain != terrain.version || gGrid != terrain.showTileGrid || memsetFog) {
-                gCamX = gameState.camX; gCamY = gameState.camY;
-                gFog = viewFog; gTerrain = terrain.version; gGrid = terrain.showTileGrid;
-                terrain.renderViewport(groundBuf, gameState.camX, gameState.camY);
-
-
-            // Sub screen: fog overlay on buffer (isometric diamond tiles)
-            {
-                // Determine visible tile range from screen corners
-                int minTX, minTY, maxTX, maxTY;
-                int tmpTX, tmpTY;
-
-                screenToTile(0, 0, gameState.camX, gameState.camY, minTX, minTY);
-                maxTX = minTX; maxTY = minTY;
-
-                screenToTile(SCREEN_W, 0, gameState.camX, gameState.camY, tmpTX, tmpTY);
-                if (tmpTX < minTX) minTX = tmpTX;
-                if (tmpTX > maxTX) maxTX = tmpTX;
-                if (tmpTY < minTY) minTY = tmpTY;
-                if (tmpTY > maxTY) maxTY = tmpTY;
-
-                screenToTile(0, SCREEN_H, gameState.camX, gameState.camY, tmpTX, tmpTY);
-                if (tmpTX < minTX) minTX = tmpTX;
-                if (tmpTX > maxTX) maxTX = tmpTX;
-                if (tmpTY < minTY) minTY = tmpTY;
-                if (tmpTY > maxTY) maxTY = tmpTY;
-
-                screenToTile(SCREEN_W, SCREEN_H, gameState.camX, gameState.camY, tmpTX, tmpTY);
-                if (tmpTX < minTX) minTX = tmpTX;
-                if (tmpTX > maxTX) maxTX = tmpTX;
-                if (tmpTY < minTY) minTY = tmpTY;
-                if (tmpTY > maxTY) maxTY = tmpTY;
-
-                minTX -= 1; minTY -= 1;
-                maxTX += 1; maxTY += 1;
-
-                int minSum = minTX + minTY;
-                int maxSum = maxTX + maxTY;
-
-                for (int sum = minSum; sum <= maxSum; sum++) {
-                    for (int tx = minTX; tx <= maxTX; tx++) {
-                        int ty = sum - tx;
-                        if (ty < minTY || ty > maxTY) continue;
-                        if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
-
-                        u8 fogState = fogMap.state[0][ty][tx];
-                        if (fogState == FOG_VISIBLE) continue;
-
-                        int isoFX, isoFY;
-                        tileToIso(tx, ty, isoFX, isoFY);
-                        int dstX = isoFX - gameState.camX;
-                        int dstY = isoFY - gameState.camY;
-
-                        if (dstX + ISO_TILE_W <= 0 || dstX >= SCREEN_W) continue;
-                        if (dstY + ISO_TILE_H <= 0 || dstY >= SCREEN_H) continue;
-
-                        for (int py = 0; py < ISO_TILE_H; py++) {
-                            int screenY = dstY + py;
-                            if (screenY < 0 || screenY >= SCREEN_H) continue;
-
-                            int xs = ISO_DIAMOND_XSTART[py];
-                            int xe = ISO_DIAMOND_XEND[py];
-
-                            // Match the extended diamond used in renderViewport
-                            if (!terrain.showTileGrid) {
-                                if (xs > 0) xs--;
-                                if (xe < ISO_TILE_W) xe++;
-                            }
-
-                            for (int px = xs; px < xe; px++) {
-                                int screenX = dstX + px;
-                                if (screenX < 0 || screenX >= SCREEN_W) continue;
-                                int idx = screenY * 256 + screenX;
-                                if (fogState == FOG_UNEXPLORED) {
-                                    groundBuf[idx] = PAL_BLACK;
-                                } else {
-                                    // Explored but not visible: checkerboard dither
-                                    if ((px + py) & 1) {
-                                        groundBuf[idx] = PAL_BLACK;
-                                    }
-                                }
-                            }
-                        }
+            enum { FOG_RECTS_PER_FRAME = 4, FOG_BACKLOG_MAX = 96, MAX_FOG_RECTS = FOG_RECTS_PER_FRAME + 1 };
+            static ClipRect fogRects[MAX_FOG_RECTS];
+            static s8 later[FOG_BACKLOG_MAX][2];   // shade changes put off
+            int laterCount = 0;
+            int fogCount = 0;
+            // Newly explored tiles come in a band along the edge of sight:
+            // one rectangle round them all
+            ClipRect newRect = { SCREEN_W, SCREEN_H, 0, 0 };
+#if !(defined(SHOWCASE) && SHOWCASE == 5)   // (there the fog is forced visible every frame)
+            for (int fy = y0 - 1; fy <= y1 + 5 && !full; fy++) {
+                for (int fx = x0 - 1; fx <= x1 + 5 && !full; fx++) {
+                    if (fx < 0 || fx >= MAP_TILES || fy < 0 || fy >= MAP_TILES) continue;
+                    u8 kind = fogMap.changed[fy][fx];
+                    if (!kind) continue;
+                    int isoX, isoY;
+                    tileToIso(fx, fy, isoX, isoY);
+                    int sx = isoX - gameState.camX, sy = isoY - gameState.camY;
+                    // Newly explored: the tree on it and the blending of its
+                    // neighbours appear as well
+                    ClipRect r = (kind == FOG_CHANGED_NEW)
+                        ? ClipRect{ sx - ISO_TILE_W - 1, sy - 72, sx + 2 * ISO_TILE_W + 1, sy + 2 * ISO_TILE_H }
+                        : ClipRect{ sx - 1, sy, sx + ISO_TILE_W + 1, sy + ISO_TILE_H };
+                    if (r.x0 < 0) r.x0 = 0;
+                    if (r.y0 < 0) r.y0 = 0;
+                    if (r.x1 > SCREEN_W) r.x1 = SCREEN_W;
+                    if (r.y1 > SCREEN_H) r.y1 = SCREEN_H;
+                    if (r.x0 >= r.x1 || r.y0 >= r.y1) continue;
+                    if (kind == FOG_CHANGED_NEW) {
+                        if (r.x0 < newRect.x0) newRect.x0 = r.x0;
+                        if (r.y0 < newRect.y0) newRect.y0 = r.y0;
+                        if (r.x1 > newRect.x1) newRect.x1 = r.x1;
+                        if (r.y1 > newRect.y1) newRect.y1 = r.y1;
+                        continue;
                     }
+                    if (fogCount == FOG_RECTS_PER_FRAME) {
+                        if (laterCount == FOG_BACKLOG_MAX) { full = true; break; }
+                        later[laterCount][0] = fx;
+                        later[laterCount][1] = fy;
+                        laterCount++;
+                        continue;
+                    }
+                    fogRects[fogCount++] = r;
                 }
             }
-                groundVersion++;
+#endif
+            // Flags outside the view are dropped (those tiles are drawn
+            // afresh when they scroll in); the ones put off stay set
+            memset(fogMap.changed, 0, sizeof(fogMap.changed));
+            if (!full)
+                for (int k = 0; k < laterCount; k++)
+                    fogMap.changed[later[k][1]][later[k][0]] = FOG_CHANGED_SHADE;
+
+            bool fogNew = newRect.x0 < newRect.x1;
+            if (fogNew) {
+                // More than half the screen: the whole picture is cheaper
+                if ((newRect.x1 - newRect.x0) * (newRect.y1 - newRect.y0) > SCREEN_W * SCREEN_H / 2) full = true;
+                else fogRects[fogCount++] = newRect;
             }
+#ifdef SHOWCASE
+            {
+                // Debug: full redraws and most fog rectangles in a frame, per second
+                extern int dbgFulls, dbgRects;
+                static int fulls, rects, frames;
+                if (full) fulls++;
+                if (!full && fogCount > rects) rects = fogCount;
+                if (++frames == 60) { dbgFulls = fulls; dbgRects = rects; fulls = rects = frames = 0; }
+            }
+#endif
+#ifdef SHOWCASE
+            u32 G_T0();
+#endif
+            if (full) {
+                draw_ground(0, 0, SCREEN_W, SCREEN_H);
+                groundVersion++;
+#ifdef SHOWCASE
+                G_LAP(4);
+#endif
+            } else if (fogCount > 0) {
+                for (int k = 0; k < fogCount; k++)
+                    draw_ground(fogRects[k].x0, fogRects[k].y0, fogRects[k].x1, fogRects[k].y1);
+#ifdef SHOWCASE
+                G_LAP(2);
+#endif
+                render_static_refresh(groundBuf, gameState, terrain, fogRects, fogCount, fogNew);
+#ifdef SHOWCASE
+                G_LAP(3);
+#endif
+            }
+#ifdef SHOWCASE
+            if (gameState.frameCount % 60 == 0)
+                for (int q = 0; q < 5; q++) { dbgG[q] = dbgGW[q]; dbgGW[q] = 0; }
+#endif
+            gHave = true;
+            gCamX = gameState.camX; gCamY = gameState.camY;
+            gTerrain = terrain.version; gGrid = terrain.showTileGrid;
         }
 
         // Sub screen: software-render units and buildings into buffer
@@ -649,8 +759,12 @@ int main(void) {
         // Sub screen: drag-selection box overlay
         render_drag_box(terrainBuf, gameState);
 
-        // DMA copy completed buffer to VRAM
+        // DMA copy completed buffer to VRAM. DMA reads memory directly, so
+        // what is still in the data cache has to be written out first (an
+        // emulator shows the picture either way; the console would not).
+        DC_FlushRange(terrainBuf, 256 * 192);
         dmaCopy(terrainBuf, subVram, 256 * 192);
+        PROF_LAP(8);
 
         // Top screen: minimap + info panel
         ui_update(gameState, terrain);

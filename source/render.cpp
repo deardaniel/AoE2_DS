@@ -709,13 +709,17 @@ static void draw_ellipse_buf(u8* buf, int cx, int cy, int rx, int ry, u8 color) 
 // ---------------------------------------------------------------------------
 // Draw a Bresenham line into the bitmap buffer
 // ---------------------------------------------------------------------------
+// Lines are drawn inside this rectangle (the whole screen unless a strip of
+// the static layer is being redrawn)
+static ClipRect lineClip = { 0, 0, SCREEN_W, SCREEN_H };
+
 static void draw_line_buf(u8* buf, int x0, int y0, int x1, int y1, u8 color) {
     int dx = x1 - x0, dy = y1 - y0;
     int sx = (dx > 0) ? 1 : -1, sy = (dy > 0) ? 1 : -1;
     dx *= sx; dy *= sy;
     int err = dx - dy;
     while (true) {
-        if (x0 >= 0 && x0 < SCREEN_W && y0 >= 0 && y0 < SCREEN_H) {
+        if (x0 >= lineClip.x0 && x0 < lineClip.x1 && y0 >= lineClip.y0 && y0 < lineClip.y1) {
             buf[y0 * 256 + x0] = color;
         }
         if (x0 == x1 && y0 == y1) break;
@@ -869,9 +873,8 @@ static u32 static_signature(const GameState& gs) {
     return sig;
 }
 
-// Rebuild the static layer over a fresh copy of the ground
-static void build_static_layer(const u8* ground, const GameState& gs, const TerrainMap& terrain) {
-    memcpy(staticBuf, ground, sizeof(staticBuf));
+// List the static sprites in view (resources and buildings), back to front
+static void collect_statics(const GameState& gs, const TerrainMap& terrain) {
     staticCount = 0;
 
     // Resource tiles in view (trees, mines, bushes)
@@ -889,8 +892,12 @@ static void build_static_layer(const u8* ground, const GameState& gs, const Terr
     // A tree is 67px tall, so tiles a few rows below the screen still show
     minTX -= 1; minTY -= 1; maxTX += 5; maxTY += 5;
 
-    for (int tx = minTX; tx <= maxTX; tx++) {
-        for (int ty = minTY; ty <= maxTY; ty++) {
+    // Row by row from the back (tx + ty rising), so the list comes out in
+    // depth order and the sort below has next to nothing to do
+    for (int sum = minTX + minTY; sum <= maxTX + maxTY; sum++) {
+        for (int tx = minTX; tx <= maxTX; tx++) {
+            int ty = sum - tx;
+            if (ty < minTY || ty > maxTY) continue;
             if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
             if (staticCount >= MAX_STATIC) break;
             const ResGeom* g;
@@ -956,7 +963,10 @@ static void build_static_layer(const u8* ground, const GameState& gs, const Terr
         statics[j + 1] = tmp;
     }
 
-    // Selection outlines lie on the ground, under the sprites
+}
+
+// Selection outlines lie on the ground, under the sprites
+static void draw_selection_outlines(const GameState& gs) {
     if (gs.selectedBldg >= 0 && gs.selectedBldg < MAX_BUILDINGS && buildings[gs.selectedBldg].alive) {
         const Building& b = buildings[gs.selectedBldg];
         int isoX, isoY;
@@ -970,8 +980,113 @@ static void build_static_layer(const u8* ground, const GameState& gs, const Terr
         tileToIso(gs.selectedTileX, gs.selectedTileY, isoX, isoY);
         draw_selection_diamond(staticBuf, isoX - gs.camX, isoY - gs.camY, 1, 1);
     }
+}
 
+// Rebuild the static layer over a fresh copy of the ground
+static void build_static_layer(const u8* ground, const GameState& gs, const TerrainMap& terrain) {
+    memcpy(staticBuf, ground, sizeof(staticBuf));
+    collect_statics(gs, terrain);
+    draw_selection_outlines(gs);
     for (int i = 0; i < staticCount; i++) draw_static(staticBuf, statics[i]);
+}
+
+// ---------------------------------------------------------------------------
+// Scrolling
+// ---------------------------------------------------------------------------
+int scroll_strips(int dx, int dy, ClipRect out[2]) {
+    int n = 0;
+    int vx0 = 0, vx1 = 0;   // the vertical strip's columns
+    if (dx > 0) { vx0 = SCREEN_W - dx; vx1 = SCREEN_W; }
+    if (dx < 0) { vx0 = 0; vx1 = -dx; }
+    if (dx != 0) out[n++] = { vx0, 0, vx1, SCREEN_H };
+    if (dy != 0) {
+        // The horizontal strip, less the columns the vertical one covers
+        int hx0 = (dx < 0) ? -dx : 0, hx1 = (dx > 0) ? SCREEN_W - dx : SCREEN_W;
+        if (dy > 0) out[n++] = { hx0, SCREEN_H - dy, hx1, SCREEN_H };
+        else        out[n++] = { hx0, 0, hx1, -dy };
+    }
+    return n;
+}
+
+// Move the picture by (-dx, -dy): what was at (x + dx, y + dy) is now at (x, y)
+// (the columns and rows that scroll in are left for the caller to draw).
+//
+// A sideways step is rarely a multiple of four pixels, and the C library
+// copies byte by byte when source and destination are aligned differently —
+// two 49 KB buffers that way cost more than redrawing the picture. So rows
+// are moved a word at a time, each output word put together from two source
+// words. That reads one word beyond either end of a row; at the very first
+// and last row it is a word outside the buffer, read but never used (it
+// lands in the strip that is redrawn). buf must be 4-byte aligned.
+void render_shift(u8* buf, int dx, int dy) {
+    enum { ROW_WORDS = 256 / 4 };
+    int yStart = (dy >= 0) ? 0 : SCREEN_H - 1;
+    int yEnd   = (dy >= 0) ? SCREEN_H - dy : -dy - 1;
+    int yStep  = (dy >= 0) ? 1 : -1;
+    for (int y = yStart; y != yEnd; y += yStep) {
+        u32* d = (u32*)(buf + y * 256);
+        const u32* s = (const u32*)(buf + (y + dy) * 256);
+        if (dx == 0) {
+            memcpy(d, s, 256);
+        } else if (dx > 0) {
+            int q = dx >> 2, r = (dx & 3) * 8;
+            if (r == 0) {
+                for (int j = 0; j < ROW_WORDS - q; j++) d[j] = s[j + q];
+            } else {
+                for (int j = 0; j < ROW_WORDS - q; j++) d[j] = (s[j + q] >> r) | (s[j + q + 1] << (32 - r));
+            }
+        } else {
+            int k = -dx, q = k >> 2, r = (k & 3) * 8;
+            if (r == 0) {
+                for (int j = ROW_WORDS - 1; j >= q; j--) d[j] = s[j - q];
+            } else {
+                for (int j = ROW_WORDS - 1; j >= q; j--) d[j] = (s[j - q] << r) | (s[j - q - 1] >> (32 - r));
+            }
+        }
+    }
+}
+
+// A static sprite in full (shadow included), inside a clip rectangle
+static void draw_static_clipped(u8* buf, const StaticSprite& sp, const ClipRect& c) {
+    int x0 = (c.x0 > sp.x) ? c.x0 : sp.x;
+    int y0 = (c.y0 > sp.y) ? c.y0 : sp.y;
+    int x1 = (c.x1 < sp.x + sp.w) ? c.x1 : sp.x + sp.w;
+    int y1 = (c.y1 < sp.y + sp.h) ? c.y1 : sp.y + sp.h;
+    if (x0 >= x1 || y0 >= y1) return;
+    const u8* remap = sp.remap ? sprite_remap_bin : NULL;
+    for (int y = y0; y < y1; y++) {
+        const u8* line = sp.src + (y - sp.y) * sp.stride - sp.x;
+        u8* row = buf + y * 256;
+        for (int x = x0; x < x1; x++) {
+            u8 val = line[x];
+            if (val == 0) continue;
+            row[x] = (val == SPR_SHADOW) ? shadowLut[row[x]] : (remap ? remap[val] : val);
+        }
+    }
+}
+
+// One rectangle of the static layer, from the ground up
+static void refresh_static_rect(const u8* ground, const GameState& gs, const ClipRect& c) {
+    for (int y = c.y0; y < c.y1; y++)
+        memcpy(staticBuf + y * 256 + c.x0, ground + y * 256 + c.x0, c.x1 - c.x0);
+    lineClip = c;
+    draw_selection_outlines(gs);
+    lineClip = { 0, 0, SCREEN_W, SCREEN_H };
+    for (int i = 0; i < staticCount; i++) draw_static_clipped(staticBuf, statics[i], c);
+}
+
+void render_static_scroll(const u8* ground, const GameState& gs, const TerrainMap& terrain, int dx, int dy) {
+    render_shift(staticBuf, dx, dy);
+    collect_statics(gs, terrain);
+    ClipRect strips[2];
+    int n = scroll_strips(dx, dy, strips);
+    for (int k = 0; k < n; k++) refresh_static_rect(ground, gs, strips[k]);
+}
+
+void render_static_refresh(const u8* ground, const GameState& gs, const TerrainMap& terrain,
+                           const ClipRect* rects, int count, bool relist) {
+    if (relist) collect_statics(gs, terrain);
+    for (int k = 0; k < count; k++) refresh_static_rect(ground, gs, rects[k]);
 }
 
 // ---------------------------------------------------------------------------
