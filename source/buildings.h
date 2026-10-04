@@ -31,6 +31,7 @@ struct Building {
 // Building pool (global)
 // ---------------------------------------------------------------------------
 extern Building buildings[MAX_BUILDINGS];
+extern u32 buildingsVersion;   // changes whenever a building appears or goes
 
 // ---------------------------------------------------------------------------
 // Functions

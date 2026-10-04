@@ -258,28 +258,41 @@ static bool tile_walkable(int tx, int ty, int owner, const TerrainMap& terrain) 
 // since they'll likely clear their tile before the pathing unit arrives.
 // skipUnits: if true, don't mark any units as blockers (used for scouts).
 static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1, bool skipUnits = false, int friendlyPlayer = -1) {
-    for (int y = 0; y < MAP_TILES; y++)
-        for (int x = 0; x < MAP_TILES; x++)
-            passMap[y][x] = terrain.passable(x, y);
+    // Terrain and buildings change rarely, so that layer is kept per player
+    // (walls differ) and only rebuilt when a tile or a building changes;
+    // each search then starts from a copy.
+    static bool base[NUM_PLAYERS][MAP_TILES][MAP_TILES];
+    static u32 baseTerrain[NUM_PLAYERS], baseBuildings[NUM_PLAYERS];
+    static bool baseValid[NUM_PLAYERS];
+    int who = (friendlyPlayer >= 0 && friendlyPlayer < NUM_PLAYERS) ? friendlyPlayer : 0;
+    if (!baseValid[who] || baseTerrain[who] != terrain.version || baseBuildings[who] != buildingsVersion) {
+        baseValid[who] = true;
+        baseTerrain[who] = terrain.version;
+        baseBuildings[who] = buildingsVersion;
+        for (int y = 0; y < MAP_TILES; y++)
+            for (int x = 0; x < MAP_TILES; x++)
+                base[who][y][x] = terrain.passable(x, y);
 
-    // Mark building tiles as impassable
-    // Friendly walls act as gates — passable for the owning player
-    for (int i = 0; i < MAX_BUILDINGS; i++) {
-        if (!buildings[i].alive) continue;
-        if (buildings[i].type == BLDG_WALL && buildings[i].owner == friendlyPlayer)
-            continue;
-        int bx = buildings[i].x / TILE_PX;
-        int by = buildings[i].y / TILE_PX;
-        int bw = BLDG_STATS[buildings[i].type].tileW;
-        int bh = BLDG_STATS[buildings[i].type].tileH;
-        for (int dy = 0; dy < bh; dy++)
-            for (int dx = 0; dx < bw; dx++) {
-                int tx = bx + dx, ty = by + dy;
-                if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES &&
-                    building_blocks_tile(i, tx, ty))
-                    passMap[ty][tx] = false;
-            }
+        // Mark building tiles as impassable
+        // Friendly walls act as gates — passable for the owning player
+        for (int i = 0; i < MAX_BUILDINGS; i++) {
+            if (!buildings[i].alive) continue;
+            if (buildings[i].type == BLDG_WALL && buildings[i].owner == who)
+                continue;
+            int bx = buildings[i].x / TILE_PX;
+            int by = buildings[i].y / TILE_PX;
+            int bw = BLDG_STATS[buildings[i].type].tileW;
+            int bh = BLDG_STATS[buildings[i].type].tileH;
+            for (int dy = 0; dy < bh; dy++)
+                for (int dx = 0; dx < bw; dx++) {
+                    int tx = bx + dx, ty = by + dy;
+                    if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES &&
+                        building_blocks_tile(i, tx, ty))
+                        base[who][ty][tx] = false;
+                }
+        }
     }
+    memcpy(passMap, base[who], sizeof(passMap));
 
     // Mark stationary units as impassable (skip self and moving/scouting units)
     if (!skipUnits) {
@@ -310,10 +323,17 @@ static bool line_clear(int x0, int y0, int x1, int y1) {
     int dx = x1 - x0, dy = y1 - y0;
     int adx = (dx < 0) ? -dx : dx, ady = (dy < 0) ? -dy : dy;
     int n = ((adx > ady) ? adx : ady) / (TILE_PX / 4);
-    for (int i = 1; i <= n; i++) {
-        if (!box_clear(x0 + dx * i / n, y0 + dy * i / n)) return false;
+    if (n == 0) return true;
+    // Fixed-point steps: two divisions per line instead of two per sample
+    // (the console divides in software; pulling a long path straight was
+    // spending most of a frame on them)
+    int stepX = (dx << 8) / n, stepY = (dy << 8) / n;
+    int fx = x0 << 8, fy = y0 << 8;
+    for (int i = 1; i < n; i++) {
+        fx += stepX; fy += stepY;
+        if (!box_clear(fx >> 8, fy >> 8)) return false;
     }
-    return true;
+    return box_clear(x1, y1);
 }
 
 // ---------------------------------------------------------------------------
@@ -368,10 +388,7 @@ static bool find_path_impl(int sx, int sy, int tx, int ty, const TerrainMap& ter
     passMap[sy][sx] = true;
     bool goalBlocked = !passMap[ty][tx];
 
-    memset(astarGrid, 0, sizeof(astarGrid));
-    for (int y = 0; y < MAP_TILES; y++)
-        for (int x = 0; x < MAP_TILES; x++)
-            astarGrid[y][x].parentX = astarGrid[y][x].parentY = -1;
+    memset(astarGrid, 0, sizeof(astarGrid));   // parents are only read along the found chain
 
     openCount = 0;
     astarGrid[sy][sx].g = 0;

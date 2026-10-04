@@ -9,7 +9,12 @@
 
 Building buildings[MAX_BUILDINGS];
 
+// Bumped whenever a building appears or goes: lets others cache what they
+// derive from the set of buildings (the pathfinder's map of blocked tiles)
+u32 buildingsVersion = 0;
+
 void buildings_init() {
+    buildingsVersion++;
     memset(buildings, 0, sizeof(buildings));
     for (int i = 0; i < MAX_BUILDINGS; i++) {
         buildings[i].alive = false;
@@ -62,6 +67,7 @@ int building_place(u8 type, u8 owner, int tileX, int tileY, GameState& gs, Terra
     // Place building
     Building& b = buildings[slot];
     b.alive = true;
+    buildingsVersion++;
     b.owner = owner;
     b.type = type;
     b.x = tileX * TILE_PX;
@@ -266,6 +272,7 @@ void building_destroy(int idx, TerrainMap& terrain) {
     }
 
     b.alive = false;
+    buildingsVersion++;
     if (b.spriteGfx) {
         oamFreeGfx(&oamSub, b.spriteGfx);
         b.spriteGfx = NULL;
