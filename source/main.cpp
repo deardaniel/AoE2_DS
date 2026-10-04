@@ -656,6 +656,9 @@ int main(void) {
         // Sub screen: training progress bars
         render_training_bars(terrainBuf, gameState);
 
+        // Sub screen: everything in production, top-left
+        render_global_queue(terrainBuf, gameState);
+
         // Sub screen: building placement preview (diamond footprint)
         render_placement_preview(terrainBuf, gameState, terrain);
 

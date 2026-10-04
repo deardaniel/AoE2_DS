@@ -42,6 +42,8 @@ void render_move_target(u8* buf, GameState& gs);
 
 // Draw training progress bars on buildings
 void render_training_bars(u8* buf, const GameState& gs);
+void render_global_queue(u8* buf, const GameState& gs);
+int  render_queue_pick(const GameState& gs, int screenX, int screenY);
 
 // Draw age advancement progress bar at top of screen
 void render_age_progress(u8* buf, const GameState& gs);

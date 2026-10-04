@@ -1228,6 +1228,90 @@ void render_train_menu(u8* vram, const GameState& gs) {
 }
 
 // ---------------------------------------------------------------------------
+// Global queue — everything the player has in production, along the top-left
+// of the map as in the Definitive Edition: one small icon per kind of unit
+// being trained (with how many are queued across all buildings) and one for
+// an age being researched, each over a progress bar for the one furthest
+// along. Tapping an icon selects the building making it.
+// ---------------------------------------------------------------------------
+enum { QUEUE_ICON = 20, QUEUE_PITCH = 22, QUEUE_X = 2, QUEUE_Y = 2, QUEUE_BAR_H = 3, QUEUE_MAX = 10 };
+struct QueueItem { const u8* icon; u8 count; u8 progress; s8 bldg; };  // progress 0-255
+
+static int gather_queue(const GameState& gs, QueueItem* out) {
+    int n = 0;
+    s8 slotOf[UNIT_TYPE_COUNT];
+    memset(slotOf, -1, sizeof(slotOf));
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        const Building& b = buildings[i];
+        if (!b.alive || b.owner != 0) continue;
+        for (int q = 0; q < 3; q++) {
+            int ut = b.trainQueue[q];
+            if (ut < 0 || ut >= UNIT_TYPE_COUNT) continue;
+            if (slotOf[ut] < 0) {
+                if (n == QUEUE_MAX) continue;
+                slotOf[ut] = n;
+                out[n++] = { unitIcon[ut], 0, 0, (s8)i };
+            }
+            QueueItem& it = out[slotOf[ut]];
+            it.count++;
+            if (q == 0) {   // the one in production at this building
+                int t = UNIT_STATS[ut].trainTime;
+                int p = (t > 0) ? b.trainProgress * 255 / t : 0;
+                if (p > 255) p = 255;
+                if (p >= it.progress) { it.progress = p; it.bldg = i; }
+            }
+        }
+    }
+    const Player& me = gs.players[0];
+    if (me.ageProgress >= 0 && me.age + 1 < AGE_COUNT && n < QUEUE_MAX) {
+        int p = me.ageProgress * 255 / AGE_RESEARCH_TIME[me.age + 1];
+        out[n++] = { ageIcon[me.age + 1], 1, (u8)(p > 255 ? 255 : p),
+                     (s8)building_nearest(0, BLDG_TOWN_CENTER, 0, 0) };
+    }
+    return n;
+}
+
+void render_global_queue(u8* buf, const GameState& gs) {
+    QueueItem items[QUEUE_MAX];
+    int n = gather_queue(gs, items);
+    for (int k = 0; k < n; k++) {
+        int x0 = QUEUE_X + k * QUEUE_PITCH, y0 = QUEUE_Y;
+        // Icon at 20x20 (every pixel picked from the 32x32 original), framed
+        for (int y = -1; y <= QUEUE_ICON + QUEUE_BAR_H; y++) {
+            u8* row = buf + (y0 + y) * 256 + x0;
+            for (int x = -1; x <= QUEUE_ICON; x++) {
+                bool frame = (x < 0 || x == QUEUE_ICON || y < 0 || y == QUEUE_ICON + QUEUE_BAR_H);
+                if (frame) { row[x] = PAL_BLACK; continue; }
+                if (y >= QUEUE_ICON) {
+                    row[x] = (x * 255 < items[k].progress * QUEUE_ICON) ? PAL_GREEN : PAL_DARKGRAY;
+                    continue;
+                }
+                u8 c = items[k].icon ? items[k].icon[(y * 32 / QUEUE_ICON) * 32 + x * 32 / QUEUE_ICON] : 0;
+                row[x] = c ? c : PAL_BLACK;
+            }
+        }
+        // How many are queued, when more than one
+        if (items[k].count > 1) {
+            char num[4] = { (char)('0' + items[k].count % 10), 0, 0, 0 };
+            if (items[k].count >= 10) { num[0] = '0' + items[k].count / 10; num[1] = '0' + items[k].count % 10; }
+            int nx = x0 + QUEUE_ICON - font_string_width(gameFont, num);
+            int ny = y0 + QUEUE_ICON - gameFont.height;
+            font_draw_str_8(buf, 256, SCREEN_H, nx + 1, ny + 1, num, PAL_BLACK, gameFont);
+            font_draw_str_8(buf, 256, SCREEN_H, nx, ny, num, PAL_WHITE, gameFont);
+        }
+    }
+}
+
+// The building behind the queue icon at a screen position, or -1
+int render_queue_pick(const GameState& gs, int screenX, int screenY) {
+    if (screenY < QUEUE_Y || screenY >= QUEUE_Y + QUEUE_ICON + QUEUE_BAR_H || screenX < QUEUE_X) return -1;
+    int k = (screenX - QUEUE_X) / QUEUE_PITCH;
+    QueueItem items[QUEUE_MAX];
+    int n = gather_queue(gs, items);
+    return (k < n && (screenX - QUEUE_X) % QUEUE_PITCH < QUEUE_ICON) ? items[k].bldg : -1;
+}
+
+// ---------------------------------------------------------------------------
 // Building placement preview — draws diamond-shaped tile highlights
 // under the current touch position when in placement mode
 // ---------------------------------------------------------------------------

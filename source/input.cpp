@@ -73,6 +73,16 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         }
     }
 
+    // Global queue icon (top-left): select the building producing it
+    if (gs.inputMode == 0) {
+        int queueBldg = render_queue_pick(gs, screenX, screenY);
+        if (queueBldg >= 0) {
+            game_clear_selection(gs);
+            gs.selectedBldg = queueBldg;
+            return;
+        }
+    }
+
     // Convert screen coords to tile coords via isometric projection
     int tileX, tileY;
     screenToTile(screenX, screenY, gs.camX, gs.camY, tileX, tileY);
