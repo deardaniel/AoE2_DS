@@ -395,19 +395,22 @@ static void process_drag_select(GameState& gs, int x0, int y0, int x1, int y1) {
     if (x0 > x1) { int t = x0; x0 = x1; x1 = t; }
     if (y0 > y1) { int t = y0; y0 = y1; y1 = t; }
 
-    // Select all own units in the box
+    // Select own units in the box. As in the game, people come first: sheep
+    // are picked up only when the box holds nothing else, so a drag across
+    // the town doesn't sweep the flock in with the villagers.
     game_clear_selection(gs);
-    for (int i = 0; i < MAX_UNITS; i++) {
-        if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
-        if (units[i].state == USTATE_GARRISONED) continue;  // inside a building
-        if (units[i].owner != 0) continue;
-        if (units[i].type == UNIT_SHEEP) continue;  // livestock isn't boxed up with the army
-        int uIsoX, uIsoY;
-        worldToIso(units[i].x, units[i].y, uIsoX, uIsoY);
-        int usx = uIsoX - gs.camX + 16; // center of 32px sprite
-        int usy = uIsoY - gs.camY;       // feet position
-        if (usx >= x0 && usx <= x1 && usy >= y0 && usy <= y1) {
-            game_add_to_selection(gs, i);
+    for (int pass = 0; pass < 2 && gs.selectionCount == 0; pass++) {
+        for (int i = 0; i < MAX_UNITS; i++) {
+            if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
+            if (units[i].state == USTATE_GARRISONED) continue;  // inside a building
+            if (units[i].owner != 0) continue;
+            if ((units[i].type == UNIT_SHEEP) != (pass == 1)) continue;
+            int gx, gy;   // where the unit's feet are drawn
+            worldToIso(units[i].x, units[i].y, gx, gy);
+            gx += ISO_TILE_W / 2 - gs.camX;
+            gy += ISO_TILE_H / 2 - gs.camY;
+            if (gx >= x0 && gx <= x1 && gy >= y0 && gy <= y1)
+                game_add_to_selection(gs, i);
         }
     }
 }
