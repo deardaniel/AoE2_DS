@@ -206,7 +206,18 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
             }
         }
         if (!hasBuilder) {
-            int vil = unit_find_idle_villager(AI_PLAYER, 0);
+            // The idle ones were just sent to gather above, so take the
+            // nearest villager who isn't already building something;
+            // otherwise a foundation can sit untouched for minutes.
+            int vil = -1, bestDist = 0x7FFFFFFF;
+            for (int ui = 0; ui < MAX_UNITS; ui++) {
+                const Unit& v = units[ui];
+                if (!v.alive || v.owner != AI_PLAYER || v.type != UNIT_VILLAGER) continue;
+                if (v.state == USTATE_DEAD || v.state == USTATE_GARRISONED || v.buildTarget >= 0) continue;
+                int dx = v.x - buildings[bi].x, dy = v.y - buildings[bi].y;
+                int dist = dx * dx + dy * dy;
+                if (dist < bestDist) { bestDist = dist; vil = ui; }
+            }
             if (vil >= 0) {
                 unit_command_build(vil, bi, terrain);
             }
