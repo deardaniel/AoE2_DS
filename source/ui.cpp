@@ -590,11 +590,17 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         font_draw_str_16(minimapVram, 256, 192, x, ty, " selected", colText, gameFont);
         ty += 12;
 
-        int vilCount = 0, milCount = 0;
+        int vilCount = 0, milCount = 0, sheepCount = 0;
         for (int i = 0; i < MAX_UNITS; i++) {
             if (!gs.unitSelected[i] || !units[i].alive) continue;
             if (units[i].type == UNIT_VILLAGER) vilCount++;
+            else if (units[i].type == UNIT_SHEEP) sheepCount++;
             else milCount++;
+        }
+        if (sheepCount > 0) {
+            x = font_draw_str_16(minimapVram, 256, 192, TX, ty, "Sheep:", colText, gameFont);
+            font_draw_num_16(minimapVram, 256, 192, x, ty, sheepCount, colText, gameFont);
+            ty += 12;
         }
         if (vilCount > 0) {
             x = font_draw_str_16(minimapVram, 256, 192, TX, ty, "Vils:", colText, gameFont);
