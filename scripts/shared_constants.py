@@ -7,7 +7,7 @@ Canonical C++ locations:
   ISO_TILE_W, ISO_TILE_H, TILE_PX  → source/config.h
   ISO_DIAMOND_XSTART/XEND          → source/iso.h
   PAL_* indices                     → source/config.h (enum PaletteIndex)
-  TERRAIN_COUNT, GRASS_VARIANTS     → source/config.h
+  TERRAIN_COUNT                     → source/config.h
   footH formula                     → source/render.cpp (bldg_sprite_offset)
 """
 
@@ -24,11 +24,19 @@ ISO_DIAMOND_XSTART = [15, 13, 11, 9, 7, 5, 3, 1, 1, 3, 5, 7, 9, 11, 13, 15]
 ISO_DIAMOND_XEND   = [16, 18, 20, 22, 24, 26, 28, 30, 30, 28, 26, 24, 22, 20, 18, 16]
 
 # ---------------------------------------------------------------------------
-# Terrain
+# Terrain (scripts/preprocess_terrain.py, source/terrain.cpp)
 # ---------------------------------------------------------------------------
-TERRAIN_COUNT  = 8   # Number of base terrain types (GRASS..BERRIES)
-GRASS_VARIANTS = 16  # Number of grass tile visual variants
-DIRT_VARIANTS  = 4   # Number of dirt tile visual variants
+TERRAIN_COUNT   = 8    # Number of terrain types (GRASS..BERRIES)
+TERRAIN_PATTERN = 10   # A ground texture repeats every 10 tiles, as in the game
+# Ground textures, in the order terrain.cpp's TERRAIN_SET refers to them.
+# Mines and berry bushes stand on grass.
+TERRAIN_SETS = [
+    ('grass',  'g_grs_00_color.png'),
+    ('dirt',   'g_gr5_00_color.png'),
+    ('water',  'g_wtr_00_color.png'),
+    ('forest', 'g_for_00_color.png'),
+    ('farm',   'g_fc1_00_color.png'),
+]
 
 # ---------------------------------------------------------------------------
 # UI palette (indices 0-15 in BG_PALETTE_SUB)

@@ -13,11 +13,20 @@ extern const u32 terrain_tiles_bin_size;
 extern const u8 sprite_pal_bin[];
 extern const u32 sprite_pal_bin_size;
 
-// Resource object sprites (32x32 each, single frame)
+// Ground texture set for each terrain type — the order of TERRAIN_SETS in
+// scripts/shared_constants.py. Mines and berry bushes stand on grass.
+enum { SET_GRASS, SET_DIRT, SET_WATER, SET_FOREST, SET_FARM };
+static const u8 TERRAIN_SET[TERRAIN_COUNT] = {
+    SET_GRASS, SET_DIRT, SET_WATER, SET_FOREST,
+    SET_GRASS,  // gold
+    SET_GRASS,  // stone
+    SET_FARM,
+    SET_GRASS,  // berries
+};
 
-u8 tileGfxCache[TERRAIN_COUNT][ISO_TILE_W * ISO_TILE_H];
-u8 grassVariantCache[GRASS_VARIANTS][ISO_TILE_W * ISO_TILE_H];
-u8 dirtVariantCache[DIRT_VARIANTS][ISO_TILE_W * ISO_TILE_H];
+// A ground texture repeats every TERRAIN_PATTERN tiles; terrain_tiles.bin
+// holds every tile of that pattern for every set
+enum { TERRAIN_PATTERN = 10 };
 
 // ---------------------------------------------------------------------------
 // Terrain edge blending
@@ -29,7 +38,6 @@ struct BlendEdge {
 
 enum { EDGE_TL = 0, EDGE_TR = 1, EDGE_BL = 2, EDGE_BR = 3 };
 static BlendEdge blendEdges[4];      // cross-terrain blend (5px)
-static BlendEdge blendEdgesWide[4];  // same-terrain blend (8px)
 
 // Each diamond edge maps to one neighbor tile offset
 static const s8 EDGE_NEIGHBOR[4][2] = {
@@ -64,19 +72,15 @@ static void initBlendSet(BlendEdge edges[4], int maxStrip) {
 
 static void terrain_initBlend() {
     initBlendSet(blendEdges, 5);
-    initBlendSet(blendEdgesWide, 8);
 }
 
-// Get the tile graphics pointer for a given tile position and type
+// Tile graphics for a terrain type at a map position: the piece of that
+// terrain's ground texture which lies under the tile. Neighbouring tiles of
+// one terrain continue each other, so there are no seams to hide.
 static inline const u8* getTileGfx(int tx, int ty, u8 ttype) {
-    if (ttype == TERRAIN_GRASS) {
-        int variant = ((tx * 7) ^ (ty * 13) ^ (tx + ty)) & (GRASS_VARIANTS - 1);
-        return grassVariantCache[variant];
-    } else if (ttype == TERRAIN_DIRT) {
-        int variant = ((tx * 11) ^ (ty * 17) ^ (tx + ty)) & (DIRT_VARIANTS - 1);
-        return dirtVariantCache[variant];
-    }
-    return tileGfxCache[ttype];
+    int tile = TERRAIN_SET[ttype] * (TERRAIN_PATTERN * TERRAIN_PATTERN) +
+               (tx % TERRAIN_PATTERN) * TERRAIN_PATTERN + (ty % TERRAIN_PATTERN);
+    return terrain_tiles_bin + tile * (ISO_TILE_W * ISO_TILE_H);
 }
 
 // Blend neighbor terrain edges onto the current tile
@@ -100,15 +104,12 @@ static void blendTileEdges(u8* vram, int tx, int ty, u8 ttype,
         s8 nPri = TERRAIN_BLEND_PRIORITY[ntype];
         if (nPri < 0) continue;  // neighbor doesn't participate
 
-        // Blend if neighbor has higher priority (cross-terrain),
-        // or same terrain type (variant-to-variant smoothing)
-        bool crossBlend = (nPri > myPri);
-        bool sameBlend = (ntype == ttype);
-        if (!crossBlend && !sameBlend) continue;
+        // A neighbour with higher priority bleeds over this tile's edge
+        if (nPri <= myPri) continue;
 
-        const u8* nsrc = getTileGfx(nx, ny, ntype);
-        // Use wider blend strip for same-terrain variant blending
-        const BlendEdge& be = sameBlend ? blendEdgesWide[e] : blendEdges[e];
+        // The neighbour's ground as it would look on this tile
+        const u8* nsrc = getTileGfx(tx, ty, ntype);
+        const BlendEdge& be = blendEdges[e];
 
         for (int py = 0; py < ISO_TILE_H; py++) {
             int bxs = be.xs[py];
@@ -173,36 +174,7 @@ void terrain_initPalette() {
 // Init tile graphics cache from preprocessed binary data
 // ---------------------------------------------------------------------------
 void TerrainMap::initTileGfx() {
-    // terrain_tiles_bin contains:
-    //   7 base terrain tiles × 512 bytes = 3584 bytes
-    //   16 grass variant tiles × 512 bytes = 8192 bytes
-    //   4 dirt variant tiles × 512 bytes = 2048 bytes
-    // Total: 13824 bytes
-    // Note: TERRAIN_BERRIES (7) is not in the binary — it reuses grass tile gfx
-    int tileSize = ISO_TILE_W * ISO_TILE_H;
-    int binTerrainCount = 7; // tiles stored in terrain_tiles.bin
-    for (int t = 0; t < binTerrainCount; t++) {
-        memcpy(tileGfxCache[t],
-               &terrain_tiles_bin[t * tileSize],
-               tileSize);
-    }
-    // Berries tile reuses grass base tile (berry sprite drawn on top)
-    memcpy(tileGfxCache[TERRAIN_BERRIES], tileGfxCache[TERRAIN_GRASS], tileSize);
-
-    // Load grass variants (stored after the 7 base tiles)
-    for (int v = 0; v < GRASS_VARIANTS; v++) {
-        memcpy(grassVariantCache[v],
-               &terrain_tiles_bin[(binTerrainCount + v) * tileSize],
-               tileSize);
-    }
-    // Load dirt variants (stored after grass variants)
-    for (int v = 0; v < DIRT_VARIANTS; v++) {
-        memcpy(dirtVariantCache[v],
-               &terrain_tiles_bin[(binTerrainCount + GRASS_VARIANTS + v) * tileSize],
-               tileSize);
-    }
-
-    // Initialize blend edge masks
+    // Tiles are read straight from terrain_tiles_bin (see getTileGfx)
     terrain_initBlend();
 }
 
