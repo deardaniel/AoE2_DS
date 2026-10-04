@@ -4,6 +4,7 @@
 #include "buildings.h"
 #include "terrain.h"
 #include "tech.h"
+#include <string.h>
 
 static const int AI_PLAYER = 1;
 static int aiTimer = 0;
@@ -40,10 +41,28 @@ int ai_get_strategy() {
 
 // Find a spot near a position where a building of this type fits, with a
 // free tile all round it so units can still walk between buildings.
+//
+// The search is skipped when the building can't be paid for, and tests a
+// per-tick grid of building footprints rather than walking the building list
+// for every tile: together those took the AI's tick from five frames to a
+// fraction of one.
+static u8 aiBuilt[MAP_TILES][MAP_TILES];
+static const GameState* aiGs;
+
+static void ai_mark_built(int idx) {
+    const Building& b = buildings[idx];
+    int bx = b.x / TILE_PX, by = b.y / TILE_PX;
+    for (int dy = 0; dy < BLDG_STATS[b.type].tileH; dy++)
+        for (int dx = 0; dx < BLDG_STATS[b.type].tileW; dx++)
+            if (bx + dx >= 0 && bx + dx < MAP_TILES && by + dy >= 0 && by + dy < MAP_TILES)
+                aiBuilt[by + dy][bx + dx] = 1;
+}
+
 static bool ai_find_build_spot(int nearTX, int nearTY, int type,
                                 const TerrainMap& terrain, int& outX, int& outY) {
     int w = BLDG_STATS[type].tileW;
     int h = BLDG_STATS[type].tileH;
+    if (!game_can_afford(*aiGs, AI_PLAYER, BLDG_STATS[type].cost)) return false;
     for (int r = 0; r < 10; r++) {
         for (int ty = nearTY - r; ty <= nearTY + r; ty++) {
             for (int tx = nearTX - r; tx <= nearTX + r; tx++) {
@@ -53,7 +72,8 @@ static bool ai_find_build_spot(int nearTX, int nearTY, int type,
                     for (int dx = -1; dx <= w && ok; dx++) {
                         bool inside = (dx >= 0 && dx < w && dy >= 0 && dy < h);
                         if (inside && !terrain.canBuild(tx + dx, ty + dy)) ok = false;
-                        if (building_at_tile(tx + dx, ty + dy) >= 0) ok = false;
+                        int cx = tx + dx, cy = ty + dy;
+                        if (cx >= 0 && cx < MAP_TILES && cy >= 0 && cy < MAP_TILES && aiBuilt[cy][cx]) ok = false;
                     }
                 }
                 if (ok) { outX = tx; outY = ty; return true; }
@@ -118,6 +138,7 @@ static bool ai_assign_villager(int vil, int res, int tcTX, int tcTY, TerrainMap&
 static int ai_place_and_build(int type, int bx, int by, GameState& gs, TerrainMap& terrain) {
     int slot = building_place(type, AI_PLAYER, bx, by, gs, terrain);
     if (slot >= 0) {
+        ai_mark_built(slot);
         int vil = unit_find_idle_villager(AI_PLAYER, 0);
         if (vil >= 0) {
             unit_command_build(vil, slot, terrain);
@@ -138,7 +159,11 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
 
     Player& p = gs.players[AI_PLAYER];
     int vilCount = unit_count_type(AI_PLAYER, UNIT_VILLAGER);
-    int militaryCount = unit_count(AI_PLAYER) - vilCount;
+    int militaryCount = 0;  // fighting units, the scout aside
+    for (int i = 0; i < MAX_UNITS; i++)
+        if (units[i].alive && units[i].owner == AI_PLAYER && units[i].state != USTATE_DEAD &&
+            unit_is_military(units[i].type) && units[i].type != UNIT_SCOUT)
+            militaryCount++;
 
     // Find AI's TC
     int tcIdx = building_nearest(AI_PLAYER, BLDG_TOWN_CENTER, MAP_PX/2, MAP_PX/2);
@@ -150,6 +175,11 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
 
     aiHomeTX = tcTX;
     aiHomeTY = tcTY;
+
+    aiGs = &gs;
+    memset(aiBuilt, 0, sizeof(aiBuilt));
+    for (int i = 0; i < MAX_BUILDINGS; i++)
+        if (buildings[i].alive) ai_mark_built(i);
 
     // ---- Economy phase ----
 
@@ -390,7 +420,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (militaryCount > 0 && militaryCount < 2) {
         for (int i = 0; i < MAX_UNITS; i++) {
             if (!units[i].alive || units[i].owner != AI_PLAYER) continue;
-            if (units[i].type == UNIT_VILLAGER) continue;
+            if (!unit_is_military(units[i].type)) continue;
             if (units[i].state == USTATE_IDLE) {
                 unit_command_move(i, tcTX * TILE_PX, tcTY * TILE_PX, terrain);
             }
@@ -402,7 +432,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         if (enemyBldg >= 0) {
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (!units[i].alive || units[i].owner != AI_PLAYER) continue;
-                if (units[i].type == UNIT_VILLAGER) continue;
+                if (!unit_is_military(units[i].type)) continue;
                 if (units[i].state == USTATE_IDLE) {
                     // Check for nearby enemy units first
                     int enemy = unit_find_nearest_enemy(i);
@@ -420,7 +450,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     else if (militaryCount >= 2) {
         for (int i = 0; i < MAX_UNITS; i++) {
             if (!units[i].alive || units[i].owner != AI_PLAYER) continue;
-            if (units[i].type == UNIT_VILLAGER) continue;
+            if (!unit_is_military(units[i].type)) continue;
             if (units[i].state == USTATE_IDLE) {
                 int enemy = unit_find_nearest_enemy(i);
                 if (enemy >= 0) {
