@@ -542,8 +542,15 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
     }
 
     // Under attack alert
-    if (gs.underAttackTimer > 0 && ((gs.frameCount >> 3) & 1)) {
-        font_draw_str_16(minimapVram, 256, 192, TX, ty, "UNDER ATTACK!", colRed, gameFont);
+    // The line is kept for as long as the alert lasts and only the text
+    // blinks, so what is below doesn't jump up and down with it; and the
+    // wording is whichever fits the panel (the capitals ran off its edge).
+    if (gs.underAttackTimer > 0) {
+        if ((gs.frameCount >> 3) & 1) {
+            const char* text = "Under attack!";
+            if (font_string_width(gameFont, text) > TW) text = "Attack!";
+            font_draw_str_16(minimapVram, 256, 192, TX, ty, text, colRed, gameFont);
+        }
         ty += 12;
     }
 
