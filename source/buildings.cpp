@@ -491,3 +491,38 @@ void building_ungarrison_all(int bldgIdx, TerrainMap& terrain) {
     }
     b.garrisonCount = 0;
 }
+
+int building_menu_items(const GameState& gs, int bldgIdx, BldgMenuItem* out, int max) {
+    if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS) return 0;
+    const Building& b = buildings[bldgIdx];
+    if (!b.alive || b.owner != 0 || !building_is_complete(bldgIdx)) return 0;
+    int n = 0;
+    for (int ut = 0; ut < UNIT_TYPE_COUNT && n < max; ut++)
+        if (UNIT_STATS[ut].bldgReq == b.type && UNIT_STATS[ut].trainTime != 0)
+            out[n++] = { MENU_UNIT, (u8)ut };
+    for (int t = 0; t < TECH_COUNT && n < max; t++)
+        if (TECH_TABLE[t].bldgReq == b.type && !tech_is_researched(gs, 0, t))
+            out[n++] = { MENU_TECH, (u8)t };
+    if (b.type == BLDG_TOWN_CENTER && gs.players[0].age < AGE_IMPERIAL &&
+        gs.players[0].ageProgress < 0 && n < max)
+        out[n++] = { MENU_AGE, (u8)(gs.players[0].age + 1) };
+    return n;
+}
+
+bool building_menu_item_info(const GameState& gs, BldgMenuItem item, const char*& name, const int*& cost) {
+    int age = gs.players[0].age;
+    switch (item.kind) {
+    case MENU_UNIT:
+        name = UNIT_NAMES[item.id];
+        cost = UNIT_STATS[item.id].cost;
+        return age >= UNIT_STATS[item.id].ageReq;
+    case MENU_TECH:
+        name = TECH_TABLE[item.id].name;
+        cost = TECH_TABLE[item.id].cost;
+        return age >= TECH_TABLE[item.id].ageReq;
+    default:
+        name = AGE_NAMES[item.id];
+        cost = AGE_COST[item.id];
+        return true;
+    }
+}

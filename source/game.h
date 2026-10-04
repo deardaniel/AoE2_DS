@@ -77,6 +77,9 @@ struct GameState {
 
     // Training unit type selection (-1 = auto/first available)
     s8    trainUnitType;
+    // Last technology (MENU_TECH) or age (MENU_AGE) slot tapped, for the cost
+    // readout; menuKind < 0 = none
+    s8    menuKind, menuId;
 
     // AI difficulty
     u8    aiDifficulty;  // AIDifficulty enum

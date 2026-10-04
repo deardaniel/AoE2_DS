@@ -43,6 +43,8 @@ void game_init(GameState& gs) {
     gs.attackAlertTX = -1;
     gs.attackAlertTY = -1;
     gs.trainUnitType = -1;
+    gs.menuKind = -1;
+    gs.menuId = 0;
     // aiDifficulty preserved across restarts (set by menu, default AI_NORMAL)
     for (int p = 0; p < NUM_PLAYERS; p++) {
         gs.unitsKilled[p] = 0;
@@ -137,6 +139,8 @@ void game_clear_selection(GameState& gs) {
     gs.selectedTileY = -1;
     gs.selectionCount = 0;
     gs.trainUnitType = -1;
+    gs.menuKind = -1;
+    gs.menuId = 0;
     for (int i = 0; i < MAX_UNITS; i++) gs.unitSelected[i] = false;
 }
 

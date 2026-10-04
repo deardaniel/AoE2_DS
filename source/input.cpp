@@ -35,23 +35,35 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         return;
     }
 
-    // Train menu check (bottom strip when military building selected)
+    // Building menu (bottom strip when a building is selected): tapping a
+    // slot trains that unit, researches that technology or starts the next
+    // age. A slot that is locked or too dear only shows its cost.
     if (screenY >= BUILD_MENU_Y && gs.selectionCount == 0 &&
         gs.selectedBldg >= 0 && !gs.buildMenuOpen) {
-        const Building& b = buildings[gs.selectedBldg];
-        if (b.alive && b.owner == 0 && building_is_complete(gs.selectedBldg)) {
-            // Same slot order as render_train_menu; a locked unit is shown
-            // but can't be picked
-            int trainable[UNIT_TYPE_COUNT];
-            int trainCount = 0;
-            for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
-                if (UNIT_STATS[ut].bldgReq == b.type && UNIT_STATS[ut].trainTime != 0)
-                    trainable[trainCount++] = ut;
-            }
+        BldgMenuItem items[MENU_BAR_SLOTS];
+        int count = building_menu_items(gs, gs.selectedBldg, items, MENU_BAR_SLOTS);
+        if (count > 0) {
             int slot = screenX / BUILD_MENU_ITEM_W;
-            if (slot < trainCount && gs.players[0].age >= UNIT_STATS[trainable[slot]].ageReq) {
-                gs.trainUnitType = trainable[slot];
-                building_train(gs.selectedBldg, trainable[slot], gs);
+            if (slot < count) {
+                BldgMenuItem it = items[slot];
+                const char* name; const int* cost;
+                bool unlocked = building_menu_item_info(gs, it, name, cost);
+                gs.menuKind = (it.kind == MENU_UNIT) ? -1 : it.kind;
+                gs.menuId = it.id;
+                if (it.kind == MENU_UNIT) {
+                    if (unlocked) {
+                        gs.trainUnitType = it.id;
+                        building_train(gs.selectedBldg, it.id, gs);
+                    }
+                } else {
+                    gs.trainUnitType = -1;
+                    if (it.kind == MENU_TECH) {
+                        tech_start_research(gs, 0, it.id);
+                    } else if (game_can_afford(gs, 0, cost)) {
+                        game_deduct_cost(gs, 0, cost);
+                        gs.players[0].ageProgress = 0;
+                    }
+                }
             }
             return;
         }

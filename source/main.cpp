@@ -431,31 +431,10 @@ int main(void) {
                     Building& b = buildings[gameState.selectedBldg];
                     bool didAction = false;
 
-                    // TC: age advancement (priority over training)
-                    if (b.type == BLDG_TOWN_CENTER && gameState.players[0].ageProgress < 0 &&
-                        gameState.players[0].age < AGE_IMPERIAL) {
-                        int nextAge = gameState.players[0].age + 1;
-                        if (game_can_afford(gameState, 0, AGE_COST[nextAge])) {
-                            game_deduct_cost(gameState, 0, AGE_COST[nextAge]);
-                            gameState.players[0].ageProgress = 0;
-                            didAction = true;
-                        }
-                    }
-
-                    // Military buildings: research tech if available
-                    if (!didAction) {
-                        for (int t = 0; t < TECH_COUNT; t++) {
-                            if (TECH_TABLE[t].bldgReq == b.type &&
-                                !tech_is_researched(gameState, 0, t) &&
-                                gameState.players[0].age >= TECH_TABLE[t].ageReq) {
-                                if (tech_start_research(gameState, 0, t)) {
-                                    didAction = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
+                    // START trains the highlighted unit (or the first one).
+                    // Ages and technologies are bought by tapping their slot;
+                    // START used to buy whichever came first, so pressing it
+                    // for a villager could spend the gold on Loom instead.
                     // Train selected unit type (or first available if none selected)
                     if (!didAction) {
                         if (gameState.trainUnitType >= 0 &&

@@ -151,6 +151,7 @@ bool load_game(TerrainMap& terrain) {
     gameState.moveTargetTimer = 0;
     gameState.underAttackTimer = 0;
     gameState.trainUnitType = -1;
+    gameState.menuKind = -1;
     gameState.selectedTileX = -1;
     gameState.selectedTileY = -1;
 

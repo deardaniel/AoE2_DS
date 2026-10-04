@@ -142,6 +142,27 @@ ICON_SPRITES = [
     ('icon_unit_ram',      'icon_unit_ram.png',      32, 32, 1, 1, 0.889),
     ('icon_unit_mangonel', 'icon_unit_mangonel.png', 32, 32, 1, 1, 0.889),
     ('icon_unit_monk',     'icon_unit_monk.png',     32, 32, 1, 1, 0.889),
+    # Technology and age icons (extract_icons.py)
+    ('icon_tech_man_at_arms', 'icon_tech_man_at_arms.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_crossbow', 'icon_tech_crossbow.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_cavalier', 'icon_tech_cavalier.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_loom', 'icon_tech_loom.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_double_bit', 'icon_tech_double_bit.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_wheelbarrow', 'icon_tech_wheelbarrow.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_gold_mining', 'icon_tech_gold_mining.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_stone_mining', 'icon_tech_stone_mining.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_bow_saw', 'icon_tech_bow_saw.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_hand_cart', 'icon_tech_hand_cart.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_horse_collar', 'icon_tech_horse_collar.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_blast_furnace', 'icon_tech_blast_furnace.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_bodkin_arrow', 'icon_tech_bodkin_arrow.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_pikeman', 'icon_tech_pikeman.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_ballistics', 'icon_tech_ballistics.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_masonry', 'icon_tech_masonry.png', 32, 32, 1, 1, 0.889),
+    ('icon_tech_chemistry', 'icon_tech_chemistry.png', 32, 32, 1, 1, 0.889),
+    ('icon_age_feudal', 'icon_age_feudal.png', 32, 32, 1, 1, 0.889),
+    ('icon_age_castle', 'icon_age_castle.png', 32, 32, 1, 1, 0.889),
+    ('icon_age_imperial', 'icon_age_imperial.png', 32, 32, 1, 1, 0.889),
 ]
 
 # Single-frame overlay sprites: (output_name, filename)

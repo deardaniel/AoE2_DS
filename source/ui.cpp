@@ -743,16 +743,6 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
             }
         }
 
-        // TC age-up option
-        if (b.type == BLDG_TOWN_CENTER && gs.players[0].ageProgress < 0 &&
-            gs.players[0].age < AGE_IMPERIAL && ty + 12 < INFO_Y + INFO_H) {
-            int na = gs.players[0].age + 1;
-            char buf[32];
-            snprintf(buf, sizeof(buf), "START:%s", AGE_SHORT[na]);
-            font_draw_str_16(minimapVram, 256, 192, TX, ty, buf, colGold, gameFont);
-            ty += 12;
-        }
-
         // Techs
         for (int t = 0; t < TECH_COUNT && ty + 12 < INFO_Y + INFO_H; t++) {
             if (TECH_TABLE[t].bldgReq == b.type &&
@@ -897,6 +887,17 @@ static void ui_draw_controls(const GameState& gs) {
         itemName = BLDG_NAMES[gs.placeBldgType];
         itemCost = BLDG_STATS[gs.placeBldgType].cost;
         hint = "B:Cancel";
+    } else if (sel && gs.selectionCount == 0 && gs.menuKind == MENU_TECH &&
+               TECH_TABLE[gs.menuId].bldgReq == sel->type) {
+        itemName = TECH_TABLE[gs.menuId].name;
+        itemCost = TECH_TABLE[gs.menuId].cost;
+        hint = tech_is_researched(gs, 0, gs.menuId) ? "Researched" :
+               (gs.players[0].age < TECH_TABLE[gs.menuId].ageReq) ? "Needs later age" : "Tap:Research";
+    } else if (sel && gs.selectionCount == 0 && gs.menuKind == MENU_AGE &&
+               sel->type == BLDG_TOWN_CENTER && gs.menuId < AGE_COUNT) {
+        itemName = AGE_NAMES[gs.menuId];
+        itemCost = AGE_COST[gs.menuId];
+        hint = (gs.players[0].ageProgress >= 0) ? "Advancing" : "Tap:Advance";
     } else if (sel && gs.selectionCount == 0 && gs.trainUnitType >= 0 &&
                UNIT_STATS[gs.trainUnitType].bldgReq == sel->type) {
         itemName = UNIT_NAMES[gs.trainUnitType];

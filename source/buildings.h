@@ -53,3 +53,13 @@ bool building_blocks_tile(int idx, int tx, int ty);
 void building_complete_now(int idx);  // finish construction instantly at full HP
 bool building_garrison(int bldgIdx, int unitIdx);
 void building_ungarrison_all(int bldgIdx, TerrainMap& terrain);
+
+// What a selected building's menu bar offers, in slot order: the units it
+// trains, the technologies still to research there, and (Town Center) the
+// next age. render.cpp draws this list and input.cpp acts on a tap, so the
+// two cannot drift apart.
+enum { MENU_UNIT, MENU_TECH, MENU_AGE };
+struct BldgMenuItem { u8 kind, id; };
+int building_menu_items(const GameState& gs, int bldgIdx, BldgMenuItem* out, int max);
+// Name and cost of an item; false if it needs a later age than the player's
+bool building_menu_item_info(const GameState& gs, BldgMenuItem item, const char*& name, const int*& cost);

@@ -134,6 +134,26 @@ extern const u8 icon_unit_scout_bin[];
 extern const u8 icon_unit_ram_bin[];
 extern const u8 icon_unit_mangonel_bin[];
 extern const u8 icon_unit_monk_bin[];
+extern const u8 icon_tech_man_at_arms_bin[];
+extern const u8 icon_tech_crossbow_bin[];
+extern const u8 icon_tech_cavalier_bin[];
+extern const u8 icon_tech_loom_bin[];
+extern const u8 icon_tech_double_bit_bin[];
+extern const u8 icon_tech_wheelbarrow_bin[];
+extern const u8 icon_tech_gold_mining_bin[];
+extern const u8 icon_tech_stone_mining_bin[];
+extern const u8 icon_tech_bow_saw_bin[];
+extern const u8 icon_tech_hand_cart_bin[];
+extern const u8 icon_tech_horse_collar_bin[];
+extern const u8 icon_tech_blast_furnace_bin[];
+extern const u8 icon_tech_bodkin_arrow_bin[];
+extern const u8 icon_tech_pikeman_bin[];
+extern const u8 icon_tech_ballistics_bin[];
+extern const u8 icon_tech_masonry_bin[];
+extern const u8 icon_tech_chemistry_bin[];
+extern const u8 icon_age_feudal_bin[];
+extern const u8 icon_age_castle_bin[];
+extern const u8 icon_age_imperial_bin[];
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -164,6 +184,19 @@ static const u8* unitIcon[UNIT_TYPE_COUNT] = {
     icon_unit_knight_bin, icon_unit_spearman_bin, icon_unit_scout_bin,
     NULL,
     icon_unit_ram_bin, icon_unit_mangonel_bin, icon_unit_monk_bin,
+};
+
+// Technology icons (indexed by TechId) and age icons (indexed by age)
+static const u8* techIcon[TECH_COUNT] = {
+    icon_tech_man_at_arms_bin, icon_tech_crossbow_bin, icon_tech_cavalier_bin,
+    icon_tech_loom_bin, icon_tech_double_bit_bin, icon_tech_wheelbarrow_bin,
+    icon_tech_gold_mining_bin, icon_tech_stone_mining_bin, icon_tech_bow_saw_bin,
+    icon_tech_hand_cart_bin, icon_tech_horse_collar_bin, icon_tech_blast_furnace_bin,
+    icon_tech_bodkin_arrow_bin, icon_tech_pikeman_bin, icon_tech_ballistics_bin,
+    icon_tech_masonry_bin, icon_tech_chemistry_bin,
+};
+static const u8* ageIcon[AGE_COUNT] = {
+    NULL, icon_age_feudal_bin, icon_age_castle_bin, icon_age_imperial_bin,
 };
 
 // ---------------------------------------------------------------------------
@@ -1103,7 +1136,7 @@ void render_build_menu(u8* vram, const GameState& gs) {
 }
 
 // ---------------------------------------------------------------------------
-// Train menu bar — the units a selected building trains
+// Building menu bar — units, technologies and the next age (building_menu_items)
 // ---------------------------------------------------------------------------
 void render_train_menu(u8* vram, const GameState& gs) {
     if (gs.buildMenuOpen) return; // build menu takes priority
@@ -1112,17 +1145,21 @@ void render_train_menu(u8* vram, const GameState& gs) {
     const Building& b = buildings[gs.selectedBldg];
     if (!b.alive || b.owner != 0 || !building_is_complete(gs.selectedBldg)) return;
 
-    // Every unit this building trains, in type order (input.cpp uses the same
-    // order); ones that need a later age are shown locked
-    int slot = 0;
-    for (int ut = 0; ut < UNIT_TYPE_COUNT && slot < MENU_BAR_SLOTS; ut++) {
-        if (UNIT_STATS[ut].bldgReq != b.type || UNIT_STATS[ut].trainTime == 0) continue;
-        if (slot == 0) fill_menu_bar(vram);
-        MenuItemState state =
-            (gs.players[0].age < UNIT_STATS[ut].ageReq) ? MENU_ITEM_LOCKED :
-            !game_can_afford(gs, 0, UNIT_STATS[ut].cost) ? MENU_ITEM_TOO_DEAR : MENU_ITEM_OK;
-        draw_menu_icon(vram, slot, unitIcon[ut], state, ut == gs.trainUnitType);
-        slot++;
+    BldgMenuItem items[MENU_BAR_SLOTS];
+    int count = building_menu_items(gs, gs.selectedBldg, items, MENU_BAR_SLOTS);
+    if (count == 0) return;
+    fill_menu_bar(vram);
+    for (int slot = 0; slot < count; slot++) {
+        BldgMenuItem it = items[slot];
+        const char* name; const int* cost;
+        bool unlocked = building_menu_item_info(gs, it, name, cost);
+        MenuItemState state = !unlocked ? MENU_ITEM_LOCKED :
+            !game_can_afford(gs, 0, cost) ? MENU_ITEM_TOO_DEAR : MENU_ITEM_OK;
+        const u8* icon = (it.kind == MENU_UNIT) ? unitIcon[it.id] :
+                         (it.kind == MENU_TECH) ? techIcon[it.id] : ageIcon[it.id];
+        bool selected = (it.kind == MENU_UNIT) ? (gs.menuKind < 0 && it.id == gs.trainUnitType)
+                                               : (it.kind == gs.menuKind && it.id == gs.menuId);
+        draw_menu_icon(vram, slot, icon, state, selected);
     }
 }
 
