@@ -9,6 +9,13 @@ exactly 3 — no fitting, no per-sprite scale. Two rules keep the result crisp:
   closest to the block's average colour, so no new colours appear and edges
   stay hard. A block is solid when most of it (5 of 9) is.
 
+Phase (units): which source pixels fall into one block is set by the hotspot,
+and for a figure a few pixels wide that decides what survives — a 5-pixel
+head split down the middle is under half of two blocks and comes out one
+pixel wide or not at all. best_phase() tries the nine ways of sliding the
+grid by 0-2 source pixels and takes the one where the blocks are most
+decisively full or empty; the sprite moves by under a pixel on screen.
+
 Shadows: genie-slp draws SLP shadow commands as pure red. reduce_layers()
 turns those into black pixels at SHADOW_ALPHA, which preprocess_sprites.py
 indexes as the marker the renderer darkens terrain with.
@@ -20,12 +27,45 @@ from shared_constants import SHADOW_ALPHA
 SCALE = 3
 
 
-def reduce_exact(rgba, hx, hy, scale=SCALE):
+def _coverage(alpha, hx, hy, scale):
+    """Solid source pixels in each block of the grid laid out from (hx, hy)."""
+    h, w = alpha.shape
+    bx0, by0 = (0 - hx) // scale, (0 - hy) // scale
+    bx1, by1 = -(-(w - hx) // scale), -(-(h - hy) // scale)
+    padded = np.zeros(((by1 - by0) * scale, (bx1 - bx0) * scale), dtype=np.int32)
+    ox, oy = -hx - bx0 * scale, -hy - by0 * scale
+    padded[oy:oy + h, ox:ox + w] = alpha
+    return padded.reshape(by1 - by0, scale, bx1 - bx0, scale).sum(axis=(1, 3))
+
+
+def best_phase(frames, scale=SCALE):
+    """The grid offset (px, py), each 0..scale-1, that suits a set of frames.
+
+    frames: [(RGBA array, hotspot_x, hotspot_y)] that must stay registered
+    with each other (every frame of one unit facing one way). The score is
+    how far each touched block is from half full, summed over all frames.
+    """
+    best, best_score = (0, 0), -1.0
+    alphas = [(rgba[:, :, 3] > 0, hx, hy) for rgba, hx, hy in frames]
+    for py in range(scale):
+        for px in range(scale):
+            score = 0.0
+            for alpha, hx, hy in alphas:
+                cover = _coverage(alpha, hx + px, hy + py, scale)
+                score += ((cover[cover > 0] / (scale * scale) - 0.5) ** 2).sum()
+            if score > best_score:
+                best, best_score = (px, py), score
+    return best
+
+
+def reduce_exact(rgba, hx, hy, scale=SCALE, phase=(0, 0)):
     """Reduce an RGBA array (alpha 0/255) by `scale` around its hotspot.
 
+    phase slides the block grid by that many source pixels (see best_phase).
     Returns (out, ax, ay): the reduced RGBA array cropped to its content, and
     the hotspot's position in it (may lie outside the array).
     """
+    hx, hy = hx + phase[0], hy + phase[1]
     h, w = rgba.shape[:2]
     # Block-aligned bounds relative to the hotspot
     bx0, by0 = (0 - hx) // scale, (0 - hy) // scale

@@ -39,7 +39,7 @@ import tempfile
 import numpy as np
 from PIL import Image
 
-from downscale import reduce_exact
+from downscale import reduce_exact, best_phase
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SLP_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics'
@@ -195,8 +195,8 @@ def layer_under(img, hx, hy, base, bhx, bhy):
     return out, left, up
 
 
-def reduced_frames(slp, layout, once):
-    """The frames a sheet uses, each as (RGBA array, anchor_x, anchor_y).
+def source_frames(slp, layout, once):
+    """The full-size frames a sheet uses: [(direction, RGBA array, hx, hy)].
 
     `slp` is one SLP, or (body, animated): the game draws siege units as a
     static body graphic (one frame per direction) with an animated part on
@@ -209,7 +209,7 @@ def reduced_frames(slp, layout, once):
         if body is not None:
             base, bhx, bhy = load_slp(body)[d]
             img, hx, hy = layer_under(img, hx, hy, base, bhx, bhy)
-        out.append(reduce_exact(np.asarray(img), hx, hy))
+        out.append((d, np.asarray(img), hx, hy))
     return out
 
 
@@ -219,9 +219,15 @@ def main():
     try:
         for unit_type, sheets in UNITS.items():
             print(unit_type)
-            for out_name, slp, layout, once in sheets:
+            # One sampling phase per direction for the whole unit, so it
+            # doesn't shift when it changes from standing to walking
+            sources = [source_frames(slp, layout, once) for _, slp, layout, once in sheets]
+            phases = [best_phase([(a, hx, hy) for src in sources for dd, a, hx, hy in src if dd == d])
+                      for d in range(DIRS)]
+            print(f'  phases {phases}')
+            for (out_name, slp, layout, once), src in zip(sheets, sources):
                 cols, fpd = LAYOUTS[layout]
-                frames = reduced_frames(slp, layout, once)
+                frames = [reduce_exact(a, hx, hy, phase=phases[d]) for d, a, hx, hy in src]
                 # Smallest cell holding every frame with the hotspot on one pixel
                 left = int(max(ax for _, ax, _ in frames))
                 up = int(max(ay for _, _, ay in frames))
