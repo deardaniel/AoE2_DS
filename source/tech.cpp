@@ -1,6 +1,7 @@
 #include "tech.h"
 #include "game.h"
 #include "buildings.h"
+#include "units.h"
 #include <string.h>
 
 UnitStats playerUnitStats[NUM_PLAYERS][UNIT_TYPE_COUNT];
@@ -49,7 +50,17 @@ bool tech_start_research(GameState& gs, int player, int techId) {
     // Deduct cost and apply immediately (simplified — no research time for techs)
     game_deduct_cost(gs, player, ti.cost);
     gs.players[player].techResearched |= (1 << techId);
+    // Units already on the map gain whatever hit points the technology adds
+    // (as in the game); otherwise Loom left every villager looking wounded.
+    s16 oldHp[UNIT_TYPE_COUNT];
+    for (int t = 0; t < UNIT_TYPE_COUNT; t++) oldHp[t] = playerUnitStats[player][t].hp;
     tech_apply_bonuses(player);
+    for (int i = 0; i < MAX_UNITS; i++) {
+        Unit& u = units[i];
+        if (!u.alive || u.owner != player || u.state == USTATE_DEAD) continue;
+        int gain = playerUnitStats[player][u.type].hp - oldHp[u.type];
+        if (gain > 0) u.hp += gain;
+    }
     return true;
 }
 
