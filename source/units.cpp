@@ -590,35 +590,75 @@ static void unit_step_path(Unit& u, int selfIdx, const TerrainMap& terrain) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: find nearest resource tile of same type as carry
+// Nearest resource a unit can actually walk to
+//
+// Floods outward over walkable ground from (sx, sy) and returns the first
+// tile of a wanted terrain type that borders ground it reached — nearest by
+// walking distance, and never one across the river or sealed inside a forest.
+// (Picking by straight-line distance sent villagers to stand at the water's
+// edge opposite a tree, idle for the rest of the game.)
+// terrMask has bit n set for each TERRAIN_n wanted. With homeRange >= 0 only
+// tiles within that many tiles of (homeTX, homeTY) count — the AI keeps its
+// villagers out of the other player's town. If the start tile is
+// itself blocked (a building's corner), the flood starts from the nearest
+// walkable ring round it.
 // ---------------------------------------------------------------------------
-static bool find_nearest_resource(int cx, int cy, u8 carryType, const TerrainMap& terrain,
-                                  int& outTX, int& outTY) {
-    // Map carry type to terrain type(s)
-    int bestDist = 99999;
-    outTX = -1;
-    outTY = -1;
-    for (int ty = 0; ty < MAP_TILES; ty++) {
-        for (int tx = 0; tx < MAP_TILES; tx++) {
-            u8 tt = terrain.tileAt(tx, ty);
-            bool match = false;
-            if (carryType == RES_WOOD  && tt == TERRAIN_FOREST) match = true;
-            if (carryType == RES_GOLD  && tt == TERRAIN_GOLD)   match = true;
-            if (carryType == RES_STONE && tt == TERRAIN_STONE)  match = true;
-            if (carryType == RES_FOOD  && tt == TERRAIN_FARM)   match = true;
-            if (carryType == RES_FOOD  && tt == TERRAIN_BERRIES) match = true;
-            if (!match) continue;
-            int dx = tx - cx; if (dx < 0) dx = -dx;
-            int dy = ty - cy; if (dy < 0) dy = -dy;
-            int dist = dx + dy; // Manhattan distance
-            if (dist < bestDist) {
-                bestDist = dist;
-                outTX = tx;
-                outTY = ty;
+bool resource_reachable_from(int sx, int sy, int owner, u32 terrMask,
+                             const TerrainMap& terrain, int& outTX, int& outTY,
+                             int homeTX, int homeTY, int homeRange) {
+    static u8 seen[MAP_TILES][MAP_TILES];
+    static s16 queue[MAP_TILES * MAP_TILES];
+    if (sx < 0) sx = 0;
+    if (sy < 0) sy = 0;
+    if (sx >= MAP_TILES) sx = MAP_TILES - 1;
+    if (sy >= MAP_TILES) sy = MAP_TILES - 1;
+    build_pass_map(terrain, -1, true, owner);
+    memset(seen, 0, sizeof(seen));
+    int head = 0, tail = 0;
+    for (int r = 0; r <= 5 && tail == 0; r++) {
+        for (int y = sy - r; y <= sy + r; y++)
+            for (int x = sx - r; x <= sx + r; x++) {
+                if (x < 0 || y < 0 || x >= MAP_TILES || y >= MAP_TILES) continue;
+                if (!passMap[y][x] || seen[y][x]) continue;
+                seen[y][x] = 1;
+                queue[tail++] = y * MAP_TILES + x;
             }
+    }
+    while (head < tail) {
+        int cx = queue[head] % MAP_TILES;
+        int cy = queue[head] / MAP_TILES;
+        head++;
+        for (int d = 0; d < 8; d++) {
+            int nx = cx + DX8[d], ny = cy + DY8[d];
+            if (nx < 0 || ny < 0 || nx >= MAP_TILES || ny >= MAP_TILES) continue;
+            if (terrMask & (1u << terrain.tileAt(nx, ny))) {
+                int hx = nx - homeTX, hy = ny - homeTY;
+                if (homeRange < 0 || (hx >= -homeRange && hx <= homeRange &&
+                                      hy >= -homeRange && hy <= homeRange)) {
+                    outTX = nx; outTY = ny;
+                    return true;
+                }
+            }
+            if (!passMap[ny][nx] || seen[ny][nx]) continue;
+            if (DX8[d] != 0 && DY8[d] != 0 &&
+                (!passMap[cy][nx] || !passMap[ny][cx])) continue;
+            seen[ny][nx] = 1;
+            queue[tail++] = ny * MAP_TILES + nx;
         }
     }
-    return outTX >= 0;
+    return false;
+}
+
+// Nearest reachable tile holding the resource a villager is carrying
+static bool find_nearest_resource(int cx, int cy, u8 carryType, const TerrainMap& terrain,
+                                  int& outTX, int& outTY, int owner) {
+    u32 mask = 0;
+    if (carryType == RES_WOOD)  mask = 1u << TERRAIN_FOREST;
+    if (carryType == RES_GOLD)  mask = 1u << TERRAIN_GOLD;
+    if (carryType == RES_STONE) mask = 1u << TERRAIN_STONE;
+    if (carryType == RES_FOOD)  mask = (1u << TERRAIN_FARM) | (1u << TERRAIN_BERRIES);
+    outTX = outTY = -1;
+    return resource_reachable_from(cx, cy, owner, mask, terrain, outTX, outTY);
 }
 
 // ---------------------------------------------------------------------------
@@ -906,7 +946,7 @@ static void unit_update_gathering(Unit& u, GameState& gs, TerrainMap& terrain) {
         tt != TERRAIN_FARM && tt != TERRAIN_BERRIES) {
         // Resource depleted — try to find nearest similar resource
         int newTX, newTY;
-        if (u.carryType < RES_COUNT && find_nearest_resource(ux, uy, u.carryType, terrain, newTX, newTY)) {
+        if (u.carryType < RES_COUNT && find_nearest_resource(ux, uy, u.carryType, terrain, newTX, newTY, u.owner)) {
             unit_command_gather(&u - units, newTX, newTY, terrain);
         } else {
             // No more resources of this type — return what we have
@@ -976,7 +1016,7 @@ static void unit_update_returning(Unit& u, GameState& gs, TerrainMap& terrain) {
             if (u.state == USTATE_RETURNING) {
                 int newTX, newTY;
                 if (savedCarryType < RES_COUNT &&
-                    find_nearest_resource(ux, uy, savedCarryType, terrain, newTX, newTY)) {
+                    find_nearest_resource(ux, uy, savedCarryType, terrain, newTX, newTY, u.owner)) {
                     unit_command_gather(&u - units, newTX, newTY, terrain);
                 }
                 // If still stuck, go idle
@@ -1076,11 +1116,11 @@ static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
             // A farm's builder becomes its farmer
             unit_command_gather(self, btx, bty, terrain);
         } else if (b.type == BLDG_LUMBER_CAMP &&
-                   find_nearest_resource(btx, bty, RES_WOOD, terrain, rtx, rty)) {
+                   find_nearest_resource(btx, bty, RES_WOOD, terrain, rtx, rty, u.owner)) {
             unit_command_gather(self, rtx, rty, terrain);
         } else if (b.type == BLDG_MINING_CAMP &&
-                   (find_nearest_resource(btx, bty, RES_GOLD, terrain, rtx, rty) ||
-                    find_nearest_resource(btx, bty, RES_STONE, terrain, rtx, rty))) {
+                   (find_nearest_resource(btx, bty, RES_GOLD, terrain, rtx, rty, u.owner) ||
+                    find_nearest_resource(btx, bty, RES_STONE, terrain, rtx, rty, u.owner))) {
             unit_command_gather(self, rtx, rty, terrain);
         } else {
             u.role = VROLE_BASE;
@@ -1728,7 +1768,12 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                         }
                     }
                     if (bestTX < 0) {
-                        u.state = USTATE_IDLE; // map fully explored
+                        // Map fully explored: ride home rather than stand
+                        // wherever the last patch of fog was — often the
+                        // enemy's town, where an idle scout picks off villagers
+                        u.state = USTATE_IDLE;
+                        int tc = building_nearest(u.owner, BLDG_TOWN_CENTER, u.x, u.y);
+                        if (tc >= 0) unit_command_move(i, buildings[tc].x, buildings[tc].y, terrain);
                         break;
                     }
                     u.targetX = bestTX * TILE_PX + TILE_PX / 2;

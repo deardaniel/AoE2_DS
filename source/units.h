@@ -83,6 +83,11 @@ int  unit_at_pixel(s16 px, s16 py, int ignoreOwner = -1);
 int  unit_count(int owner);
 int  unit_count_type(int owner, int type);
 int  unit_find_idle_villager(int owner, int startFrom = 0);
+// Nearest tile of a wanted terrain type (terrMask: bit n = TERRAIN_n) that can
+// be walked to from tile (sx, sy), optionally only within homeRange tiles of home
+bool resource_reachable_from(int sx, int sy, int owner, u32 terrMask,
+                             const TerrainMap& terrain, int& outTX, int& outTY,
+                             int homeTX = 0, int homeTY = 0, int homeRange = -1);
 int  unit_find_nearest_enemy(int unitIdx);
 
 // Command queue: append a waypoint command (shift-click style)

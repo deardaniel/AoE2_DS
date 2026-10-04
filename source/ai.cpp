@@ -63,27 +63,55 @@ static bool ai_find_build_spot(int nearTX, int nearTY, int type,
     return false;
 }
 
-// Find nearest resource tile of a given type
+// The AI's Town Center tile and how far from it villagers are sent to work.
+// Without the limit the nearest berries by foot can be the ones under the
+// other player's Town Center, which shoots the villagers one by one.
+static int aiHomeTX, aiHomeTY;
+static const int AI_WORK_RANGE = 13;
+
+// Nearest resource tile of a given type that can be walked to from a tile
 static bool ai_find_resource(int nearTX, int nearTY, u8 terrType,
                              const TerrainMap& terrain, int& outX, int& outY) {
-    int bestDist = 0x7FFFFFFF;
-    bool found = false;
-    for (int ty = 0; ty < MAP_TILES; ty++) {
-        for (int tx = 0; tx < MAP_TILES; tx++) {
-            if (terrain.tileAt(tx, ty) == terrType) {
-                int dx = tx - nearTX;
-                int dy = ty - nearTY;
-                int dist = dx*dx + dy*dy;
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    outX = tx;
-                    outY = ty;
-                    found = true;
-                }
+    return resource_reachable_from(nearTX, nearTY, AI_PLAYER, 1u << terrType, terrain, outX, outY,
+                                   aiHomeTX, aiHomeTY, AI_WORK_RANGE);
+}
+
+// Put a villager on a resource (RES_*). Food is taken from the nearest of the
+// AI's sheep, then berries, then a farm. False if there is none in reach.
+static bool ai_assign_villager(int vil, int res, int tcTX, int tcTY, TerrainMap& terrain) {
+    static const u8 terrTypes[] = { TERRAIN_FARM, TERRAIN_FOREST, TERRAIN_GOLD, TERRAIN_STONE };
+    // Resources are looked for from where the villager stands
+    int vilTX = (units[vil].x + TILE_PX / 2) / TILE_PX;
+    int vilTY = (units[vil].y + TILE_PX / 2) / TILE_PX;
+    int resTX = 0, resTY = 0;
+    if (res == RES_FOOD) {
+        int sheepIdx = -1;
+        int sheepBestDist = 0x7FFFFFFF;
+        for (int si = 0; si < MAX_UNITS; si++) {
+            if (!units[si].alive || units[si].state == USTATE_DEAD) continue;
+            if (units[si].type != UNIT_SHEEP || units[si].owner != AI_PLAYER) continue;
+            int dx = units[si].x / TILE_PX - tcTX;
+            int dy = units[si].y / TILE_PX - tcTY;
+            int dist = dx*dx + dy*dy;
+            if (dist < sheepBestDist) {
+                sheepBestDist = dist;
+                sheepIdx = si;
             }
         }
+        if (sheepIdx >= 0) {
+            unit_command_attack(vil, sheepIdx);
+            return true;
+        }
+        if (ai_find_resource(vilTX, vilTY, TERRAIN_BERRIES, terrain, resTX, resTY)) {
+            unit_command_gather(vil, resTX, resTY, terrain);
+            return true;
+        }
     }
-    return found;
+    if (ai_find_resource(vilTX, vilTY, terrTypes[res], terrain, resTX, resTY)) {
+        unit_command_gather(vil, resTX, resTY, terrain);
+        return true;
+    }
+    return false;
 }
 
 // Place a building and send nearest idle villager to build it
@@ -120,6 +148,9 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         tcTY = buildings[tcIdx].y / TILE_PX;
     }
 
+    aiHomeTX = tcTX;
+    aiHomeTY = tcTY;
+
     // ---- Economy phase ----
 
     // Train villagers if under target (scale with age, difficulty, and strategy)
@@ -129,64 +160,35 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         building_train(tcIdx, UNIT_VILLAGER, gs);
     }
 
-    // Assign idle villagers to resources based on need
+    // Assign idle villagers to whatever the stockpile is shortest of
+    // (each try moves on from the last villager, so one who can't be given
+    // anything doesn't hold up the rest)
+    int lowestRes = 0, highestRes = 0;
+    for (int r = 1; r < RES_COUNT; r++) {
+        if (p.resources[r] < p.resources[lowestRes]) lowestRes = r;
+        if (p.resources[r] > p.resources[highestRes]) highestRes = r;
+    }
+    int nextVil = 0;
     for (int tries = 0; tries < 4; tries++) {
-        int vil = unit_find_idle_villager(AI_PLAYER, 0);
+        int vil = unit_find_idle_villager(AI_PLAYER, nextVil);
         if (vil < 0) break;
-
-        int resTX = 0, resTY = 0;
-        bool assigned = false;
-
-        // Find the most-needed resource and assign to it
-        int lowestRes = 0;
-        int lowestVal = p.resources[RES_FOOD];
-        for (int r = 1; r < RES_COUNT; r++) {
-            if (p.resources[r] < lowestVal) {
-                lowestVal = p.resources[r];
-                lowestRes = r;
-            }
+        nextVil = vil + 1;
+        if (!ai_assign_villager(vil, lowestRes, tcTX, tcTY, terrain)) {
+            // Nothing of that kind in reach: take anything
+            for (int r = 0; r < RES_COUNT; r++)
+                if (ai_assign_villager(vil, r, tcTX, tcTY, terrain)) break;
         }
+    }
 
-        // Map resource type to terrain type
-        // For food, prefer berries (free) over farms (cost wood)
-        u8 terrTypes[] = { TERRAIN_FARM, TERRAIN_FOREST, TERRAIN_GOLD, TERRAIN_STONE };
-        if (lowestRes == RES_FOOD) {
-            // Try sheep first (highest food value), then berries, then farms
-            int sheepIdx = -1;
-            int sheepBestDist = 0x7FFFFFFF;
-            for (int si = 0; si < MAX_UNITS; si++) {
-                if (!units[si].alive || units[si].state == USTATE_DEAD) continue;
-                if (units[si].type != UNIT_SHEEP || units[si].owner != AI_PLAYER) continue;
-                int dx = units[si].x / TILE_PX - tcTX;
-                int dy = units[si].y / TILE_PX - tcTY;
-                int dist = dx*dx + dy*dy;
-                if (dist < sheepBestDist) {
-                    sheepBestDist = dist;
-                    sheepIdx = si;
-                }
-            }
-            if (sheepIdx >= 0) {
-                unit_command_attack(vil, sheepIdx);
-                assigned = true;
-            } else if (ai_find_resource(tcTX, tcTY, TERRAIN_BERRIES, terrain, resTX, resTY)) {
-                unit_command_gather(vil, resTX, resTY, terrain);
-                assigned = true;
-            }
-        }
-        if (!assigned && ai_find_resource(tcTX, tcTY, terrTypes[lowestRes], terrain, resTX, resTY)) {
-            unit_command_gather(vil, resTX, resTY, terrain);
-            assigned = true;
-        }
-
-        // Fallback: try any available resource
-        if (!assigned) {
-            for (int r = 0; r < RES_COUNT; r++) {
-                if (ai_find_resource(tcTX, tcTY, terrTypes[r], terrain, resTX, resTY)) {
-                    unit_command_gather(vil, resTX, resTY, terrain);
-                    assigned = true;
-                    break;
-                }
-            }
+    // Rebalance: gatherers otherwise stay on their first resource for good,
+    // and an AI with 900 gold and no food never trains or advances. When one
+    // stock runs far ahead of the shortest, move a villager across.
+    if (p.resources[highestRes] - p.resources[lowestRes] > 200) {
+        for (int i = 0; i < MAX_UNITS; i++) {
+            const Unit& v = units[i];
+            if (!v.alive || v.owner != AI_PLAYER || v.type != UNIT_VILLAGER) continue;
+            if (v.state != USTATE_GATHERING || v.carryType != highestRes) continue;
+            if (ai_assign_villager(i, lowestRes, tcTX, tcTY, terrain)) break;
         }
     }
 
