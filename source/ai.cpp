@@ -16,6 +16,10 @@ static const int AI_VIL_BASE[]     = {6, 8, 10};    // base villager target
 static const int AI_VIL_PER_AGE[]  = {2, 4, 5};     // additional vils per age
 static const int AI_ARMY_BASE[]    = {4, 3, 2};      // base army threshold (lower = attacks sooner)
 static const int AI_ARMY_PER_AGE[] = {1, 2, 3};      // additional threshold per age
+// Minutes of peace before the first attack. The player starts with three
+// villagers; soldiers arriving in the third minute end the game before it
+// starts. A rush comes a quarter sooner.
+static const int AI_FIRST_ATTACK_MIN[] = {12, 8, 5};
 
 // Strategy modifiers [balanced, rush, boom, turtle]
 static const int STRAT_VIL_MOD[]   = {0, -3, 4, 0};    // villager target modifier
@@ -414,7 +418,9 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
 
     // ---- Attack decision ----
     int armyThreshold = AI_ARMY_BASE[diff] + p.age * AI_ARMY_PER_AGE[diff] + STRAT_ARMY_MOD[aiStrategy];
-    if (armyThreshold < 1) armyThreshold = 1;
+    // Never fewer than three: sent one at a time as they were trained, the
+    // soldiers just walked into the Town Center's arrows
+    if (armyThreshold < 3) armyThreshold = 3;
 
     // Retreat: if army too small and under pressure, pull back to TC
     if (militaryCount > 0 && militaryCount < 2) {
@@ -427,7 +433,8 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         }
     }
     // Attack: send army to nearest enemy building
-    else if (militaryCount >= armyThreshold) {
+    else if (militaryCount >= armyThreshold &&
+             gs.frameCount >= (int)(AI_FIRST_ATTACK_MIN[diff] * 3600 * (aiStrategy == AI_STRAT_RUSH ? 3 : 4) / 4)) {
         int enemyBldg = building_nearest(0, -1, tcTX * TILE_PX, tcTY * TILE_PX);
         if (enemyBldg >= 0) {
             for (int i = 0; i < MAX_UNITS; i++) {
