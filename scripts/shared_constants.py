@@ -72,22 +72,10 @@ UI_PALETTE_RGB = {
 
 # ---------------------------------------------------------------------------
 # Town Center composite (scripts/composite_tc.py)
-# Must match TC_SPR_W/H and TC_ANCHOR_X/Y in source/render.cpp
+# preprocess_sprites.py writes these into source/sprite_geom.h
 # ---------------------------------------------------------------------------
 TC_CANVAS = (136, 80)  # sprite canvas W x H
 TC_ANCHOR = (68, 62)   # canvas pixel of the footprint diamond's centre
-
-# ---------------------------------------------------------------------------
-# Unit sprite sheets (scripts/build_unit_sheets.py)
-# ---------------------------------------------------------------------------
-UNIT_CELL   = (32, 32)  # CELL_W x CELL_H in source/render.cpp
-# Cell pixel where the unit's SLP hotspot (its ground position) goes. Must
-# match UNIT_ANCHOR_X/Y in source/render.cpp, which puts it on the tile centre.
-UNIT_ANCHOR = (16, 24)
-# AoE2 pixels -> NDS pixels: the same 1/3 as the terrain (96x48 -> 32x16 tiles)
-# and the Town Center, so units are in proportion to both. Cavalry and siege
-# come out a few percent smaller (see group_scale in build_unit_sheets.py).
-UNIT_SCALE  = 1 / 3
 
 # Ground shadow: sprite PNGs store it as black at this alpha, the indexed
 # data as PAL_SHADOW (SPR_SHADOW in source/render.cpp), which is drawn by

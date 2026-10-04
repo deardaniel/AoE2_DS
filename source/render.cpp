@@ -7,6 +7,7 @@
 #include "fog.h"
 #include "tech.h"
 #include "font.h"
+#include "sprite_geom.h"
 #include <string.h>
 
 // Access tech-modified stats for HP bar max values
@@ -24,8 +25,8 @@ extern const u32 sprite_pal_bin_size;
 extern const u8 sprite_remap_bin[];
 extern const u32 sprite_remap_bin_size;
 
-// Unit sprite sheets (160x160 = 5 cols x 5 rows of 32x32 cells for walk/fight,
-//                     160x96  = 5 cols x 3 rows for stand)
+// Unit sprite sheets; each one's cell size and layout is GEOM_<name> in
+// sprite_geom.h
 extern const u8 spr_villager_bin[];
 extern const u8 spr_villager_walk_bin[];
 extern const u8 spr_villager_attack_bin[];
@@ -97,6 +98,10 @@ extern const u8 spr_market_bin[];
 extern const u8 spr_castle_bin[];
 extern const u8 spr_monastery_bin[];
 extern const u8 spr_university_bin[];
+extern const u8 spr_construction_1_bin[];
+extern const u8 spr_construction_2_bin[];
+extern const u8 spr_construction_3_bin[];
+extern const u8 spr_construction_4_bin[];
 
 // Fire overlay sprite (16x16, 4 animation frames stacked = 1024 bytes)
 extern const u8 spr_fire_bin[];
@@ -124,13 +129,6 @@ extern const u8 icon_university_bin[];
 // Build menu layout (shared with input.cpp)
 enum { BUILD_MENU_Y = 160, BUILD_MENU_H = 32, BUILD_MENU_ITEM_W = 32 };
 
-// OAM slot management
-static const int MAX_OAM_UNITS = 50;
-static const int MAX_OAM_BLDGS = 30;
-static const int OAM_UNIT_START = 0;
-static const int OAM_BLDG_START = MAX_OAM_UNITS;
-static const int OAM_UI_START = 80;
-
 // Build menu icon lookup (indexed by BLDG_* enum)
 static const u8* buildingIcon[BLDG_TYPE_COUNT] = {
     icon_tc_bin,            // BLDG_TOWN_CENTER
@@ -149,69 +147,30 @@ static const u8* buildingIcon[BLDG_TYPE_COUNT] = {
     icon_university_bin,    // BLDG_UNIVERSITY
 };
 
-// Sprite sheet dimensions
-static const int ANIM_SHEET_W = 320;  // 10 columns of 32px (walk/fight sheets)
-static const int ANIM_SHEET_COLS = 10;
-static const int STAND_SHEET_W = 160; // 5 columns of 32px (standing sheets)
-static const int STAND_SHEET_COLS = 5;
-static const int SHEET_ROWS = 5;      // max 5 rows
-static const int CELL_W = 32;
-static const int CELL_H = 32;
-// Cell pixel of a unit's ground position, on the centre of its tile — must
-// match UNIT_ANCHOR in scripts/shared_constants.py
-static const int UNIT_ANCHOR_X = 16;
-static const int UNIT_ANCHOR_Y = 24;
-// Sprite height above the ground position, for placing HP bars
-static const u8 UNIT_HEIGHT_PX[UNIT_TYPE_COUNT] = {
-    14, 14, 14, 23, 17, 23, 9,   // villager, militia, archer, knight, spearman, scout, sheep
-    22, 16, 15                   // ram, mangonel, monk
-};
-
-// Per-unit-type animation columns (5 for compact sheets, 10 for full)
-static const int UNIT_ANIM_COLS[UNIT_TYPE_COUNT] = {
-    10, 10, 10, 10, 10, 10, 10,  // villager..sheep
-    5, 5, 5                       // ram, mangonel, monk (compact)
-};
-
-// Units whose standing sheet is a single frame per direction (5 cols x 1 row)
-static const bool UNIT_STAND_STATIC[UNIT_TYPE_COUNT] = {
-    false, false, false, false, false, false, false,
-    true, true, false             // ram, mangonel
-};
-
 // ---------------------------------------------------------------------------
-// Sprite sheet table — maps unit type + state to sheet data pointer
+// Sprite sheet tables — map unit type + state to a sheet
 // ---------------------------------------------------------------------------
+// A unit sheet: pixel data plus its layout (generated into sprite_geom.h)
+struct UnitSheet { const u8* data; const SheetGeom* g; };
+#define SHEET(name) UnitSheet{ spr_##name##_bin, &GEOM_##name }
 
-// Stand sheets indexed by UnitTypeId
-static const u8* unitStandSheet[UNIT_TYPE_COUNT];
-// Walk sheets (NULL if no walk sheet — fallback to stand)
-static const u8* unitWalkSheet[UNIT_TYPE_COUNT];
-// Attack/fight sheets (NULL if none — fallback to stand)
-static const u8* unitFightSheet[UNIT_TYPE_COUNT];
-// Death sheets (NULL if none — fallback to gray tint)
-static const u8* unitDeathSheet[UNIT_TYPE_COUNT];
+static UnitSheet unitStandSheet[UNIT_TYPE_COUNT];
+static UnitSheet unitWalkSheet[UNIT_TYPE_COUNT];
+static UnitSheet unitFightSheet[UNIT_TYPE_COUNT];
+static UnitSheet unitDeathSheet[UNIT_TYPE_COUNT];
 
-// Villager role-specific sprite sheets
-// Indexed by VillagerRole: stand, walk, work, carry
-static const u8* villagerRoleStand[VROLE_COUNT];
-static const u8* villagerRoleWalk[VROLE_COUNT];
-static const u8* villagerRoleWork[VROLE_COUNT];  // work animation (chop/mine/build/farm)
-static const u8* villagerRoleCarry[VROLE_COUNT]; // carry-walk animation (returning)
+// Villager role-specific sheets, indexed by VillagerRole
+static UnitSheet villagerRoleStand[VROLE_COUNT];
+static UnitSheet villagerRoleWalk[VROLE_COUNT];
+static UnitSheet villagerRoleWork[VROLE_COUNT];  // chop/mine/build/farm
+static UnitSheet villagerRoleCarry[VROLE_COUNT]; // walking with a load
 
-// Building sheets indexed by BuildingTypeId
+// Building sheets indexed by BuildingTypeId; sizes and anchors are BLDG_GEOM
 static const u8* buildingSheet[BLDG_TYPE_COUNT];
-// Building sprite sizes (side length in pixels)
-static int buildingSprW[BLDG_TYPE_COUNT];
-static int buildingSprH[BLDG_TYPE_COUNT];
-// Canvas pixel that sits on the centre of the building's footprint diamond
-static int buildingAnchorX[BLDG_TYPE_COUNT];
-static int buildingAnchorY[BLDG_TYPE_COUNT];
-
-// Town Center composite canvas — must match TC_CANVAS / TC_ANCHOR in
-// scripts/shared_constants.py (scripts/composite_tc.py builds the sprite)
-static const int TC_SPR_W = 136, TC_SPR_H = 80;
-static const int TC_ANCHOR_X = 68, TC_ANCHOR_Y = 62;
+// Construction site sheets indexed by footprint size - 1 (CONSTRUCTION_GEOM)
+static const u8* const constructionSheet[4] = {
+    spr_construction_1_bin, spr_construction_2_bin, spr_construction_3_bin, spr_construction_4_bin,
+};
 
 // Building sprite pixels with this index are ground shadow: instead of being
 // drawn they darken whatever is already in the framebuffer (PAL_SHADOW in
@@ -236,70 +195,8 @@ static u8 shadowLut[256];
 // ---------------------------------------------------------------------------
 static const bool DIR_HFLIP[DIR_COUNT] = { true, true, true, false, false, false, false, false };
 
-// For walking/attack sheets (5 dirs x 10 anim frames = 50 frames):
-// SLP Dir 0 (S): frames 0-9
-// SLP Dir 1 (SW): frames 10-19
-// SLP Dir 2 (W): frames 20-29
-// SLP Dir 3 (NW): frames 30-39
-// SLP Dir 4 (N): frames 40-49
-static const int DIR_TO_ANIM_BASE[DIR_COUNT] = { 30, 20, 10, 0, 10, 20, 30, 40 };
-
-// ---------------------------------------------------------------------------
-// Convert linear pixel buffer to NDS 8x8 tile layout (256-color, 1D mapping)
-// ---------------------------------------------------------------------------
-static void linear_to_tiled(const u8* src, u8* dst, int w, int h) {
-    int tilesX = w / 8;
-    int tilesY = h / 8;
-    int dstIdx = 0;
-    for (int ty = 0; ty < tilesY; ty++) {
-        for (int tx = 0; tx < tilesX; tx++) {
-            for (int py = 0; py < 8; py++) {
-                for (int px = 0; px < 8; px++) {
-                    int srcX = tx * 8 + px;
-                    int srcY = ty * 8 + py;
-                    dst[dstIdx++] = src[srcY * w + srcX];
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Convert linear pixel buffer to NDS 8x8 tile layout with horizontal flip
-// ---------------------------------------------------------------------------
-static void linear_to_tiled_hflip(const u8* src, u8* dst, int w, int h) {
-    int tilesX = w / 8;
-    int tilesY = h / 8;
-    int dstIdx = 0;
-    for (int ty = 0; ty < tilesY; ty++) {
-        for (int tx = 0; tx < tilesX; tx++) {
-            for (int py = 0; py < 8; py++) {
-                for (int px = 0; px < 8; px++) {
-                    int srcX = (w - 1) - (tx * 8 + px);
-                    int srcY = ty * 8 + py;
-                    dst[dstIdx++] = src[srcY * w + srcX];
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Extract a single 32x32 frame from a sprite sheet of given width/cols
-// ---------------------------------------------------------------------------
-static void extract_frame(const u8* sheet, int frameIdx, u8* dst32x32,
-                          int sheetCols, int sheetW) {
-    int col = frameIdx % sheetCols;
-    int row = frameIdx / sheetCols;
-    int srcX = col * CELL_W;
-    int srcY = row * CELL_H;
-
-    for (int y = 0; y < CELL_H; y++) {
-        memcpy(&dst32x32[y * CELL_W],
-               &sheet[(srcY + y) * sheetW + srcX],
-               CELL_W);
-    }
-}
+// Sheet row (SLP direction 0-4: S, SW, W, NW, N) for each tile direction
+static const int DIR_TO_SLP_DIR[DIR_COUNT] = { 3, 2, 1, 0, 1, 2, 3, 4 };
 
 // ---------------------------------------------------------------------------
 // Apply player color remap for player 2 (in-place, modifies buffer)
@@ -314,15 +211,8 @@ static void apply_color_remap(u8* buf, int size) {
 // ---------------------------------------------------------------------------
 // Get the appropriate sprite sheet for a unit based on its state and role
 // ---------------------------------------------------------------------------
-static const u8* get_unit_sheet(const Unit& u) {
-    // Death animation (all unit types)
-    if (u.state == USTATE_DEAD) {
-        if (u.type == UNIT_VILLAGER) {
-            return spr_villager_die_bin;
-        }
-        if (unitDeathSheet[u.type]) return unitDeathSheet[u.type];
-        return unitStandSheet[u.type]; // fallback
-    }
+static const UnitSheet& get_unit_sheet(const Unit& u) {
+    if (u.state == USTATE_DEAD) return unitDeathSheet[u.type];
 
     // Villager role-specific sheets
     if (u.type == UNIT_VILLAGER) {
@@ -331,63 +221,33 @@ static const u8* get_unit_sheet(const Unit& u) {
         switch (u.state) {
         case USTATE_MOVING:
             // Show carry sprite when walking with resources (returning to drop-off)
-            if (u.carryAmount > 0 && villagerRoleCarry[role])
+            if (u.carryAmount > 0 && villagerRoleCarry[role].data)
                 return villagerRoleCarry[role];
-            if (villagerRoleWalk[role]) return villagerRoleWalk[role];
-            break;
+            return villagerRoleWalk[role];
         case USTATE_RETURNING:
-            if (villagerRoleCarry[role]) return villagerRoleCarry[role];
-            if (villagerRoleWalk[role]) return villagerRoleWalk[role];
-            break;
+            if (villagerRoleCarry[role].data) return villagerRoleCarry[role];
+            return villagerRoleWalk[role];
         case USTATE_GATHERING:
         case USTATE_BUILDING:
-            if (villagerRoleWork[role]) return villagerRoleWork[role];
-            if (villagerRoleWalk[role]) return villagerRoleWalk[role];
-            break;
+            return villagerRoleWork[role];
         case USTATE_ATTACKING:
-            if (unitFightSheet[UNIT_VILLAGER]) return unitFightSheet[UNIT_VILLAGER];
-            break;
+            return unitFightSheet[UNIT_VILLAGER];
         default:
-            break;
+            return villagerRoleStand[role];
         }
-        return villagerRoleStand[role] ? villagerRoleStand[role] : unitStandSheet[UNIT_VILLAGER];
     }
 
-    // Non-villager units
     switch (u.state) {
     case USTATE_MOVING:
     case USTATE_RETURNING:
     case USTATE_SCOUTING:
-        if (unitWalkSheet[u.type]) return unitWalkSheet[u.type];
-        break;
+        return unitWalkSheet[u.type];
     case USTATE_ATTACKING:
     case USTATE_GATHERING:
-        if (unitFightSheet[u.type]) return unitFightSheet[u.type];
-        break;
+        return unitFightSheet[u.type];
     default:
-        break;
+        return unitStandSheet[u.type];
     }
-    return unitStandSheet[u.type];
-}
-
-// ---------------------------------------------------------------------------
-// Check if a sheet is an animated sheet (walk/fight/work) vs stand
-// ---------------------------------------------------------------------------
-static bool is_animated_sheet(const u8* sheet, const Unit& u) {
-    if (u.type == UNIT_VILLAGER) {
-        int role = u.role;
-        if (role >= VROLE_COUNT) role = VROLE_BASE;
-        return sheet != villagerRoleStand[role] && sheet != unitStandSheet[u.type];
-    }
-    return sheet != unitStandSheet[u.type];
-}
-
-// Check if sheet is a carry sheet (5 frames per dir instead of 10)
-static bool is_carry_sheet(const u8* sheet, const Unit& u) {
-    if (u.type != UNIT_VILLAGER) return false;
-    int role = u.role;
-    if (role >= VROLE_COUNT) role = VROLE_BASE;
-    return sheet == villagerRoleCarry[role] && villagerRoleCarry[role] != NULL;
 }
 
 // ---------------------------------------------------------------------------
@@ -401,80 +261,80 @@ void render_init() {
     SPRITE_PALETTE_SUB[255] = RGB15(4, 4, 4);
 
     // Set up unit sheet lookup tables
-    unitStandSheet[UNIT_VILLAGER]  = spr_villager_bin;
-    unitStandSheet[UNIT_MILITIA]   = spr_militia_bin;
-    unitStandSheet[UNIT_ARCHER]    = spr_archer_bin;
-    unitStandSheet[UNIT_KNIGHT]    = spr_knight_bin;
-    unitStandSheet[UNIT_SPEARMAN]  = spr_spearman_bin;
-    unitStandSheet[UNIT_SCOUT]     = spr_scout_bin;
-    unitStandSheet[UNIT_SHEEP]     = spr_sheep_stand_bin;
-    unitStandSheet[UNIT_RAM]       = spr_ram_stand_bin;
-    unitStandSheet[UNIT_MANGONEL]  = spr_mango_stand_bin;
-    unitStandSheet[UNIT_MONK]      = spr_monk_stand_bin;
+    unitStandSheet[UNIT_VILLAGER]   = SHEET(villager);
+    unitStandSheet[UNIT_MILITIA]    = SHEET(militia);
+    unitStandSheet[UNIT_ARCHER]     = SHEET(archer);
+    unitStandSheet[UNIT_KNIGHT]     = SHEET(knight);
+    unitStandSheet[UNIT_SPEARMAN]   = SHEET(spearman);
+    unitStandSheet[UNIT_SCOUT]      = SHEET(scout);
+    unitStandSheet[UNIT_SHEEP]      = SHEET(sheep_stand);
+    unitStandSheet[UNIT_RAM]        = SHEET(ram_stand);
+    unitStandSheet[UNIT_MANGONEL]   = SHEET(mango_stand);
+    unitStandSheet[UNIT_MONK]       = SHEET(monk_stand);
 
-    unitWalkSheet[UNIT_VILLAGER]   = spr_villager_walk_bin;
-    unitWalkSheet[UNIT_MILITIA]    = spr_militia_walk_bin;
-    unitWalkSheet[UNIT_ARCHER]     = spr_archer_walk_bin;
-    unitWalkSheet[UNIT_KNIGHT]     = spr_knight_walk_bin;
-    unitWalkSheet[UNIT_SPEARMAN]   = spr_spearman_walk_bin;
-    unitWalkSheet[UNIT_SCOUT]      = spr_scout_walk_bin;
-    unitWalkSheet[UNIT_SHEEP]      = spr_sheep_walk_bin;
-    unitWalkSheet[UNIT_RAM]        = spr_ram_walk_bin;
-    unitWalkSheet[UNIT_MANGONEL]   = spr_mango_walk_bin;
-    unitWalkSheet[UNIT_MONK]       = spr_monk_walk_bin;
+    unitWalkSheet[UNIT_VILLAGER]    = SHEET(villager_walk);
+    unitWalkSheet[UNIT_MILITIA]     = SHEET(militia_walk);
+    unitWalkSheet[UNIT_ARCHER]      = SHEET(archer_walk);
+    unitWalkSheet[UNIT_KNIGHT]      = SHEET(knight_walk);
+    unitWalkSheet[UNIT_SPEARMAN]    = SHEET(spearman_walk);
+    unitWalkSheet[UNIT_SCOUT]       = SHEET(scout_walk);
+    unitWalkSheet[UNIT_SHEEP]       = SHEET(sheep_walk);
+    unitWalkSheet[UNIT_RAM]         = SHEET(ram_walk);
+    unitWalkSheet[UNIT_MANGONEL]    = SHEET(mango_walk);
+    unitWalkSheet[UNIT_MONK]        = SHEET(monk_walk);
 
-    unitFightSheet[UNIT_VILLAGER]  = spr_villager_attack_bin;
-    unitFightSheet[UNIT_MILITIA]   = spr_militia_fight_bin;
-    unitFightSheet[UNIT_ARCHER]    = spr_archer_fire_bin;
-    unitFightSheet[UNIT_KNIGHT]    = spr_knight_fight_bin;
-    unitFightSheet[UNIT_SPEARMAN]  = spr_spearman_fight_bin;
-    unitFightSheet[UNIT_SCOUT]     = spr_scout_fight_bin;
-    unitFightSheet[UNIT_SHEEP]     = spr_sheep_stand_bin; // sheep don't fight
-    unitFightSheet[UNIT_RAM]       = spr_ram_fight_bin;
-    unitFightSheet[UNIT_MANGONEL]  = spr_mango_fight_bin;
-    unitFightSheet[UNIT_MONK]      = spr_monk_fight_bin;
+    unitFightSheet[UNIT_VILLAGER]   = SHEET(villager_attack);
+    unitFightSheet[UNIT_MILITIA]    = SHEET(militia_fight);
+    unitFightSheet[UNIT_ARCHER]     = SHEET(archer_fire);
+    unitFightSheet[UNIT_KNIGHT]     = SHEET(knight_fight);
+    unitFightSheet[UNIT_SPEARMAN]   = SHEET(spearman_fight);
+    unitFightSheet[UNIT_SCOUT]      = SHEET(scout_fight);
+    unitFightSheet[UNIT_SHEEP]      = SHEET(sheep_stand); // sheep don't fight
+    unitFightSheet[UNIT_RAM]        = SHEET(ram_fight);
+    unitFightSheet[UNIT_MANGONEL]   = SHEET(mango_fight);
+    unitFightSheet[UNIT_MONK]       = SHEET(monk_fight);
 
-    unitDeathSheet[UNIT_VILLAGER]  = spr_villager_die_bin;
-    unitDeathSheet[UNIT_MILITIA]   = spr_militia_die_bin;
-    unitDeathSheet[UNIT_ARCHER]    = spr_archer_die_bin;
-    unitDeathSheet[UNIT_KNIGHT]    = spr_knight_die_bin;
-    unitDeathSheet[UNIT_SPEARMAN]  = spr_spearman_die_bin;
-    unitDeathSheet[UNIT_SCOUT]     = spr_scout_die_bin;
-    unitDeathSheet[UNIT_SHEEP]     = spr_sheep_die_bin;
-    unitDeathSheet[UNIT_RAM]       = spr_ram_die_bin;
-    unitDeathSheet[UNIT_MANGONEL]  = spr_mango_die_bin;
-    unitDeathSheet[UNIT_MONK]      = spr_monk_die_bin;
+    unitDeathSheet[UNIT_VILLAGER]   = SHEET(villager_die);
+    unitDeathSheet[UNIT_MILITIA]    = SHEET(militia_die);
+    unitDeathSheet[UNIT_ARCHER]     = SHEET(archer_die);
+    unitDeathSheet[UNIT_KNIGHT]     = SHEET(knight_die);
+    unitDeathSheet[UNIT_SPEARMAN]   = SHEET(spearman_die);
+    unitDeathSheet[UNIT_SCOUT]      = SHEET(scout_die);
+    unitDeathSheet[UNIT_SHEEP]      = SHEET(sheep_die);
+    unitDeathSheet[UNIT_RAM]        = SHEET(ram_die);
+    unitDeathSheet[UNIT_MANGONEL]   = SHEET(mango_die);
+    unitDeathSheet[UNIT_MONK]       = SHEET(monk_die);
 
     // Villager role-specific sheets
-    villagerRoleStand[VROLE_BASE]       = spr_villager_bin;
-    villagerRoleWalk[VROLE_BASE]        = spr_villager_walk_bin;
-    villagerRoleWork[VROLE_BASE]        = spr_villager_attack_bin;
-    villagerRoleCarry[VROLE_BASE]       = spr_villager_carry_bin;
+    villagerRoleStand[VROLE_BASE]        = SHEET(villager);
+    villagerRoleWalk[VROLE_BASE]         = SHEET(villager_walk);
+    villagerRoleWork[VROLE_BASE]         = SHEET(villager_attack);
+    villagerRoleCarry[VROLE_BASE]        = SHEET(villager_carry);
 
-    villagerRoleStand[VROLE_LUMBERJACK] = spr_lumberjack_bin;
-    villagerRoleWalk[VROLE_LUMBERJACK]  = spr_lumberjack_walk_bin;
-    villagerRoleWork[VROLE_LUMBERJACK]  = spr_lumberjack_work_bin;
-    villagerRoleCarry[VROLE_LUMBERJACK] = spr_lumberjack_carry_bin;
+    villagerRoleStand[VROLE_LUMBERJACK]  = SHEET(lumberjack);
+    villagerRoleWalk[VROLE_LUMBERJACK]   = SHEET(lumberjack_walk);
+    villagerRoleWork[VROLE_LUMBERJACK]   = SHEET(lumberjack_work);
+    villagerRoleCarry[VROLE_LUMBERJACK]  = SHEET(lumberjack_carry);
 
-    villagerRoleStand[VROLE_MINER]      = spr_miner_bin;
-    villagerRoleWalk[VROLE_MINER]       = spr_miner_walk_bin;
-    villagerRoleWork[VROLE_MINER]       = spr_miner_work_bin;
-    villagerRoleCarry[VROLE_MINER]      = spr_miner_carry_bin;
+    villagerRoleStand[VROLE_MINER]       = SHEET(miner);
+    villagerRoleWalk[VROLE_MINER]        = SHEET(miner_walk);
+    villagerRoleWork[VROLE_MINER]        = SHEET(miner_work);
+    villagerRoleCarry[VROLE_MINER]       = SHEET(miner_carry);
 
-    villagerRoleStand[VROLE_BUILDER]    = spr_builder_bin;
-    villagerRoleWalk[VROLE_BUILDER]     = spr_builder_walk_bin;
-    villagerRoleWork[VROLE_BUILDER]     = spr_builder_work_bin;
-    villagerRoleCarry[VROLE_BUILDER]    = spr_villager_carry_bin;     // builders use base carry
+    villagerRoleStand[VROLE_BUILDER]     = SHEET(builder);
+    villagerRoleWalk[VROLE_BUILDER]      = SHEET(builder_walk);
+    villagerRoleWork[VROLE_BUILDER]      = SHEET(builder_work);
+    villagerRoleCarry[VROLE_BUILDER]     = SHEET(villager_carry);     // builders use base carry
 
-    villagerRoleStand[VROLE_FARMER]     = spr_farmer_bin;
-    villagerRoleWalk[VROLE_FARMER]      = spr_farmer_walk_bin;
-    villagerRoleWork[VROLE_FARMER]      = spr_farmer_work_bin;
-    villagerRoleCarry[VROLE_FARMER]     = spr_farmer_carry_bin;
+    villagerRoleStand[VROLE_FARMER]      = SHEET(farmer);
+    villagerRoleWalk[VROLE_FARMER]       = SHEET(farmer_walk);
+    villagerRoleWork[VROLE_FARMER]       = SHEET(farmer_work);
+    villagerRoleCarry[VROLE_FARMER]      = SHEET(farmer_carry);
 
-    villagerRoleStand[VROLE_FORAGER]    = spr_farmer_bin;
-    villagerRoleWalk[VROLE_FORAGER]     = spr_farmer_walk_bin;
-    villagerRoleWork[VROLE_FORAGER]     = spr_farmer_work_bin;
-    villagerRoleCarry[VROLE_FORAGER]    = spr_forager_carry_bin;
+    villagerRoleStand[VROLE_FORAGER]     = SHEET(farmer);
+    villagerRoleWalk[VROLE_FORAGER]      = SHEET(farmer_walk);
+    villagerRoleWork[VROLE_FORAGER]      = SHEET(farmer_work);
+    villagerRoleCarry[VROLE_FORAGER]     = SHEET(forager_carry);
 
     // Set up building sheet lookup tables
     buildingSheet[BLDG_TOWN_CENTER]   = spr_town_center_bin;
@@ -491,33 +351,6 @@ void render_init() {
     buildingSheet[BLDG_CASTLE]        = spr_castle_bin;
     buildingSheet[BLDG_MONASTERY]     = spr_monastery_bin;
     buildingSheet[BLDG_UNIVERSITY]    = spr_university_bin;
-
-    // Building sprite pixel sizes (must match preprocessing target sizes)
-    // Isometric: footW = (tileW+tileH)*16, sprH = footH + 16 above-ground
-    buildingSprW[BLDG_TOWN_CENTER]   = TC_SPR_W; buildingSprH[BLDG_TOWN_CENTER] = TC_SPR_H;
-    buildingSprW[BLDG_HOUSE]         = 32;  buildingSprH[BLDG_HOUSE]         = 32;
-    buildingSprW[BLDG_BARRACKS]      = 64;  buildingSprH[BLDG_BARRACKS]      = 64;
-    buildingSprW[BLDG_ARCHERY_RANGE] = 64;  buildingSprH[BLDG_ARCHERY_RANGE] = 80;
-    buildingSprW[BLDG_STABLE]        = 64;  buildingSprH[BLDG_STABLE]        = 64;
-    buildingSprW[BLDG_FARM]          = 32;  buildingSprH[BLDG_FARM]          = 32;
-    buildingSprW[BLDG_MINING_CAMP]   = 32;  buildingSprH[BLDG_MINING_CAMP]   = 32;
-    buildingSprW[BLDG_LUMBER_CAMP]   = 32;  buildingSprH[BLDG_LUMBER_CAMP]   = 48;
-    buildingSprW[BLDG_WALL]          = 32;  buildingSprH[BLDG_WALL]          = 32;
-    buildingSprW[BLDG_TOWER]         = 32;  buildingSprH[BLDG_TOWER]         = 64;
-    buildingSprW[BLDG_MARKET]        = 64;  buildingSprH[BLDG_MARKET]        = 80;
-    buildingSprW[BLDG_CASTLE]        = 96;  buildingSprH[BLDG_CASTLE]        = 128;
-    buildingSprW[BLDG_MONASTERY]     = 64;  buildingSprH[BLDG_MONASTERY]     = 80;
-    buildingSprW[BLDG_UNIVERSITY]    = 64;  buildingSprH[BLDG_UNIVERSITY]    = 80;
-
-    // Anchors: preprocess_sprites.py centres each building horizontally and
-    // puts the footprint centre footH/2 above the bottom of the canvas.
-    for (int t = 0; t < BLDG_TYPE_COUNT; t++) {
-        int footH = (BLDG_STATS[t].tileW + BLDG_STATS[t].tileH) * (ISO_TILE_H / 2);
-        buildingAnchorX[t] = BLDG_STATS[t].tileH * (ISO_TILE_W / 2);
-        buildingAnchorY[t] = buildingSprH[t] - footH / 2;
-    }
-    buildingAnchorX[BLDG_TOWN_CENTER] = TC_ANCHOR_X;
-    buildingAnchorY[BLDG_TOWN_CENTER] = TC_ANCHOR_Y;
 
     // Shadow table: for every palette entry, the closest entry to that colour
     // at ~60% brightness. Built from the live palette so it can't go stale.
@@ -540,184 +373,47 @@ void render_init() {
 }
 
 // ---------------------------------------------------------------------------
-// Compute building sprite screen offset from worldToIso origin
+// Building and unit placement
 // ---------------------------------------------------------------------------
-static void bldg_sprite_offset(int type, int& offX, int& offY) {
-    // worldToIso gives the top-left of the origin tile's 32x16 cell, so the
-    // footprint diamond's centre is half a tile right and footH/2 down.
-    int footH = (BLDG_STATS[type].tileW + BLDG_STATS[type].tileH) * (ISO_TILE_H / 2);
-    offX = ISO_TILE_W / 2 - buildingAnchorX[type];
-    offY = footH / 2 - buildingAnchorY[type];
+static bool bldg_complete(const Building& b) {
+    return b.buildProgress >= BLDG_STATS[b.type].buildTime;
 }
 
-// ---------------------------------------------------------------------------
-// Render all sprites
-// ---------------------------------------------------------------------------
-void render_sprites(const GameState& gs, const TerrainMap& terrain) {
-    // First, hide all OAM entries
-    for (int i = 0; i < 128; i++) {
-        oamSet(&oamSub, i, 0, 192, 0, 0, SpriteSize_16x16, SpriteColorFormat_256Color,
-               NULL, -1, false, true, false, false, false);
-    }
+// Screen position of the centre of a building's footprint diamond.
+// worldToIso gives the top-left of the origin tile's 32x16 cell.
+static void bldg_centre(const Building& b, const GameState& gs, int& cx, int& cy) {
+    const BuildingStats& st = BLDG_STATS[b.type];
+    int isoX, isoY;
+    worldToIso(b.x, b.y, isoX, isoY);
+    cx = isoX - gs.camX + ISO_TILE_W / 2 + (st.tileW - st.tileH) * (ISO_TILE_W / 4);
+    cy = isoY - gs.camY + (st.tileW + st.tileH) * (ISO_TILE_H / 4);
+}
 
-    int oamIdx = OAM_UNIT_START;
+// The sprite a building currently shows: its construction site, or itself.
+static const SpriteGeom& bldg_geom(const Building& b) {
+    if (!bldg_complete(b)) return CONSTRUCTION_GEOM[BLDG_STATS[b.type].tileW - 1];
+    return BLDG_GEOM[b.type];
+}
 
-    // --- Render units (32x32 OAM sprites from HD sprite sheets) ---
-    for (int i = 0; i < MAX_UNITS && oamIdx < OAM_BLDG_START; i++) {
-        Unit& u = units[i];
-        if (!u.alive || u.state == USTATE_GARRISONED) continue;
+// Top-left screen pixel of that sprite
+static void bldg_sprite_pos(const Building& b, const GameState& gs, int& sx, int& sy) {
+    const SpriteGeom& g = bldg_geom(b);
+    bldg_centre(b, gs, sx, sy);
+    sx -= g.ax;
+    sy -= g.ay;
+}
 
-        // Check if on screen (32x32 sprite, positioned at iso coords)
-        int uIsoX, uIsoY;
-        worldToIso(u.x, u.y, uIsoX, uIsoY);
-        int sx = uIsoX - gs.camX;
-        int sy = uIsoY - gs.camY - (CELL_H - ISO_TILE_H);
-        if (sx < -CELL_W || sx >= SCREEN_W || sy < -CELL_H || sy >= SCREEN_H) continue;
+// Screen position of a unit's ground point: the centre of its tile
+static void unit_ground(const Unit& u, const GameState& gs, int& gx, int& gy) {
+    int isoX, isoY;
+    worldToIso(u.x, u.y, isoX, isoY);
+    gx = isoX - gs.camX + ISO_TILE_W / 2;
+    gy = isoY - gs.camY + ISO_TILE_H / 2;
+}
 
-        // Fog check — only show enemy units in visible tiles
-        if (u.owner != 0) {
-            int tx = (u.x + TILE_PX / 2) / TILE_PX;
-            int ty = (u.y + TILE_PX / 2) / TILE_PX;
-            if (!fogMap.isVisible(0, tx, ty)) continue;
-        }
-
-        // Allocate OAM gfx if needed (32x32 = 1024 bytes)
-        if (!u.spriteGfx) {
-            u.spriteGfx = oamAllocateGfx(&oamSub, SpriteSize_32x32, SpriteColorFormat_256Color);
-        }
-        if (!u.spriteGfx) continue;
-
-        // Select sprite sheet based on unit state and role
-        const u8* sheet = get_unit_sheet(u);
-
-        // Select frame based on direction and animation
-        int frameIdx;
-        bool hflip;
-        bool animated = is_animated_sheet(sheet, u);
-        if (animated) {
-            bool carry = is_carry_sheet(sheet, u);
-            int unitCols = UNIT_ANIM_COLS[u.type];
-            bool compact = (unitCols == 5);
-            // Compact sheets (5 cols) or carry sheets use halved base
-            int base = (carry || compact) ? DIR_TO_ANIM_BASE[u.direction] / 2 : DIR_TO_ANIM_BASE[u.direction];
-            int fpd = (carry || compact) ? 5 : 10;
-            int anim = u.animFrame % fpd;
-            frameIdx = base + anim;
-            hflip = DIR_HFLIP[u.direction];
-        } else {
-            // Standing sheet: 5 cols × 5 rows, cycle through idle animation
-            int base = DIR_TO_ANIM_BASE[u.direction] / 2;
-            frameIdx = base + (u.animFrame % 5);
-            hflip = DIR_HFLIP[u.direction];
-        }
-
-        int unitCols2 = UNIT_ANIM_COLS[u.type];
-        int sheetCols = animated ? unitCols2 : STAND_SHEET_COLS;
-        int sheetW = sheetCols * CELL_W;
-
-        // Clamp frame index to valid range
-        if (frameIdx >= sheetCols * SHEET_ROWS) frameIdx = 0;
-
-        // Extract 32x32 frame from sheet
-        u8 frame[CELL_W * CELL_H];
-        extract_frame(sheet, frameIdx, frame, sheetCols, sheetW);
-
-        // Apply player 2 color remap
-        if (u.owner == 1) {
-            apply_color_remap(frame, CELL_W * CELL_H);
-        }
-
-        // Convert to NDS tiled format and copy to OAM VRAM
-        u8 tiled[CELL_W * CELL_H];
-        if (hflip) {
-            linear_to_tiled_hflip(frame, tiled, CELL_W, CELL_H);
-        } else {
-            linear_to_tiled(frame, tiled, CELL_W, CELL_H);
-        }
-        dmaCopy(tiled, u.spriteGfx, CELL_W * CELL_H);
-
-        bool selected = gs.unitSelected[i];
-        oamSet(&oamSub, oamIdx, sx, sy, 0, 0, SpriteSize_32x32, SpriteColorFormat_256Color,
-               u.spriteGfx, -1, false, false, selected, false, false);
-        u.oamSlot = oamIdx;
-        oamIdx++;
-    }
-
-    // --- Render buildings ---
-    for (int i = 0; i < MAX_BUILDINGS && oamIdx < OAM_UI_START; i++) {
-        Building& b = buildings[i];
-        if (!b.alive) continue;
-
-        const BuildingStats& st = BLDG_STATS[b.type];
-        int pw = buildingSprW[b.type];
-        int ph = buildingSprH[b.type];
-
-        int bIsoX, bIsoY;
-        worldToIso(b.x, b.y, bIsoX, bIsoY);
-        int offX, offY;
-        bldg_sprite_offset(b.type, offX, offY);
-        int sx = bIsoX - gs.camX + offX;
-        int sy = bIsoY - gs.camY + offY;
-        if (sx < -pw || sx >= SCREEN_W || sy < -ph || sy >= SCREEN_H) continue;
-
-        // Fog check
-        if (b.owner != 0) {
-            int tx = b.x / TILE_PX;
-            int ty = b.y / TILE_PX;
-            if (!fogMap.isExplored(0, tx, ty)) continue;
-        }
-
-        bool complete = (b.buildProgress >= st.buildTime);
-
-        // OAM can only handle power-of-2 sizes up to 64x64; skip oversized buildings
-        if (pw > 64 || ph > 64) continue;
-
-        // Determine OAM sprite size
-        SpriteSize sprSize;
-        if (pw > 32 || ph > 32) {
-            sprSize = SpriteSize_64x64;
-        } else if (pw > 16 || ph > 16) {
-            sprSize = SpriteSize_32x32;
-        } else {
-            sprSize = SpriteSize_16x16;
-        }
-
-        if (!b.spriteGfx) {
-            b.spriteGfx = oamAllocateGfx(&oamSub, sprSize, SpriteColorFormat_256Color);
-        }
-        if (!b.spriteGfx) continue;
-
-        u8 oamBuf[64 * 64];
-        memset(oamBuf, 0, sizeof(oamBuf));
-
-        if (!complete || buildingSheet[b.type] == NULL) {
-            for (int y = 0; y < ph; y++) {
-                for (int x = 0; x < pw; x++) {
-                    bool border = (x == 0 || y == 0 || x == pw - 1 || y == ph - 1);
-                    if (border || ((x + y) % 6 == 0)) {
-                        oamBuf[y * pw + x] = 1;
-                    }
-                }
-            }
-        } else {
-            memcpy(oamBuf, buildingSheet[b.type], pw * ph);
-            if (b.owner == 1) {
-                apply_color_remap(oamBuf, pw * ph);
-            }
-        }
-
-        u8 tiled[64 * 64];
-        linear_to_tiled(oamBuf, tiled, pw, ph);
-        dmaCopy(tiled, b.spriteGfx, pw * ph);
-
-        bool selected = (gs.selectedBldg == i);
-        oamSet(&oamSub, oamIdx, sx, sy, 0, 0, sprSize, SpriteColorFormat_256Color,
-               b.spriteGfx, -1, false, false, selected, false, false);
-        b.oamSlot = oamIdx;
-        oamIdx++;
-    }
-
-    oamUpdate(&oamSub);
+// Generous on-screen test for a unit (its sheets' cells differ in size)
+static bool unit_on_screen(int gx, int gy) {
+    return gx > -48 && gx < SCREEN_W + 48 && gy > -48 && gy < SCREEN_H + 48;
 }
 
 // ---------------------------------------------------------------------------
@@ -767,6 +463,25 @@ static void blit_frame(u8* buf, const u8* frame, int fw, int fh,
             u8 val = frame[py * fw + srcX];
             if (val == 0) continue; // transparent
             buf[screenY * 256 + screenX] = val;
+        }
+    }
+}
+
+// Unit blit: one cell straight out of a sheet (stride = sheet width), with
+// optional horizontal flip and player colour remap.
+static void blit_cell(u8* buf, const u8* src, int stride, int w, int h,
+                      int sx, int sy, bool hflip, const u8* remap) {
+    for (int py = 0; py < h; py++) {
+        int screenY = sy + py;
+        if (screenY < 0 || screenY >= SCREEN_H) continue;
+        const u8* row = src + py * stride;
+        u8* dst = buf + screenY * 256;
+        for (int px = 0; px < w; px++) {
+            int screenX = sx + px;
+            if (screenX < 0 || screenX >= SCREEN_W) continue;
+            u8 val = row[hflip ? (w - 1 - px) : px];
+            if (val == 0) continue;
+            dst[screenX] = remap ? remap[val] : val;
         }
     }
 }
@@ -922,105 +637,46 @@ static void draw_selection_diamond(u8* buf, int bScreenX, int bScreenY,
 // ---------------------------------------------------------------------------
 static void render_building_sw(u8* buf, const GameState& gs, int i) {
     Building& b = buildings[i];
-    int pw = buildingSprW[b.type];
-    int ph = buildingSprH[b.type];
-    int tileW = BLDG_STATS[b.type].tileW;
-    int tileH = BLDG_STATS[b.type].tileH;
+    const SpriteGeom& g = bldg_geom(b);
+    int pw = g.w, ph = g.h;
+    int sx, sy;
+    bldg_sprite_pos(b, gs, sx, sy);
 
-    int bIsoX, bIsoY;
-    worldToIso(b.x, b.y, bIsoX, bIsoY);
-    int bScreenX = bIsoX - gs.camX;
-    int bScreenY = bIsoY - gs.camY;
-
-    // Offset for diamond footprint: left extension + above-ground height
-    int offX, offY;
-    bldg_sprite_offset(b.type, offX, offY);
-    int sx = bScreenX + offX;
-    int sy = bScreenY + offY;
-
-    bool complete = (b.buildProgress >= BLDG_STATS[b.type].buildTime);
-    static u8 frame[128 * 128]; // max building sprite size (castle = 96x128)
-    memset(frame, 0, pw * ph);
-
-    if (!complete && buildingSheet[b.type] != NULL) {
-        // Under construction: show building sprite with construction overlay
-        // As build progresses, more of the real sprite shows through
-        int buildPct = b.buildProgress * 100 / BLDG_STATS[b.type].buildTime;
-        const u8* sprData = buildingSheet[b.type];
-        memcpy(frame, sprData, pw * ph);
-        if (b.owner == 1) apply_color_remap(frame, pw * ph);
-
-        // Dim pixels based on build progress: skip every Nth pixel to create
-        // a dithering effect that becomes less visible as construction completes
-        for (int py = 0; py < ph; py++) {
-            for (int px = 0; px < pw; px++) {
-                u8& c = frame[py * pw + px];
-                if (c == 0) continue; // skip transparent
-                if (c == SPR_SHADOW) { c = 0; continue; } // no shadow until built
-                // Use a hash to pseudo-randomly select which pixels to dim
-                int hash = (px * 7 + py * 13) & 0xFF;
-                int threshold = buildPct * 255 / 100;
-                if (hash > threshold) {
-                    // Replace with scaffold color (brown) or transparent
-                    c = ((px + py) % 4 == 0) ? PAL_BROWN : 0;
-                }
-            }
-        }
-        blit_building(buf, frame, pw, ph, sx, sy);
-    } else if (!complete || buildingSheet[b.type] == NULL) {
-        // Draw under-construction scaffold as diamond shape matching iso footprint
-        int scaffoldBaseY = -offY;
-        for (int dty = 0; dty < tileH; dty++) {
-            for (int dtx = 0; dtx < tileW; dtx++) {
-                int tIsoX = (dtx - dty) * (ISO_TILE_W / 2) - offX;
-                int tIsoY = scaffoldBaseY + (dtx + dty) * (ISO_TILE_H / 2);
-
-                for (int py = 0; py < ISO_TILE_H; py++) {
-                    int fy = tIsoY + py;
-                    if (fy < 0 || fy >= ph) continue;
-                    int xs = ISO_DIAMOND_XSTART[py];
-                    int xe = ISO_DIAMOND_XEND[py];
-                    for (int px = xs; px < xe; px++) {
-                        int fx = tIsoX + px;
-                        if (fx < 0 || fx >= pw) continue;
-                        bool border = (px == xs || px == xe - 1 || py == 0 || py == ISO_TILE_H - 1);
-                        if (border || ((px + py) % 6 == 0))
-                            frame[fy * pw + fx] = PAL_BROWN;
-                    }
-                }
-            }
-        }
-        blit_frame(buf, frame, pw, ph, sx, sy, false);
+    const u8* sprData;
+    if (!bldg_complete(b)) {
+        // Construction site: the stages of the game's own CNSTn_NN graphic
+        // for this footprint, spread evenly over the build time.
+        int stage = b.buildProgress * CONSTRUCTION_STAGES / BLDG_STATS[b.type].buildTime;
+        if (stage >= CONSTRUCTION_STAGES) stage = CONSTRUCTION_STAGES - 1;
+        sprData = constructionSheet[BLDG_STATS[b.type].tileW - 1] + stage * pw * ph;
     } else {
-        // Blit completed sprite — positioned via hotspot alignment in preprocessing.
-        const u8* sprData = buildingSheet[b.type];
-        if (b.owner == 1) {
-            memcpy(frame, sprData, pw * ph);
-            apply_color_remap(frame, pw * ph);
-            sprData = frame;
-        }
-        blit_building(buf, sprData, pw, ph, sx, sy);
+        sprData = buildingSheet[b.type];
+        if (sprData == NULL) return;  // farm: drawn as terrain
+    }
 
-        // Fire overlay on damaged buildings
-        int maxHp = BLDG_STATS[b.type].hp;
-        if (maxHp > 0 && b.hp < maxHp / 2) {
-            int fireW = 16, fireH = 16;
-            int fireFrame = (gs.frameCount / 8) % 4;
-            const u8* fireSrc = spr_fire_bin + fireFrame * fireW * fireH;
+    if (b.owner == 1) {
+        static u8 frame[128 * 128];  // largest building sprite (castle 116x117)
+        memcpy(frame, sprData, pw * ph);
+        apply_color_remap(frame, pw * ph);
+        sprData = frame;
+    }
+    blit_building(buf, sprData, pw, ph, sx, sy);
 
-            // First fire: centered horizontally, 1/4 down from top
-            int fx1 = sx + pw / 2 - fireW / 2;
-            int fy1 = sy + ph / 4 - fireH / 2;
-            blit_frame(buf, fireSrc, fireW, fireH, fx1, fy1, false);
+    // Fire overlay on damaged buildings
+    int maxHp = BLDG_STATS[b.type].hp;
+    if (bldg_complete(b) && maxHp > 0 && b.hp < maxHp / 2) {
+        int fireW = 16, fireH = 16;
+        int fireFrame = (gs.frameCount / 8) % 4;
+        const u8* fireSrc = spr_fire_bin + fireFrame * fireW * fireH;
 
-            // Second fire at < 25% HP: offset left, 1/3 down
-            if (b.hp < maxHp / 4) {
-                int fireFrame2 = ((gs.frameCount + 13) / 8) % 4;
-                const u8* fireSrc2 = spr_fire_bin + fireFrame2 * fireW * fireH;
-                int fx2 = sx + pw / 3 - fireW / 2;
-                int fy2 = sy + ph / 3 - fireH / 2;
-                blit_frame(buf, fireSrc2, fireW, fireH, fx2, fy2, false);
-            }
+        // First fire: centered horizontally, 1/4 down from top
+        blit_frame(buf, fireSrc, fireW, fireH, sx + pw / 2 - fireW / 2, sy + ph / 4 - fireH / 2, false);
+
+        // Second fire at < 25% HP: offset left, 1/3 down
+        if (b.hp < maxHp / 4) {
+            int fireFrame2 = ((gs.frameCount + 13) / 8) % 4;
+            const u8* fireSrc2 = spr_fire_bin + fireFrame2 * fireW * fireH;
+            blit_frame(buf, fireSrc2, fireW, fireH, sx + pw / 3 - fireW / 2, sy + ph / 3 - fireH / 2, false);
         }
     }
 }
@@ -1078,42 +734,21 @@ static void render_resource_sw(u8* buf, const GameState& gs, int tx, int ty, con
 // ---------------------------------------------------------------------------
 static void render_unit_sw(u8* buf, const GameState& gs, int i) {
     Unit& u = units[i];
+    const UnitSheet& sheet = get_unit_sheet(u);
+    const SheetGeom& g = *sheet.g;
 
-    int uIsoX, uIsoY;
-    worldToIso(u.x, u.y, uIsoX, uIsoY);
-    int sx = uIsoX - gs.camX;
-    int sy = uIsoY - gs.camY - (CELL_H - ISO_TILE_H);
-
-    const u8* sheet = get_unit_sheet(u);
-    int frameIdx;
-    int sheetCols;
+    // Frame within the direction: looping, or played once over animFrame 0-9
+    int f = g.once ? ((u.animFrame > 9 ? 9 : u.animFrame) * g.fpd / 10) : (u.animFrame % g.fpd);
+    int frameIdx = DIR_TO_SLP_DIR[u.direction] * g.fpd + f;
     bool hflip = DIR_HFLIP[u.direction];
-    int dirRow = DIR_TO_ANIM_BASE[u.direction] / 10;  // SLP direction 0-4
-    if (u.state == USTATE_DEAD) {
-        // Death sheets: 5 frames per direction, played once over animFrame 0-9
-        sheetCols = 5;
-        frameIdx = dirRow * 5 + (u.animFrame > 9 ? 4 : u.animFrame / 2);
-    } else if (is_animated_sheet(sheet, u)) {
-        sheetCols = UNIT_ANIM_COLS[u.type];
-        // Carry sheets and compact units have 5 frames per direction
-        int fpd = (is_carry_sheet(sheet, u) || sheetCols == 5) ? 5 : 10;
-        frameIdx = dirRow * fpd + u.animFrame % fpd;
-    } else if (UNIT_STAND_STATIC[u.type]) {
-        // One frame per direction, in a single row
-        sheetCols = STAND_SHEET_COLS;
-        frameIdx = dirRow;
-    } else {
-        // Standing sheet: 5 cols x 5 rows, cycle through idle animation
-        sheetCols = STAND_SHEET_COLS;
-        frameIdx = dirRow * 5 + u.animFrame % 5;
-    }
-    int sheetW = sheetCols * CELL_W;
 
-    u8 frame[CELL_W * CELL_H];
-    extract_frame(sheet, frameIdx, frame, sheetCols, sheetW);
-    if (u.owner == 1) apply_color_remap(frame, CELL_W * CELL_H);
+    int stride = g.cols * g.cw;
+    const u8* src = sheet.data + (frameIdx / g.cols) * g.ch * stride + (frameIdx % g.cols) * g.cw;
 
-    blit_frame(buf, frame, CELL_W, CELL_H, sx, sy, hflip);
+    int gx, gy;
+    unit_ground(u, gs, gx, gy);
+    blit_cell(buf, src, stride, g.cw, g.ch, gx - (hflip ? g.cw - g.ax : g.ax), gy - g.ay,
+              hflip, u.owner == 1 ? sprite_remap_bin : NULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,16 +817,14 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         Building& b = buildings[i];
         if (!b.alive) continue;
 
-        int pw = buildingSprW[b.type];
-        int ph = buildingSprH[b.type];
+        int pw = bldg_geom(b).w;
+        int ph = bldg_geom(b).h;
         int tileW = BLDG_STATS[b.type].tileW;
         int tileH = BLDG_STATS[b.type].tileH;
         int bIsoX, bIsoY;
         worldToIso(b.x, b.y, bIsoX, bIsoY);
-        int offX, offY;
-        bldg_sprite_offset(b.type, offX, offY);
-        int sx = bIsoX - gs.camX + offX;
-        int sy = bIsoY - gs.camY + offY;
+        int sx, sy;
+        bldg_sprite_pos(b, gs, sx, sy);
         if (sx < -pw || sx >= SCREEN_W || sy < -ph || sy >= SCREEN_H) continue;
 
         // Fog check
@@ -1222,11 +855,9 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         Unit& u = units[i];
         if (!u.alive || u.state == USTATE_GARRISONED) continue;
 
-        int uIsoX, uIsoY;
-        worldToIso(u.x, u.y, uIsoX, uIsoY);
-        int sx = uIsoX - gs.camX;
-        int sy = uIsoY - gs.camY - (CELL_H - ISO_TILE_H);
-        if (sx < -CELL_W || sx >= SCREEN_W || sy < -CELL_H || sy >= SCREEN_H) continue;
+        int gx, gy;
+        unit_ground(u, gs, gx, gy);
+        if (!unit_on_screen(gx, gy)) continue;
 
         // Fog check
         if (u.owner != 0) {
@@ -1308,12 +939,9 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         Unit& u = units[i];
         if (!u.alive || u.state == USTATE_GARRISONED) continue;
 
-        int uIsoX, uIsoY;
-        worldToIso(u.x, u.y, uIsoX, uIsoY);
-        int sx = uIsoX - gs.camX;
-        int sy = uIsoY - gs.camY - (CELL_H - ISO_TILE_H);
-
-        if (sx < -CELL_W || sx >= SCREEN_W || sy < -CELL_H || sy >= SCREEN_H) continue;
+        int gx, gy;
+        unit_ground(u, gs, gx, gy);
+        if (!unit_on_screen(gx, gy)) continue;
 
         if (u.owner != 0) {
             int tx = (u.x + TILE_PX/2) / TILE_PX;
@@ -1321,7 +949,8 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
             if (!fogMap.isVisible(0, tx, ty)) continue;
         }
 
-        draw_hp_bar(buf, sx + UNIT_ANCHOR_X, sy + UNIT_ANCHOR_Y - UNIT_HEIGHT_PX[u.type] - 4, 12,
+        // Just above the head: the standing sheet's anchor row is its height
+        draw_hp_bar(buf, gx, gy - unitStandSheet[u.type].g->ay - 4, 12,
                     u.hp, playerUnitStats[u.owner][u.type].hp, gs.unitSelected[i]);
     }
 
@@ -1335,19 +964,16 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         int bIsoX, bIsoY;
         worldToIso(b.x, b.y, bIsoX, bIsoY);
         int bScreenX = bIsoX - gs.camX;
-        int bScreenY = bIsoY - gs.camY;
 
-        int pw = buildingSprW[b.type];
-        int ph = buildingSprH[b.type];
-        int offX, offY;
-        bldg_sprite_offset(b.type, offX, offY);
-        int bsx = bScreenX + offX;
-        int bsy = bScreenY + offY;
+        int pw = bldg_geom(b).w;
+        int ph = bldg_geom(b).h;
+        int bsx, bsy;
+        bldg_sprite_pos(b, gs, bsx, bsy);
         if (bsx < -pw || bsx >= SCREEN_W || bsy < -ph || bsy >= SCREEN_H) continue;
 
-        int hpCx = bScreenX + ISO_TILE_W / 2;
-        int hpW = (tileW + tileH) * 8;
-        draw_hp_bar(buf, hpCx, bScreenY - 3, hpW, b.hp, BLDG_STATS[b.type].hp);
+        int hpCx = bScreenX + ISO_TILE_W / 2 + (tileW - tileH) * (ISO_TILE_W / 4);
+        int hpW = (tileW + tileH) * 4 + 8;
+        draw_hp_bar(buf, hpCx, bsy - 3, hpW, b.hp, BLDG_STATS[b.type].hp);
     }
 }
 
@@ -1454,21 +1080,21 @@ void render_train_menu(u8* vram, const GameState& gs) {
         bool affordable = game_can_afford(gs, 0, UNIT_STATS[ut].cost);
         bool isSelected = (ut == gs.trainUnitType);
 
-        // Blit first frame (top-left 32x32) from standing sprite sheet
-        const u8* sheet = unitStandSheet[ut];
-        if (sheet) {
-            int sheetW = STAND_SHEET_W; // 160px wide (5 cols × 32px)
-            for (int py = 0; py < 32; py++) {
-                int dy = BUILD_MENU_Y + py;
-                if (dy >= SCREEN_H) break;
-                for (int px = 0; px < 32; px++) {
-                    int dx = ix + px;
-                    if (dx >= SCREEN_W) break;
-                    u8 c = sheet[py * sheetW + px];
-                    if (c != 0) {
-                        if (!affordable) c = PAL_DARKBROWN; // dim if can't afford
-                        vram[dy * 256 + dx] = c;
-                    }
+        // First standing frame (facing the camera), centred in the slot
+        const UnitSheet& sheet = unitStandSheet[ut];
+        const SheetGeom& g = *sheet.g;
+        int ox = ix + (BUILD_MENU_ITEM_W - g.cw) / 2;
+        int oy = BUILD_MENU_Y + (BUILD_MENU_H - g.ch) / 2;
+        for (int py = 0; py < g.ch; py++) {
+            int dy = oy + py;
+            if (dy < BUILD_MENU_Y || dy >= SCREEN_H) continue;
+            for (int px = 0; px < g.cw; px++) {
+                int dx = ox + px;
+                if (dx < ix || dx >= ix + BUILD_MENU_ITEM_W || dx >= SCREEN_W) continue;
+                u8 c = sheet.data[py * (g.cols * g.cw) + px];
+                if (c != 0) {
+                    if (!affordable) c = PAL_DARKBROWN; // dim if can't afford
+                    vram[dy * 256 + dx] = c;
                 }
             }
         }

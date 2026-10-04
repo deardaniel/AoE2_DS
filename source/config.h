@@ -274,23 +274,25 @@ static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
 // ---------------------------------------------------------------------------
 // Building stats based on real AoE2 values (wiki-verified), scaled for DSi:
 // - HP scaled down (real TC = 2400, too high for DSi combat pace)
+// - Footprints (tw, th) are the real AoE2 ones, so sprites at 1/3 scale fit
+//   them exactly. The farm is the exception: it is a single terrain tile here.
 // - Build times in frames at 60fps
 //                                      hp  build   F    W    G    S   age  pop  tw th
 static const BuildingStats BLDG_STATS[BLDG_TYPE_COUNT] = {
     /* TOWN_CENTER   */ { 600, 600, {  0, 275,  0, 100}, AGE_DARK,    5,  4, 4 },
-    /* HOUSE         */ { 150, 150, {  0,  25,  0,   0}, AGE_DARK,    5,  1, 1 },
-    /* BARRACKS      */ { 350, 300, {  0, 175,  0,   0}, AGE_DARK,    0,  2, 2 },
-    /* ARCHERY_RANGE */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  2, 2 },
-    /* STABLE        */ { 350, 300, {  0, 175,  0,   0}, AGE_CASTLE,  0,  2, 2 },
+    /* HOUSE         */ { 150, 150, {  0,  25,  0,   0}, AGE_DARK,    5,  2, 2 },
+    /* BARRACKS      */ { 350, 300, {  0, 175,  0,   0}, AGE_DARK,    0,  3, 3 },
+    /* ARCHERY_RANGE */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  3, 3 },
+    /* STABLE        */ { 350, 300, {  0, 175,  0,   0}, AGE_CASTLE,  0,  3, 3 },
     /* FARM          */ {  50, 100, {  0,  60,  0,   0}, AGE_DARK,    0,  1, 1 },
-    /* MINING_CAMP   */ { 100, 150, {  0, 100,  0,   0}, AGE_DARK,    0,  1, 1 },
-    /* LUMBER_CAMP   */ { 100, 150, {  0, 100,  0,   0}, AGE_DARK,    0,  1, 1 },
+    /* MINING_CAMP   */ { 100, 150, {  0, 100,  0,   0}, AGE_DARK,    0,  2, 2 },
+    /* LUMBER_CAMP   */ { 100, 150, {  0, 100,  0,   0}, AGE_DARK,    0,  2, 2 },
     /* WALL          */ { 100,  30, {  0,   5,  0,   0}, AGE_DARK,    0,  1, 1 },
     /* TOWER         */ { 200, 300, {  0,  50,  0,  25}, AGE_FEUDAL,  0,  1, 1 },
-    /* MARKET        */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  2, 2 },
-    /* CASTLE        */ {1000, 900, {  0,   0,  0, 650}, AGE_IMPERIAL,0,  3, 3 },
-    /* MONASTERY     */ { 350, 300, {  0, 175,  0,   0}, AGE_CASTLE,  0,  2, 2 },
-    /* UNIVERSITY    */ { 350, 300, {  0, 200,  0,   0}, AGE_CASTLE,  0,  2, 2 },
+    /* MARKET        */ { 350, 300, {  0, 175,  0,   0}, AGE_FEUDAL,  0,  4, 4 },
+    /* CASTLE        */ {1000, 900, {  0,   0,  0, 650}, AGE_IMPERIAL,0,  4, 4 },
+    /* MONASTERY     */ { 350, 300, {  0, 175,  0,   0}, AGE_CASTLE,  0,  3, 3 },
+    /* UNIVERSITY    */ { 350, 300, {  0, 200,  0,   0}, AGE_CASTLE,  0,  4, 4 },
 };
 
 // ---------------------------------------------------------------------------

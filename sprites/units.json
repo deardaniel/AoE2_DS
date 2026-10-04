@@ -1,0 +1,730 @@
+{
+ "villager.png": {
+  "cell": [
+   7,
+   15
+  ],
+  "anchor": [
+   4,
+   13
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "villager_walk.png": {
+  "cell": [
+   8,
+   16
+  ],
+  "anchor": [
+   5,
+   13
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "villager_attack.png": {
+  "cell": [
+   20,
+   16
+  ],
+  "anchor": [
+   13,
+   12
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "villager_carry.png": {
+  "cell": [
+   11,
+   18
+  ],
+  "anchor": [
+   6,
+   15
+  ],
+  "cols": 10,
+  "fpd": 5,
+  "once": false
+ },
+ "villager_die.png": {
+  "cell": [
+   27,
+   23
+  ],
+  "anchor": [
+   7,
+   13
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "lumberjack.png": {
+  "cell": [
+   11,
+   16
+  ],
+  "anchor": [
+   6,
+   14
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "lumberjack_walk.png": {
+  "cell": [
+   14,
+   16
+  ],
+  "anchor": [
+   8,
+   13
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "lumberjack_work.png": {
+  "cell": [
+   23,
+   23
+  ],
+  "anchor": [
+   16,
+   15
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "lumberjack_carry.png": {
+  "cell": [
+   10,
+   15
+  ],
+  "anchor": [
+   6,
+   13
+  ],
+  "cols": 10,
+  "fpd": 5,
+  "once": false
+ },
+ "miner.png": {
+  "cell": [
+   12,
+   14
+  ],
+  "anchor": [
+   6,
+   12
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "miner_walk.png": {
+  "cell": [
+   15,
+   15
+  ],
+  "anchor": [
+   8,
+   13
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "miner_work.png": {
+  "cell": [
+   23,
+   19
+  ],
+  "anchor": [
+   13,
+   12
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "miner_carry.png": {
+  "cell": [
+   9,
+   15
+  ],
+  "anchor": [
+   4,
+   13
+  ],
+  "cols": 10,
+  "fpd": 5,
+  "once": false
+ },
+ "builder.png": {
+  "cell": [
+   7,
+   14
+  ],
+  "anchor": [
+   4,
+   12
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "builder_walk.png": {
+  "cell": [
+   9,
+   16
+  ],
+  "anchor": [
+   6,
+   13
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "builder_work.png": {
+  "cell": [
+   17,
+   17
+  ],
+  "anchor": [
+   12,
+   11
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "farmer.png": {
+  "cell": [
+   11,
+   17
+  ],
+  "anchor": [
+   6,
+   15
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "farmer_walk.png": {
+  "cell": [
+   12,
+   18
+  ],
+  "anchor": [
+   5,
+   15
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "farmer_work.png": {
+  "cell": [
+   25,
+   31
+  ],
+  "anchor": [
+   19,
+   22
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "farmer_carry.png": {
+  "cell": [
+   11,
+   18
+  ],
+  "anchor": [
+   6,
+   15
+  ],
+  "cols": 10,
+  "fpd": 5,
+  "once": false
+ },
+ "forager_carry.png": {
+  "cell": [
+   11,
+   16
+  ],
+  "anchor": [
+   6,
+   13
+  ],
+  "cols": 10,
+  "fpd": 5,
+  "once": false
+ },
+ "militia.png": {
+  "cell": [
+   11,
+   16
+  ],
+  "anchor": [
+   6,
+   13
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "militia_walk.png": {
+  "cell": [
+   10,
+   17
+  ],
+  "anchor": [
+   6,
+   13
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "militia_fight.png": {
+  "cell": [
+   18,
+   21
+  ],
+  "anchor": [
+   9,
+   16
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "militia_die.png": {
+  "cell": [
+   38,
+   25
+  ],
+  "anchor": [
+   18,
+   14
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "archer.png": {
+  "cell": [
+   14,
+   16
+  ],
+  "anchor": [
+   8,
+   12
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "archer_walk.png": {
+  "cell": [
+   15,
+   17
+  ],
+  "anchor": [
+   7,
+   13
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "archer_fire.png": {
+  "cell": [
+   17,
+   21
+  ],
+  "anchor": [
+   9,
+   17
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "archer_die.png": {
+  "cell": [
+   46,
+   33
+  ],
+  "anchor": [
+   21,
+   21
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "knight.png": {
+  "cell": [
+   28,
+   30
+  ],
+  "anchor": [
+   12,
+   23
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "knight_walk.png": {
+  "cell": [
+   26,
+   29
+  ],
+  "anchor": [
+   13,
+   22
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "knight_fight.png": {
+  "cell": [
+   24,
+   30
+  ],
+  "anchor": [
+   12,
+   24
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "knight_die.png": {
+  "cell": [
+   39,
+   28
+  ],
+  "anchor": [
+   19,
+   20
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "spearman.png": {
+  "cell": [
+   21,
+   21
+  ],
+  "anchor": [
+   11,
+   18
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "spearman_walk.png": {
+  "cell": [
+   23,
+   20
+  ],
+  "anchor": [
+   12,
+   16
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "spearman_fight.png": {
+  "cell": [
+   30,
+   27
+  ],
+  "anchor": [
+   21,
+   15
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "spearman_die.png": {
+  "cell": [
+   36,
+   32
+  ],
+  "anchor": [
+   23,
+   19
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "scout.png": {
+  "cell": [
+   29,
+   29
+  ],
+  "anchor": [
+   15,
+   21
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "scout_walk.png": {
+  "cell": [
+   27,
+   29
+  ],
+  "anchor": [
+   13,
+   21
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "scout_fight.png": {
+  "cell": [
+   25,
+   30
+  ],
+  "anchor": [
+   15,
+   23
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "scout_die.png": {
+  "cell": [
+   34,
+   30
+  ],
+  "anchor": [
+   17,
+   21
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "sheep_stand.png": {
+  "cell": [
+   14,
+   12
+  ],
+  "anchor": [
+   10,
+   8
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "sheep_walk.png": {
+  "cell": [
+   15,
+   12
+  ],
+  "anchor": [
+   10,
+   8
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "sheep_die.png": {
+  "cell": [
+   17,
+   14
+  ],
+  "anchor": [
+   10,
+   8
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "ram_stand.png": {
+  "cell": [
+   32,
+   29
+  ],
+  "anchor": [
+   16,
+   21
+  ],
+  "cols": 5,
+  "fpd": 1,
+  "once": false
+ },
+ "ram_walk.png": {
+  "cell": [
+   32,
+   29
+  ],
+  "anchor": [
+   16,
+   21
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "ram_fight.png": {
+  "cell": [
+   34,
+   30
+  ],
+  "anchor": [
+   18,
+   21
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "ram_death.png": {
+  "cell": [
+   47,
+   34
+  ],
+  "anchor": [
+   22,
+   21
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "mango_stand.png": {
+  "cell": [
+   34,
+   26
+  ],
+  "anchor": [
+   16,
+   15
+  ],
+  "cols": 5,
+  "fpd": 1,
+  "once": false
+ },
+ "mango_walk.png": {
+  "cell": [
+   34,
+   26
+  ],
+  "anchor": [
+   16,
+   15
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "mango_fight.png": {
+  "cell": [
+   37,
+   29
+  ],
+  "anchor": [
+   21,
+   17
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "mango_death.png": {
+  "cell": [
+   42,
+   30
+  ],
+  "anchor": [
+   18,
+   16
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ },
+ "monk_stand.png": {
+  "cell": [
+   11,
+   18
+  ],
+  "anchor": [
+   7,
+   15
+  ],
+  "cols": 5,
+  "fpd": 5,
+  "once": false
+ },
+ "monk_walk.png": {
+  "cell": [
+   14,
+   18
+  ],
+  "anchor": [
+   9,
+   14
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "monk_fight.png": {
+  "cell": [
+   18,
+   22
+  ],
+  "anchor": [
+   9,
+   18
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": false
+ },
+ "monk_death.png": {
+  "cell": [
+   41,
+   30
+  ],
+  "anchor": [
+   24,
+   16
+  ],
+  "cols": 10,
+  "fpd": 10,
+  "once": true
+ }
+}

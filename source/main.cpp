@@ -103,32 +103,45 @@ static void game_start() {
     unit_spawn(UNIT_SHEEP, 0, 1 * TILE_PX, 4 * TILE_PX);
 
 #ifdef SHOWCASE
-    // Debug build (make SHOWCASE=1 or 2): lay out every building, or every
-    // unit, next to the player's TC so sprites can be checked in one screenshot.
+    // Debug builds for checking sprites in one screenshot (make SHOWCASE=n):
+    //   1 = the smaller buildings beside the player's TC
+    //   2 = one of every unit, turned to a new facing every 2 seconds
+    //   3 = normal start, one villager scripted onto a sheep
+    //   4 = the 4x4 buildings, each construction stage and an enemy building
 #if SHOWCASE != 3
-    for (int ty = 0; ty < 18; ty++)
-        for (int tx = 0; tx < 18; tx++)
+    for (int ty = 0; ty < 26; ty++)
+        for (int tx = 0; tx < 26; tx++)
             if (tx < 2 || tx > 5 || ty < 2 || ty > 5)
                 terrain.setTile(tx, ty, TERRAIN_GRASS, 0);
 #endif
-#if SHOWCASE == 1
+#if SHOWCASE == 1 || SHOWCASE == 4
     {
-        static const struct { u8 type, owner, tx, ty; } LAYOUT[] = {
-            { BLDG_HOUSE, 0, 7, 3 },      { BLDG_HOUSE, 1, 12, 7 },    { BLDG_TOWER, 0, 9, 3 },
-            { BLDG_WALL, 0, 11, 5 },      { BLDG_WALL, 0, 12, 5 },     { BLDG_MINING_CAMP, 0, 2, 7 },
-            { BLDG_LUMBER_CAMP, 0, 2, 9 },{ BLDG_BARRACKS, 0, 8, 6 },  { BLDG_ARCHERY_RANGE, 0, 10, 8 },
-            { BLDG_STABLE, 0, 4, 8 },     { BLDG_MARKET, 0, 7, 10 },   { BLDG_MONASTERY, 0, 10, 11 },
-            { BLDG_UNIVERSITY, 0, 13, 9 },{ BLDG_CASTLE, 0, 5, 12 },
+        // progress: construction stage 0-2, or 3 = finished
+        static const struct { u8 type, owner, tx, ty, progress; } LAYOUT[] = {
+            { BLDG_HOUSE, 0, 8, 3, 3 },        { BLDG_TOWER, 0, 11, 3, 3 },
+            { BLDG_WALL, 0, 13, 6, 3 },        { BLDG_WALL, 0, 14, 6, 3 },
+            { BLDG_MINING_CAMP, 0, 2, 7, 3 },  { BLDG_LUMBER_CAMP, 0, 1, 10, 3 },
+            { BLDG_BARRACKS, 0, 7, 6, 3 },     { BLDG_ARCHERY_RANGE, 0, 11, 8, 3 },
+            { BLDG_STABLE, 0, 4, 10, 3 },      { BLDG_MONASTERY, 0, 8, 11, 3 },
+            { BLDG_MARKET, 0, 9, 16, 3 },      { BLDG_CASTLE, 0, 14, 12, 3 },
+            { BLDG_UNIVERSITY, 0, 14, 17, 3 }, { BLDG_HOUSE, 1, 19, 16, 3 },
+            { BLDG_HOUSE, 0, 12, 21, 0 },      { BLDG_BARRACKS, 0, 8, 21, 1 },
+            { BLDG_MARKET, 0, 19, 19, 2 },     { BLDG_TOWER, 0, 15, 22, 0 },
         };
         for (unsigned i = 0; i < sizeof(LAYOUT) / sizeof(LAYOUT[0]); i++) {
-            u8 savedAge = gameState.players[LAYOUT[i].owner].age;
-            gameState.players[LAYOUT[i].owner].age = AGE_IMPERIAL;
-            gameState.players[LAYOUT[i].owner].resources[RES_WOOD]  = 9999;
-            gameState.players[LAYOUT[i].owner].resources[RES_STONE] = 9999;
+            Player& pl = gameState.players[LAYOUT[i].owner];
+            u8 savedAge = pl.age;
+            pl.age = AGE_IMPERIAL;
+            pl.resources[RES_WOOD] = 9999;
+            pl.resources[RES_STONE] = 9999;
             int bi = building_place(LAYOUT[i].type, LAYOUT[i].owner, LAYOUT[i].tx, LAYOUT[i].ty,
                                     gameState, terrain);
-            building_complete_now(bi);
-            gameState.players[LAYOUT[i].owner].age = savedAge;
+            if (bi >= 0) {
+                if (LAYOUT[i].progress >= 3) building_complete_now(bi);
+                else buildings[bi].buildProgress =
+                    BLDG_STATS[LAYOUT[i].type].buildTime * LAYOUT[i].progress / 3 + 1;
+            }
+            pl.age = savedAge;
         }
     }
 #elif SHOWCASE == 2
@@ -188,7 +201,11 @@ static void game_start() {
     gameState.camY = isoY - SCREEN_H / 2;
     if (gameState.camX < 0) gameState.camX = 0;
     if (gameState.camY < 0) gameState.camY = 0;
-#if defined(SHOWCASE) && SHOWCASE != 3
+#if defined(SHOWCASE) && SHOWCASE == 4
+    tileToIso(14, 17, isoX, isoY);
+    gameState.camX = isoX - SCREEN_W / 2;
+    gameState.camY = isoY - SCREEN_H / 2;
+#elif defined(SHOWCASE) && SHOWCASE != 3
     gameState.camY = 24;
 #endif
 }

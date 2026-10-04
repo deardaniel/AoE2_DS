@@ -45,6 +45,7 @@ import tempfile
 import numpy as np
 from PIL import Image
 
+from downscale import reduce_exact, SCALE
 from shared_constants import TC_CANVAS, TC_ANCHOR, SHADOW_ALPHA
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -52,7 +53,6 @@ AOE2 = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_comm
 SLP_DIR = os.path.join(AOE2, 'graphics')
 PALETTE = os.path.join(AOE2, 'interface', '50500.bina')
 
-SCALE = 3  # AoE2 tile 96x48 -> NDS tile 32x16
 
 # (slp_id, delta_x, delta_y, description), back to front
 TC_LAYERS = [
@@ -134,22 +134,19 @@ def main():
         dbg[solid > 0, 3] = 255
         Image.fromarray(dbg).save(os.path.join(args.debug, 'town_center_full.png'))
 
-    # Box-reduce by SCALE with coverage-weighted colour so edge pixels keep the
-    # building's colour instead of blending toward the transparent background.
-    def reduce(a):
-        return a.reshape(ch, SCALE, cw, SCALE, *a.shape[2:]).sum(axis=(1, 3))
-
-    cover = reduce(solid)
-    rgb = reduce(color * solid[:, :, None]) / np.maximum(cover, 1)[:, :, None]
-    shade = reduce(shadow * (1 - solid))
-
-    n = SCALE * SCALE
-    is_solid = cover * 2 >= n
-    is_shadow = ~is_solid & ((shade + cover) * 2 >= n) & (shade > 0)
-
+    # Reduce by SCALE. Building pixels are picked, not blended (see
+    # downscale.py); the full canvas is already block-aligned on the anchor.
+    full = np.zeros((fh, fw, 4), dtype=np.uint8)
+    full[solid > 0, :3] = color[solid > 0]
+    full[solid > 0, 3] = 255
+    small, sx, sy = reduce_exact(full, ox, oy)
     out = np.zeros((ch, cw, 4), dtype=np.uint8)
-    out[is_solid, :3] = np.clip(np.rint(rgb[is_solid]), 0, 255)
-    out[is_solid, 3] = 255
+    x0, y0 = ax - sx, ay - sy
+    out[y0:y0 + small.shape[0], x0:x0 + small.shape[1]] = small
+
+    # Shadow where most of a block is shadow and the building doesn't cover it
+    shade = (shadow * (1 - solid)).reshape(ch, SCALE, cw, SCALE).sum(axis=(1, 3))
+    is_shadow = (out[:, :, 3] == 0) & (shade * 2 > SCALE * SCALE)
     out[is_shadow] = (0, 0, 0, SHADOW_ALPHA)
 
     Image.fromarray(out).save(args.out)

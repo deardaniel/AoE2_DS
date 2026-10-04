@@ -70,6 +70,28 @@ standing graphic across civs (`--civ N`) instead.
 Only the main layer is used for these; the shadow layers are not composited
 yet (the renderer draws a soft ellipse instead).
 
+Footprints in the game are the real ones (unit radius × 2): house and camps
+2×2, barracks / archery range / stable / monastery 3×3, market / university /
+castle / Town Center 4×4, tower and palisade 1×1. Every sprite is reduced by
+exactly 3 around its hotspot (`scripts/downscale.py`), so it fits its
+footprint with no per-building scale. The farm is the exception: a single
+terrain tile rather than the game's 3×3.
+
+## Construction sites
+
+Each building's `constructionGraphicId` points at one of four graphics chosen
+by footprint size, each an SLP with three frames (the stages of building):
+
+| Footprint | Graphic | SLP |
+|---|---|---|
+| 1×1 | CNST1_NN | 236 |
+| 2×2 | CNST2_NN | 237 |
+| 3×3 | CNST3_NN | 238 |
+| 4×4 | CNST4_NN | 239 |
+
+The renderer shows the stage for the current build progress and switches to
+the finished building at 100%.
+
 ## Town Center (`scripts/composite_tc.py`)
 
 Unit 109 "RTWC" is a main unit plus annex units 618, 619, 620 and head unit
@@ -112,6 +134,13 @@ ground. The composite is reduced by exactly 3 with the footprint centre on
 | Monk | 125 | 774 | 779 | 768 | 771 |
 
 SLPs 702 / 708 / 713 are the Longbowman (`LNGBW_*`), not the Archer.
+
+Siege units are two layers: a static body with one frame per direction and an
+animated part drawn on top (delta graphics in the .dat). Ram walking = 181
+body + 183 wheels; ram attacking = 171 body + 173 ram head; mangonel walking =
+724 body + 726 wheels. The second body halves (182, 172, 725, and 177/178 for
+the standing ram) are not shipped with HD. On its own, the animated SLP is
+just wheels.
 
 Villager jobs (stand / walk / work / carry): lumberjack 1542 / 1548 / 1535 /
 1536 · miner 1558 / 1563 / 1560 / 1552 · builder 1493 / 1499 / 1496 / — ·

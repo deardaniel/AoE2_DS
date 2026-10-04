@@ -85,10 +85,19 @@ Each script owns the table of SLP IDs for its sprites. The IDs come from the
 game's `.dat`, looked up **by ID** (`node scripts/dump_unit_graphics.js <unit>`);
 see `docs/building_graphics_reference.md` before adding or changing one.
 
-- Town Center: composited from its nine SLP layers, reduced by exactly 3
-- Buildings: raw SLP frame plus a hotspot sidecar; scaled so the hotspot sits
-  on the centre of the building's footprint
-- Units: every sheet at the same 1/3 scale, hotspot on the tile centre
+Everything is reduced by exactly 3 (AoE2 tiles are 96x48, ours 32x16) around
+its SLP hotspot, picking source pixels rather than blending them
+(`scripts/downscale.py`). Nothing is fitted or scaled per sprite.
+
+- Town Center: composited from its nine SLP layers
+- Buildings: raw SLP frame plus a hotspot sidecar; the hotspot sits on the
+  centre of the building's real footprint. Construction sites come from the
+  game's staged CNSTn_NN graphics
+- Units: each sheet gets the smallest cell that holds its frames, hotspot on
+  the tile centre
+
+`make sprites` writes the resulting sizes and anchors to
+`source/sprite_geom.h`, which the renderer reads — none are typed in by hand.
 
 `node extract-slp.js <path-to-slp> <output-dir> [frame-index]` dumps the
 frames of a single SLP for inspection.
@@ -107,15 +116,18 @@ This generates:
 The scripts need numpy and Pillow (`python3 -m venv --system-site-packages .venv
 && .venv/bin/pip install numpy`, then put `.venv/bin` first on `PATH`).
 
-The ARM9 image must fit the 2.6 MB `lma9` region; sprite data is most of it
-and there is little room left, so new sheets usually mean trimming others.
+The ARM9 image must fit the 2.6 MB `lma9` region; it is about 2.0 MB now.
 
 ### Checking sprites in the emulator
 ```bash
-make SHOWCASE=1   # one of every building beside the player's Town Center
+make SHOWCASE=1   # the smaller buildings beside the player's Town Center
 make SHOWCASE=2   # one of every unit, turning every 2 seconds
+make SHOWCASE=3   # normal start with a villager scripted onto a sheep
+make SHOWCASE=4   # the 4x4 buildings and each construction stage
 ```
 `touch source/main.cpp` when switching between these and a normal build.
+`tools/emu/emu.sh` launches a private melonDS, takes screenshots and sends
+taps, drags and key presses to it.
 
 ## Architecture
 

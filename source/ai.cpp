@@ -38,17 +38,21 @@ int ai_get_strategy() {
     return aiStrategy;
 }
 
-// Find a buildable tile near a given position
-static bool ai_find_build_spot(int nearTX, int nearTY, int w, int h,
+// Find a spot near a position where a building of this type fits, with a
+// free tile all round it so units can still walk between buildings.
+static bool ai_find_build_spot(int nearTX, int nearTY, int type,
                                 const TerrainMap& terrain, int& outX, int& outY) {
-    for (int r = 0; r < 8; r++) {
+    int w = BLDG_STATS[type].tileW;
+    int h = BLDG_STATS[type].tileH;
+    for (int r = 0; r < 10; r++) {
         for (int ty = nearTY - r; ty <= nearTY + r; ty++) {
             for (int tx = nearTX - r; tx <= nearTX + r; tx++) {
                 if (tx < 0 || ty < 0 || tx + w > MAP_TILES || ty + h > MAP_TILES) continue;
                 bool ok = true;
-                for (int dy = 0; dy < h && ok; dy++) {
-                    for (int dx = 0; dx < w && ok; dx++) {
-                        if (!terrain.canBuild(tx + dx, ty + dy)) ok = false;
+                for (int dy = -1; dy <= h && ok; dy++) {
+                    for (int dx = -1; dx <= w && ok; dx++) {
+                        bool inside = (dx >= 0 && dx < w && dy >= 0 && dy < h);
+                        if (inside && !terrain.canBuild(tx + dx, ty + dy)) ok = false;
                         if (building_at_tile(tx + dx, ty + dy) >= 0) ok = false;
                     }
                 }
@@ -212,7 +216,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     // House if near pop cap
     if (p.popCount >= p.popCap - 2) {
         int bx, by;
-        if (ai_find_build_spot(tcTX, tcTY, 1, 1, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX, tcTY, BLDG_HOUSE, terrain, bx, by)) {
             ai_place_and_build(BLDG_HOUSE, bx, by, gs, terrain);
         }
     }
@@ -221,7 +225,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     int maxBarracks = (aiStrategy == AI_STRAT_RUSH) ? 2 : 1;
     if (building_count(AI_PLAYER, BLDG_BARRACKS) < maxBarracks) {
         int bx, by;
-        if (ai_find_build_spot(tcTX + 2, tcTY, 2, 2, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX + 2, tcTY, BLDG_BARRACKS, terrain, bx, by)) {
             ai_place_and_build(BLDG_BARRACKS, bx, by, gs, terrain);
         }
     }
@@ -230,7 +234,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     int farmTarget = 3 + p.age * 2 + STRAT_FARM_MOD[aiStrategy];
     if (p.resources[RES_FOOD] < 150 && building_count(AI_PLAYER, BLDG_FARM) < farmTarget) {
         int bx, by;
-        if (ai_find_build_spot(tcTX - 1, tcTY + 2, 1, 1, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX - 1, tcTY + 2, BLDG_FARM, terrain, bx, by)) {
             ai_place_and_build(BLDG_FARM, bx, by, gs, terrain);
         }
     }
@@ -240,7 +244,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         int fx, fy;
         if (ai_find_resource(tcTX, tcTY, TERRAIN_FOREST, terrain, fx, fy)) {
             int bx, by;
-            if (ai_find_build_spot(fx, fy, 1, 1, terrain, bx, by)) {
+            if (ai_find_build_spot(fx, fy, BLDG_LUMBER_CAMP, terrain, bx, by)) {
                 ai_place_and_build(BLDG_LUMBER_CAMP, bx, by, gs, terrain);
             }
         }
@@ -251,7 +255,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
         int gx, gy;
         if (ai_find_resource(tcTX, tcTY, TERRAIN_GOLD, terrain, gx, gy)) {
             int bx, by;
-            if (ai_find_build_spot(gx, gy, 1, 1, terrain, bx, by)) {
+            if (ai_find_build_spot(gx, gy, BLDG_MINING_CAMP, terrain, bx, by)) {
                 ai_place_and_build(BLDG_MINING_CAMP, bx, by, gs, terrain);
             }
         }
@@ -260,7 +264,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     // Archery range if feudal and none
     if (p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_ARCHERY_RANGE) == 0) {
         int bx, by;
-        if (ai_find_build_spot(tcTX, tcTY + 3, 2, 2, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX, tcTY + 3, BLDG_ARCHERY_RANGE, terrain, bx, by)) {
             ai_place_and_build(BLDG_ARCHERY_RANGE, bx, by, gs, terrain);
         }
     }
@@ -272,7 +276,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (diff >= AI_NORMAL && p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_TOWER) < maxTowers &&
         p.resources[RES_STONE] >= 50) {
         int bx, by;
-        if (ai_find_build_spot(tcTX - 1, tcTY - 1, 1, 1, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX - 1, tcTY - 1, BLDG_TOWER, terrain, bx, by)) {
             ai_place_and_build(BLDG_TOWER, bx, by, gs, terrain);
         }
     }
@@ -280,7 +284,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     // Market if feudal and none
     if (p.age >= AGE_FEUDAL && building_count(AI_PLAYER, BLDG_MARKET) == 0) {
         int bx, by;
-        if (ai_find_build_spot(tcTX + 3, tcTY + 3, 2, 2, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX + 3, tcTY + 3, BLDG_MARKET, terrain, bx, by)) {
             ai_place_and_build(BLDG_MARKET, bx, by, gs, terrain);
         }
     }
@@ -288,7 +292,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     // Stable if castle and none
     if (p.age >= AGE_CASTLE && building_count(AI_PLAYER, BLDG_STABLE) == 0) {
         int bx, by;
-        if (ai_find_build_spot(tcTX - 3, tcTY, 2, 2, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX - 3, tcTY, BLDG_STABLE, terrain, bx, by)) {
             ai_place_and_build(BLDG_STABLE, bx, by, gs, terrain);
         }
     }
@@ -297,7 +301,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     if (diff >= AI_NORMAL && p.age >= AGE_IMPERIAL && building_count(AI_PLAYER, BLDG_CASTLE) == 0 &&
         p.resources[RES_STONE] >= 650) {
         int bx, by;
-        if (ai_find_build_spot(tcTX + 2, tcTY - 2, 3, 3, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX + 2, tcTY - 2, BLDG_CASTLE, terrain, bx, by)) {
             ai_place_and_build(BLDG_CASTLE, bx, by, gs, terrain);
         }
     }
@@ -305,7 +309,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     // Monastery if castle age and none
     if (p.age >= AGE_CASTLE && building_count(AI_PLAYER, BLDG_MONASTERY) == 0) {
         int bx, by;
-        if (ai_find_build_spot(tcTX - 3, tcTY - 2, 2, 2, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX - 3, tcTY - 2, BLDG_MONASTERY, terrain, bx, by)) {
             ai_place_and_build(BLDG_MONASTERY, bx, by, gs, terrain);
         }
     }
@@ -313,7 +317,7 @@ void ai_update(GameState& gs, TerrainMap& terrain) {
     // University if castle age and none
     if (p.age >= AGE_CASTLE && building_count(AI_PLAYER, BLDG_UNIVERSITY) == 0) {
         int bx, by;
-        if (ai_find_build_spot(tcTX + 3, tcTY - 2, 2, 2, terrain, bx, by)) {
+        if (ai_find_build_spot(tcTX + 3, tcTY - 2, BLDG_UNIVERSITY, terrain, bx, by)) {
             ai_place_and_build(BLDG_UNIVERSITY, bx, by, gs, terrain);
         }
     }

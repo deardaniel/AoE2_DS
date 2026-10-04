@@ -2,9 +2,10 @@
 """Extract building sprites from AoE2 HD SLPs into sprites/<name>.png.
 
 Each PNG is the untouched SLP frame; a sidecar sprites/<name>.json records
-the SLP, frame and hotspot. preprocess_sprites.py reads the sidecar to scale
-the building and put the hotspot on the centre of its footprint, so nothing
-about a building's placement is typed in by hand.
+the SLP, frame and hotspot. preprocess_sprites.py reduces the frame by exactly
+3 around that hotspot, which the renderer puts on the centre of the
+building's footprint, so nothing about a building's size or placement is
+typed in by hand.
 
 The SLP IDs are the standing graphics of the British civ (West European
 set, civ 1) in empires2_x2_p1.dat, resolved BY ID through scripts/dat_by_id.js.
@@ -47,8 +48,18 @@ BUILDINGS = [
 ]
 
 
+# Construction sites: one SLP per footprint size (CNST1..4_NN), three frames
+# for the stages of building. Every building's constructionGraphic in the
+# .dat points at the one matching its footprint.
+CONSTRUCTION = [(1, 236), (2, 237), (3, 238), (4, 239)]
+
+
 def main():
-    for name, unit_id, slp, frame, gname in BUILDINGS:
+    jobs = list(BUILDINGS)
+    for size, slp in CONSTRUCTION:
+        for frame in range(3):
+            jobs.append((f'construction_{size}_{frame}', -1, slp, frame, f'CNST{size}_NN'))
+    for name, unit_id, slp, frame, gname in jobs:
         slp_path = os.path.join(SLP_DIR, f'{slp}.slp')
         if not os.path.exists(slp_path):
             sys.exit(f'SLP not found: {slp_path}')

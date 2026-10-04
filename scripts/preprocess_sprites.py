@@ -19,8 +19,8 @@ import struct
 import sys
 import numpy as np
 from PIL import Image
-from shared_constants import (ISO_TILE_H, footprint_height, rgb_to_bgr555,
-                              TC_CANVAS, PAL_SHADOW)
+from downscale import reduce_exact
+from shared_constants import rgb_to_bgr555, TC_CANVAS, TC_ANCHOR, PAL_SHADOW
 
 SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sprites')
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
@@ -86,32 +86,29 @@ UNIT_SHEETS = [
     ('spr_monk_die',         'monk_death.png'),
 ]
 
-# Building sprites: (output_name, filename, target_w, target_h, tileW, tileH)
-# The canvas is target_w x target_h with the footprint diamond's centre at
-# (target_w / 2, target_h - footH / 2), footH = (tileW + tileH) * 8 — the
-# default anchor in render.cpp. Each PNG has a sidecar .json with its SLP
-# hotspot (written by extract_buildings.py); the building is scaled as large
-# as fits with that hotspot on the anchor.
+# Building sprites in BuildingTypeId order (source/config.h); None = no sprite.
+# Each PNG is a raw SLP frame with a sidecar .json holding its hotspot
+# (extract_buildings.py). It is reduced by exactly 3 around the hotspot, which
+# the renderer puts on the centre of the building's footprint.
 BUILDING_SPRITES = [
-    ('spr_house',         'house.png',          32,  32, 1, 1),
-    ('spr_barracks',      'barracks.png',       64,  64, 2, 2),
-    ('spr_archery_range', 'archery_range.png',  64,  80, 2, 2),
-    ('spr_stable',        'stable.png',         64,  64, 2, 2),
-    ('spr_mining_camp',   'mining_camp.png',    32,  32, 1, 1),
-    ('spr_lumber_camp',   'lumber_camp.png',    32,  48, 1, 1),
-    ('spr_wall',          'wall.png',           32,  32, 1, 1),
-    ('spr_tower',         'tower.png',          32,  64, 1, 1),
-    ('spr_market',        'market.png',         64,  80, 2, 2),
-    ('spr_castle',        'castle.png',         96, 128, 3, 3),
-    ('spr_monastery',     'monastery.png',      64,  80, 2, 2),
-    ('spr_university',    'university.png',     64,  80, 2, 2),
+    'town_center',  # composite_tc.py output, already reduced: see PREALIGNED
+    'house', 'barracks', 'archery_range', 'stable',
+    None,           # farm: drawn as terrain
+    'mining_camp', 'lumber_camp', 'wall', 'tower', 'market', 'castle',
+    'monastery', 'university',
 ]
 
-# Sprites that are already a finished canvas (composite_tc.py output): indexed
-# as-is, semi-transparent pixels become the PAL_SHADOW marker.
-PREALIGNED_SPRITES = [
-    ('spr_town_center',   'town_center.png',  TC_CANVAS[0], TC_CANVAS[1]),
-]
+# Finished canvases (composite_tc.py): indexed as-is, semi-transparent pixels
+# become the PAL_SHADOW marker. name -> (canvas size, anchor)
+PREALIGNED = {'town_center': (TC_CANVAS, TC_ANCHOR)}
+
+# Construction sites by footprint size (1x1 .. 4x4), three stages each,
+# stored as one sheet per size with the stages stacked vertically.
+CONSTRUCTION_SIZES = [1, 2, 3, 4]
+CONSTRUCTION_STAGES = 3
+
+GEOM_HEADER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           'source', 'sprite_geom.h')
 
 # Icon sprites for build menu: (output_name, filename, target_w, target_h, cols, rows, scale)
 # 36x36 source icons scaled to 32x32 output (single frame, no directions)
@@ -143,9 +140,9 @@ RESOURCE_SPRITES = [
 ]
 
 
-def load_hotspot(filename):
+def load_hotspot(name):
     """Return the SLP hotspot (x, y) from a sprite's sidecar .json."""
-    path = os.path.join(SPRITES_DIR, os.path.splitext(filename)[0] + '.json')
+    path = os.path.join(SPRITES_DIR, name + '.json')
     if not os.path.exists(path):
         sys.exit(f"{path} missing: run scripts/extract_buildings.py")
     with open(path) as f:
@@ -247,53 +244,26 @@ def build_shared_palette(all_rgba_images, max_colors=248):
     return palette
 
 
-def index_rgba_image(img_data, palette_array, target_size=None, hotspot_align=None,
-                     prealigned=False):
+def index_rgba_image(img_data, palette_array, target_size=None, prealigned=False):
     """Convert RGBA image to indexed format using the shared palette.
 
     Returns (indexed_bytes, width, height).
     Index 0 = transparent, 16-N = palette color (1-15 reserved for UI).
 
-    hotspot_align=(tileW, tileH, (hotspot_x, hotspot_y)): scale the image as
-    large as fits in target_size with its hotspot on the canvas anchor (the
-    centre of the tileW x tileH footprint diamond).
-
-    prealigned: the image is already the final canvas; it is indexed untouched
-    and its semi-transparent pixels become the PAL_SHADOW marker.
-
-    Otherwise, with target_size: scale to fit and centre.
+    prealigned: semi-transparent pixels become the PAL_SHADOW marker.
+    target_size: scale to fit and centre (icons only — sprites are never
+    rescaled here).
     """
-    if prealigned:
-        if (img_data.shape[1], img_data.shape[0]) != tuple(target_size):
-            sys.exit(f"prealigned sprite is {img_data.shape[1]}x{img_data.shape[0]}, "
-                     f"expected {target_size[0]}x{target_size[1]}")
-    elif target_size:
+    if target_size:
         tw, th = target_size
         # Premultiplied alpha so edge pixels don't blend toward black
         img = Image.fromarray(img_data).convert('RGBa')
-
-        if hotspot_align:
-            tileW, tileH, (hx, hy) = hotspot_align
-            ax = tw // 2
-            ay = th - footprint_height(tileW, tileH) // 2
-            # Largest scale that keeps every edge inside the canvas
-            scale = min(ax / hx, (tw - ax) / (img.width - hx),
-                        ay / hy, (th - ay) / (img.height - hy))
-            new_w = max(1, int(img.width * scale))
-            new_h = max(1, int(img.height * scale))
-            img = img.resize((new_w, new_h), Image.LANCZOS).convert('RGBA')
-            ox = ax - int(round(hx * new_w / img_data.shape[1]))
-            oy = ay - int(round(hy * new_h / img_data.shape[0]))
-        else:
-            scale = min(tw / img.width, th / img.height)
-            new_w = int(img.width * scale)
-            new_h = int(img.height * scale)
-            img = img.resize((new_w, new_h), Image.LANCZOS).convert('RGBA')
-            ox = (tw - new_w) // 2
-            oy = (th - new_h) // 2
-
+        scale = min(tw / img.width, th / img.height)
+        new_w = int(img.width * scale)
+        new_h = int(img.height * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS).convert('RGBA')
         result = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
-        result.paste(img, (ox, oy))
+        result.paste(img, ((tw - new_w) // 2, (th - new_h) // 2))
         img_data = np.array(result)
 
     h, w = img_data.shape[:2]
@@ -339,6 +309,50 @@ def find_blue_player_indices(palette):
     return list(range(8))
 
 
+def write_geom_header(building_geom, construction_geom):
+    """Write source/sprite_geom.h: sizes and anchors the renderer needs."""
+    with open(os.path.join(SPRITES_DIR, 'units.json')) as f:
+        units = json.load(f)
+    png_to_bin = {filename: name for name, filename in UNIT_SHEETS}
+    lines = [
+        '// Generated by scripts/preprocess_sprites.py — do not edit.',
+        '// Sprite sizes and anchors, measured from the sprites themselves.',
+        '#pragma once',
+        '#include <nds.h>',
+        '',
+        '// A building sprite: canvas size and the pixel that sits on the centre',
+        "// of the building's footprint diamond.",
+        'struct SpriteGeom { s16 w, h, ax, ay; };',
+        '',
+        "// A unit sheet: cell size, the cell pixel of the unit's ground position,",
+        '// columns in the sheet, frames per direction, and whether the animation',
+        '// plays once (deaths) or loops.',
+        'struct SheetGeom { u8 cw, ch, ax, ay, cols, fpd; bool once; };',
+        '',
+        '// Indexed by BuildingTypeId',
+        'static const SpriteGeom BLDG_GEOM[] = {',
+    ]
+    for name, g in zip(BUILDING_SPRITES, building_geom):
+        lines.append(f'    {{ {g[0]:3d}, {g[1]:3d}, {g[2]:3d}, {g[3]:3d} }},  // {name or "farm (terrain)"}')
+    lines += ['};', '', '// Construction sites, indexed by footprint size - 1; the sheet holds',
+              f'// {CONSTRUCTION_STAGES} stages stacked vertically.',
+              f'static const int CONSTRUCTION_STAGES = {CONSTRUCTION_STAGES};',
+              'static const SpriteGeom CONSTRUCTION_GEOM[] = {']
+    for size, g in zip(CONSTRUCTION_SIZES, construction_geom):
+        lines.append(f'    {{ {g[0]:3d}, {g[1]:3d}, {g[2]:3d}, {g[3]:3d} }},  // {size}x{size}')
+    lines += ['};', '', '// Unit sheets, named after their data/spr_*.bin']
+    for filename, g in units.items():
+        if filename not in png_to_bin:
+            sys.exit(f"{filename} is in units.json but not in UNIT_SHEETS")
+        name = png_to_bin[filename][len('spr_'):]
+        lines.append(f'static const SheetGeom GEOM_{name} = {{ {g["cell"][0]}, {g["cell"][1]}, '
+                     f'{g["anchor"][0]}, {g["anchor"][1]}, {g["cols"]}, {g["fpd"]}, '
+                     f'{"true" if g["once"] else "false"} }};')
+    with open(GEOM_HEADER, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    print(f"  {GEOM_HEADER}")
+
+
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -358,22 +372,50 @@ def main():
         all_images.append(data)
         print(f"  {filename}: {data.shape[1]}x{data.shape[0]}")
 
-    for name, filename, tw, th, tileW, tileH in BUILDING_SPRITES:
-        data = load_rgba(filename)
-        if data is None:
+    building_geom = []  # (w, h, ax, ay) per BuildingTypeId
+    for name in BUILDING_SPRITES:
+        if name is None:
+            building_geom.append((0, 0, 0, 0))
             continue
-        building_data[name] = (data, load_hotspot(filename))
+        data = load_rgba(name + '.png')
+        if data is None:
+            sys.exit(f"{name}.png missing: run make assets-game")
+        if name in PREALIGNED:
+            (cw, ch), (ax, ay) = PREALIGNED[name]
+            if (data.shape[1], data.shape[0]) != (cw, ch):
+                sys.exit(f"{name}.png is {data.shape[1]}x{data.shape[0]}, expected {cw}x{ch}")
+        else:
+            hx, hy = load_hotspot(name)
+            data, ax, ay = reduce_exact(data, hx, hy)
+        building_data[name] = data
+        building_geom.append((data.shape[1], data.shape[0], int(ax), int(ay)))
         all_images.append(data)
-        print(f"  {filename}: {data.shape[1]}x{data.shape[0]} -> {tw}x{th}")
+        print(f"  {name}: {data.shape[1]}x{data.shape[0]}, anchor ({ax},{ay})")
 
-    prealigned_data = {}
-    for name, filename, tw, th in PREALIGNED_SPRITES:
-        data = load_rgba(filename)
-        if data is None:
-            continue
-        prealigned_data[name] = data
-        all_images.append(data)
-        print(f"  {filename}: {data.shape[1]}x{data.shape[0]} (prealigned)")
+    construction_data = {}
+    construction_geom = []
+    for size in CONSTRUCTION_SIZES:
+        stages = []
+        for frame in range(CONSTRUCTION_STAGES):
+            name = f'construction_{size}_{frame}'
+            data = load_rgba(name + '.png')
+            if data is None:
+                sys.exit(f"{name}.png missing: run make assets-game")
+            hx, hy = load_hotspot(name)
+            stages.append(reduce_exact(data, hx, hy))
+        # One canvas that holds every stage with the hotspot on the same pixel
+        left = max(ax for _, ax, _ in stages)
+        up = max(ay for _, _, ay in stages)
+        w = left + max(d.shape[1] - ax for d, ax, _ in stages)
+        h = up + max(d.shape[0] - ay for d, _, ay in stages)
+        sheet = np.zeros((h * CONSTRUCTION_STAGES, w, 4), dtype=np.uint8)
+        for i, (d, ax, ay) in enumerate(stages):
+            y, x = i * h + up - ay, left - ax
+            sheet[y:y + d.shape[0], x:x + d.shape[1]] = d
+        construction_data[size] = sheet
+        construction_geom.append((int(w), int(h), int(left), int(up)))
+        all_images.append(sheet)
+        print(f"  construction {size}x{size}: {w}x{h} x{CONSTRUCTION_STAGES}, anchor ({left},{up})")
 
     icon_data = {}
     for name, filename, tw, th, cols, rows, scale in ICON_SPRITES:
@@ -488,26 +530,21 @@ def main():
 
     # --- Process building sprites ---
     print("\nProcessing building sprites...")
-    for name, filename, tw, th, tileW, tileH in BUILDING_SPRITES:
-        if name not in building_data:
-            continue
-        data, hotspot = building_data[name]
-        indexed, w, h = index_rgba_image(data, palette_array, (tw, th),
-                                          hotspot_align=(tileW, tileH, hotspot))
-        out_path = os.path.join(DATA_DIR, f'{name}.bin')
+    for name, data in building_data.items():
+        indexed, w, h = index_rgba_image(data, palette_array, prealigned=name in PREALIGNED)
+        out_path = os.path.join(DATA_DIR, f'spr_{name}.bin')
         with open(out_path, 'wb') as f:
             f.write(indexed)
-        print(f"  {name}: {w}x{h} = {len(indexed)} bytes")
+        print(f"  spr_{name}: {w}x{h} = {len(indexed)} bytes")
 
-    for name, filename, tw, th in PREALIGNED_SPRITES:
-        if name not in prealigned_data:
-            continue
-        indexed, w, h = index_rgba_image(prealigned_data[name], palette_array, (tw, th),
-                                          prealigned=True)
-        out_path = os.path.join(DATA_DIR, f'{name}.bin')
+    for size, sheet in construction_data.items():
+        indexed, w, h = index_rgba_image(sheet, palette_array)
+        out_path = os.path.join(DATA_DIR, f'spr_construction_{size}.bin')
         with open(out_path, 'wb') as f:
             f.write(indexed)
-        print(f"  {name}: {w}x{h} = {len(indexed)} bytes")
+        print(f"  spr_construction_{size}: {w}x{h} = {len(indexed)} bytes")
+
+    write_geom_header(building_geom, construction_geom)
 
     # --- Process icon sprites ---
     print("\nProcessing icon sprites...")

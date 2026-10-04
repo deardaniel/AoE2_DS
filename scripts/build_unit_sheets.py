@@ -1,36 +1,33 @@
 #!/usr/bin/env python3
 """Build every unit sprite sheet in sprites/ from the AoE2 HD SLPs.
 
-One table, one layout rule, one scale rule — this replaces the mix of
-manifest entries and one-off pack_frames.py runs that left sheets with
-different shapes (standing sheets holding one direction, or 5 frames total)
-and the Archer wearing the Longbowman's graphics.
+One table, one layout rule, one scale. SLP IDs are the British civ's graphics
+from empires2_x2_p1.dat, resolved BY ID with scripts/dat_by_id.js (name in the
+comment column). An SLP holds five directions (S, SW, W, NW, N), each with
+the same number of frames.
 
-SLP IDs are the British civ's graphics from empires2_x2_p1.dat, resolved BY
-ID with scripts/dat_by_id.js (name in the comment column). An SLP holds five
-directions (S, SW, W, NW, N), each with the same number of frames.
-
-Sheet layouts (32x32 cells, one row per direction unless noted):
+Sheet layouts (one row per direction unless noted):
   stand   5 cols x 5 rows   5 frames per direction
-  stand1  5 cols x 1 row    1 frame per direction (ram, mangonel: no idle
-                            animation; UNIT_STAND_STATIC in render.cpp)
+  stand1  5 cols x 1 row    1 frame per direction (ram, mangonel: the game
+                            has no idle animation for them)
   anim   10 cols x 5 rows  10 frames per direction
-  anim5   5 cols x 5 rows   5 frames per direction (ram, mangonel, monk, and
-                            every death sheet)
+  anim5   5 cols x 5 rows   5 frames per direction (unused; halves a sheet)
   carry  10 cols x 3 rows   5 frames per direction, packed back to back
-The ARM9 binary has to fit in 3.5 MB together with the sound bank, and these
-sheets are most of it — that is why deaths and siege idles are trimmed.
 A direction with fewer frames than the layout wants repeats frames; one with
 more is sampled evenly. `once` animations (deaths) always end on the last
 frame.
 
-Scale: every unit uses UNIT_SCALE unless its standing/walking frames would
-not fit the cell, in which case the whole group (all sheets of that unit)
-shrinks together. The SLP hotspot — the unit's ground position — lands on
-CELL_ANCHOR, which render.cpp puts on the unit's tile.
+Every frame is reduced by exactly 3 (scripts/downscale.py). Each sheet gets
+its own cell size: the smallest cell that holds every frame of that sheet
+with the SLP hotspot (the unit's ground position) on one fixed anchor pixel.
+sprites/units.json records cell, anchor and layout per sheet;
+preprocess_sprites.py turns it into source/sprite_geom.h.
+
+The ARM9 image has to fit a 2.6 MB region together with the sound bank; with
+per-sheet cells the sheets total about 1.3 MB, leaving roughly 0.5 MB free.
 
 Usage:
-    python3 scripts/build_unit_sheets.py [name ...]
+    python3 scripts/build_unit_sheets.py
 """
 import json
 import os
@@ -39,9 +36,10 @@ import subprocess
 import sys
 import tempfile
 
+import numpy as np
 from PIL import Image
 
-from shared_constants import UNIT_CELL, UNIT_ANCHOR, UNIT_SCALE
+from downscale import reduce_exact
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SLP_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics'
@@ -52,34 +50,29 @@ DIRS = 5
 # layout -> (columns, frames per direction)
 LAYOUTS = {'stand': (5, 5), 'stand1': (5, 1), 'anim': (10, 10), 'anim5': (5, 5), 'carry': (10, 5)}
 
-# group -> [(output png, SLP, layout, once)]; the first two sheets of a group
-# (stand, walk) decide its scale.
+# unit type (UnitTypeId order in config.h) -> [(output png, SLP, layout, once)]
 UNITS = {
     'villager': [
         ('villager.png',          1479, 'stand', False),  # VMBAS_FN
         ('villager_walk.png',     1484, 'anim',  False),  # VMBAS_WN
         ('villager_attack.png',   1473, 'anim',  False),  # VMBAS_AN
         ('villager_carry.png',    1519, 'carry', False),  # VMHUN_CN (meat)
-        ('villager_die.png',      1476, 'anim5', True),   # VMBAS_DN
-    ],
-    'lumberjack': [
+        ('villager_die.png',      1476, 'anim',  True),   # VMBAS_DN
+        # lumberjack
         ('lumberjack.png',        1542, 'stand', False),  # VMLUM_FN
         ('lumberjack_walk.png',   1548, 'anim',  False),  # VMLUM_WN
         ('lumberjack_work.png',   1535, 'anim',  False),  # VMLUM_AN (chop)
         ('lumberjack_carry.png',  1536, 'carry', False),  # VMLUM_CN
-    ],
-    'miner': [
+        # miner
         ('miner.png',             1558, 'stand', False),  # VMMIN_FN
         ('miner_walk.png',        1563, 'anim',  False),  # VMMIN_WN
         ('miner_work.png',        1560, 'anim',  False),  # VMMIN_TN
         ('miner_carry.png',       1552, 'carry', False),  # VMMIN_CN
-    ],
-    'builder': [
+        # builder
         ('builder.png',           1493, 'stand', False),  # VMBLD_FN
         ('builder_walk.png',      1499, 'anim',  False),  # VMBLD_WN
         ('builder_work.png',      1496, 'anim',  False),  # VMBLD_TN
-    ],
-    'farmer': [
+        # farmer
         ('farmer.png',            1509, 'stand', False),  # VMFAR_FN
         ('farmer_walk.png',       1515, 'anim',  False),  # VMFAR_WN
         ('farmer_work.png',       1512, 'anim',  False),  # VMFAR_TN
@@ -90,54 +83,54 @@ UNITS = {
         ('militia.png',            993, 'stand', False),  # SPRMN_FN
         ('militia_walk.png',       997, 'anim',  False),  # SPRMN_WN
         ('militia_fight.png',      987, 'anim',  False),  # SPRMN_AN
-        ('militia_die.png',        990, 'anim5', True),   # SPRMN_DN
+        ('militia_die.png',        990, 'anim',  True),   # SPRMN_DN
     ],
     'archer': [
         ('archer.png',               8, 'stand', False),  # ARCHR_FN
         ('archer_walk.png',         12, 'anim',  False),  # ARCHR_WN
         ('archer_fire.png',          2, 'anim',  False),  # ARCHR_AN
-        ('archer_die.png',           5, 'anim5', True),   # ARCHR_DN
+        ('archer_die.png',           5, 'anim',  True),   # ARCHR_DN
     ],
     'knight': [
         ('knight.png',             669, 'stand', False),  # KNGHT_FN
         ('knight_walk.png',        673, 'anim',  False),  # KNGHT_WN
         ('knight_fight.png',       663, 'anim',  False),  # KNGHT_AN
-        ('knight_die.png',         666, 'anim5', True),   # KNGHT_DN
+        ('knight_die.png',         666, 'anim',  True),   # KNGHT_DN
     ],
     'spearman': [
         ('spearman.png',           873, 'stand', False),  # PKEMN_FN
         ('spearman_walk.png',      877, 'anim',  False),  # PKEMN_WN
         ('spearman_fight.png',     867, 'anim',  False),  # PKEMN_AN
-        ('spearman_die.png',       870, 'anim5', True),   # PKEMN_DN
+        ('spearman_die.png',       870, 'anim',  True),   # PKEMN_DN
     ],
     'scout': [
         ('scout.png',             2085, 'stand', False),  # SCOUT_FN
         ('scout_walk.png',        2089, 'anim',  False),  # SCOUT_WN
         ('scout_fight.png',       2079, 'anim',  False),  # SCOUT_AN
-        ('scout_die.png',         2082, 'anim5', True),   # SCOUT_DN
+        ('scout_die.png',         2082, 'anim',  True),   # SCOUT_DN
     ],
     'sheep': [
         ('sheep_stand.png',       3629, 'stand', False),  # SHEEP_FN
         ('sheep_walk.png',        3634, 'anim',  False),  # SHEEP_WN
-        ('sheep_die.png',         3626, 'anim5', True),   # SHEEP_DN
+        ('sheep_die.png',         3626, 'anim',  True),   # SHEEP_DN
     ],
     'ram': [
         ('ram_stand.png',          179, 'stand1',False),  # BTRAM_FN
-        ('ram_walk.png',           183, 'anim5', False),  # BTRAM_WN
-        ('ram_fight.png',          173, 'anim5', False),  # BTRAM_AN
-        ('ram_death.png',          176, 'anim5', True),   # BTRAM_DN
+        ('ram_walk.png',    (181, 183), 'anim',  False),  # BTRAM_W0 body + BTRAM_WN wheels
+        ('ram_fight.png',   (171, 173), 'anim',  False),  # BTRAM_A0 body + BTRAM_AN ram head
+        ('ram_death.png',          176, 'anim',  True),   # BTRAM_DN
     ],
     'mangonel': [
         ('mango_stand.png',        722, 'stand1',False),  # MANGO_FN
-        ('mango_walk.png',         726, 'anim5', False),  # MANGO_WN
-        ('mango_fight.png',        716, 'anim5', False),  # MANGO_AN
-        ('mango_death.png',        719, 'anim5', True),   # MANGO_DN
+        ('mango_walk.png',  (724, 726), 'anim',  False),  # MANGO_W0 body + MANGO_WN wheels
+        ('mango_fight.png',        716, 'anim',  False),  # MANGO_AN
+        ('mango_death.png',        719, 'anim',  True),   # MANGO_DN
     ],
     'monk': [
         ('monk_stand.png',         774, 'stand', False),  # MONKX_FN
-        ('monk_walk.png',          779, 'anim5', False),  # MONKX_WN
-        ('monk_fight.png',         768, 'anim5', False),  # MONKX_AN
-        ('monk_death.png',         771, 'anim5', True),   # MONKX_DN
+        ('monk_walk.png',          779, 'anim',  False),  # MONKX_WN
+        ('monk_fight.png',         768, 'anim',  False),  # MONKX_AN
+        ('monk_death.png',         771, 'anim',  True),   # MONKX_DN
     ],
 }
 
@@ -172,7 +165,10 @@ def load_slp(slp):
 
 
 def pick_frames(frames, want, once):
-    """Sample `want` frames for each of the five directions."""
+    """Sample `want` frames for each of the five directions.
+
+    Returns [(direction, frame)]; frame is (RGBA image, hotspot_x, hotspot_y).
+    """
     # A few SLPs are a frame or two short in the last direction, so round the
     # per-direction count up and clamp.
     per_dir = -(-len(frames) // DIRS)
@@ -184,54 +180,72 @@ def pick_frames(frames, want, once):
                 k = round(i * (have - 1) / (want - 1)) if want > 1 else 0
             else:
                 k = i * have // want
-            out.append(frames[d * per_dir + k])
+            out.append((d, frames[d * per_dir + k]))
     return out
 
 
-def group_scale(sheets):
-    """UNIT_SCALE, or less if the stand/walk frames would overflow the cell."""
-    cw, ch = UNIT_CELL
-    ax, ay = UNIT_ANCHOR
-    left = right = up = 1
-    for _, slp, _, _ in sheets[:2]:
-        for img, hx, hy in load_slp(slp):
-            left, right, up = max(left, hx), max(right, img.width - hx), max(up, hy)
-    return min(UNIT_SCALE, ax / left, (cw - ax) / right, ay / up)
+def layer_under(img, hx, hy, base, bhx, bhy):
+    """Draw `img` over `base`, lining up their hotspots."""
+    left, up = max(hx, bhx), max(hy, bhy)
+    w = left + max(img.width - hx, base.width - bhx)
+    h = up + max(img.height - hy, base.height - bhy)
+    out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    out.alpha_composite(base, (left - bhx, up - bhy))
+    out.alpha_composite(img, (left - hx, up - hy))
+    return out, left, up
 
 
-def build_sheet(out_name, slp, layout, once, scale):
-    cw, ch = UNIT_CELL
-    ax, ay = UNIT_ANCHOR
-    cols, want = LAYOUTS[layout]
-    picked = pick_frames(load_slp(slp), want, once)
-    rows = -(-len(picked) // cols)
-    sheet = Image.new('RGBA', (cols * cw, rows * ch), (0, 0, 0, 0))
-    for i, (img, hx, hy) in enumerate(picked):
-        nw = max(1, round(img.width * scale))
-        nh = max(1, round(img.height * scale))
-        # Premultiplied alpha so edges don't blend toward black
-        small = img.convert('RGBa').resize((nw, nh), Image.LANCZOS).convert('RGBA')
-        cell = Image.new('RGBA', (cw, ch), (0, 0, 0, 0))
-        cell.paste(small, (ax - round(hx * scale), ay - round(hy * scale)))  # clips to the cell
-        sheet.paste(cell, ((i % cols) * cw, (i // cols) * ch))
-    sheet.save(os.path.join(SPRITES_DIR, out_name))
-    return sheet.size
+def reduced_frames(slp, layout, once):
+    """The frames a sheet uses, each as (RGBA array, anchor_x, anchor_y).
+
+    `slp` is one SLP, or (body, animated): the game draws siege units as a
+    static body graphic (one frame per direction) with an animated part on
+    top — the delta graphics of e.g. BTRAM_WN in the .dat.
+    """
+    body, slp = slp if isinstance(slp, tuple) else (None, slp)
+    _, want = LAYOUTS[layout]
+    out = []
+    for d, (img, hx, hy) in pick_frames(load_slp(slp), want, once):
+        if body is not None:
+            base, bhx, bhy = load_slp(body)[d]
+            img, hx, hy = layer_under(img, hx, hy, base, bhx, bhy)
+        out.append(reduce_exact(np.asarray(img), hx, hy))
+    return out
 
 
 def main():
-    only = set(sys.argv[1:])
+    geom = {}
+    total = 0
     try:
-        for group, sheets in UNITS.items():
-            if only and group not in only:
-                continue
-            scale = group_scale(sheets)
-            print(f'{group}: scale {scale:.3f}')
+        for unit_type, sheets in UNITS.items():
+            print(unit_type)
             for out_name, slp, layout, once in sheets:
-                w, h = build_sheet(out_name, slp, layout, once, scale)
-                print(f'  {out_name}: SLP {slp} {layout} {w}x{h}')
+                cols, fpd = LAYOUTS[layout]
+                frames = reduced_frames(slp, layout, once)
+                # Smallest cell holding every frame with the hotspot on one pixel
+                left = int(max(ax for _, ax, _ in frames))
+                up = int(max(ay for _, _, ay in frames))
+                right = int(max(f.shape[1] - ax for f, ax, _ in frames))
+                down = int(max(f.shape[0] - ay for f, _, ay in frames))
+                cw, ch = left + right, up + down
+                rows = -(-len(frames) // cols)
+                sheet = np.zeros((rows * ch, cols * cw, 4), dtype=np.uint8)
+                for i, (f, ax, ay) in enumerate(frames):
+                    x = (i % cols) * cw + left - ax
+                    y = (i // cols) * ch + up - ay
+                    sheet[y:y + f.shape[0], x:x + f.shape[1]] = f
+                Image.fromarray(sheet).save(os.path.join(SPRITES_DIR, out_name))
+                geom[out_name] = {'cell': [cw, ch], 'anchor': [left, up],
+                                  'cols': cols, 'fpd': fpd, 'once': once}
+                total += sheet.shape[0] * sheet.shape[1]
+                print(f'  {out_name}: SLP {slp} {layout}, cell {cw}x{ch}, anchor ({left},{up})')
     finally:
         for d in _tmp_dirs:
             shutil.rmtree(d, ignore_errors=True)
+    with open(os.path.join(SPRITES_DIR, 'units.json'), 'w') as f:
+        json.dump(geom, f, indent=1)
+        f.write('\n')
+    print(f'{total} bytes of unit sheets')
     return 0
 
 
