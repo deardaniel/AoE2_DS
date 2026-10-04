@@ -10,6 +10,7 @@
 #include "font.h"
 #include "ai.h"
 #include <stdio.h>
+#include <string.h>
 
 // Access tech-modified stats
 extern UnitStats playerUnitStats[NUM_PLAYERS][UNIT_TYPE_COUNT];
@@ -483,9 +484,7 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
     const int TX_END = TX + TW;
     (void)TX_END;
 
-    // Re-tile parchment to clear old text each frame
-    const u16* parchTile = (const u16*)tex_parchment_64_bin;
-    ui_tile_rect(INFO_X + 1, INFO_Y + 1, INFO_W - 2, INFO_H - 2, parchTile, 64, 64);
+    // (The panel was just restored from the cached background: no old text to clear)
 
     const Player& p0 = gs.players[0];
 
@@ -817,18 +816,15 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
 // ---------------------------------------------------------------------------
 // Controls area (below minimap, right panel)
 // ---------------------------------------------------------------------------
-static void ui_draw_controls(const GameState& gs) {
-    if (!minimapVram) return;
-
-    int cy = CONTROLS_Y;
-    int cx = MINIMAP_X + 4;
-    u16 colCtrl = RGB15(24, 22, 18) | BIT(15);  // light text on dark wood
-
 #ifdef SHOWCASE
+// Debug overlay (drawn over both halves of the screen)
+static void ui_draw_debug(const GameState& gs) {
+    int cx = MINIMAP_X + 4;
+    (void)cx;
     // Debug builds: percent of a frame spent in units / other logic /
     // terrain / sprites / this screen (the last is a frame behind)
     {
-        extern int profPct[8];
+        extern int profPct[10];
         char dbg[48];
         snprintf(dbg, sizeof(dbg), "u%d b%d f%d a%d", profPct[0], profPct[5], profPct[6], profPct[1]);
         font_draw_str_16(minimapVram, 256, 192, 2, 180, dbg, COL_YELLOW, gameFont);
@@ -866,11 +862,27 @@ static void ui_draw_controls(const GameState& gs) {
             for (int k = 0; k < 3; k++)
                 font_draw_str_16(minimapVram, 256, 192, 2, 160 - k * 10, dbgKills[k], COL_YELLOW, gameFont);
         }
-        extern int profPathSearches;
-        snprintf(dbg, sizeof(dbg), "g%d s%d i%d p%d/%d", profPct[2], profPct[3], profPct[4], profPathSearches, profPct[7]);
+        extern int profTotal[2];
+        snprintf(dbg, sizeof(dbg), "g%d s%d o%d i%d p%d", profPct[2], profPct[3], profPct[8], profPct[4], profPct[7]);
+
+        {
+            char tot[40];
+            extern int dbgFulls, dbgRects;
+            snprintf(tot, sizeof(tot), "T%d~%d F%d R%d", profTotal[0], profTotal[1], dbgFulls, dbgRects);
+            font_draw_str_16(minimapVram, 256, 192, 2, 52, tot, COL_YELLOW, gameFont);
+        }
         font_draw_str_16(minimapVram, 256, 192, 130, 180, dbg, COL_YELLOW, gameFont);
     }
+}
 #endif
+
+static void ui_draw_controls(const GameState& gs) {
+    if (!minimapVram) return;
+
+    int cy = CONTROLS_Y;
+    int cx = MINIMAP_X + 4;
+    u16 colCtrl = RGB15(24, 22, 18) | BIT(15);  // light text on dark wood
+
 
     if (gs.phase == PHASE_VICTORY || gs.phase == PHASE_DEFEAT) {
         bool won = (gs.phase == PHASE_VICTORY);
@@ -934,18 +946,81 @@ static void ui_draw_controls(const GameState& gs) {
 // ---------------------------------------------------------------------------
 // Main update
 // ---------------------------------------------------------------------------
-void ui_update(const GameState& gs, const TerrainMap& terrain) {
-    // Draw everything every 4th frame for performance
-    if ((gs.frameCount & 3) == 0) {
-        ui_draw_status_bar(gs);
-        ui_draw_panel_bg();
-        ui_draw_info_panel(gs, terrain);
-        ui_draw_right_bg();   // also trims any text that ran past the panel
-        ui_draw_minimap(gs, terrain);
-        ui_draw_controls(gs);
+// ---------------------------------------------------------------------------
+// The top screen is redrawn in two halves on alternate even frames: status
+// bar and info panel, then minimap and controls. Each half starts from a
+// copy of the background, which is drawn once — painting the wood and
+// parchment afresh was most of what made a redraw cost over two frames.
+// ---------------------------------------------------------------------------
+enum { UI_SPLIT_X = INFO_X + INFO_W };   // first column of the right half
+static u16 topBg[256 * 192] __attribute__((aligned(4)));
+static bool topBgReady = false;
 
-        // DMA copy buffer to VRAM (avoids flicker from mid-scanline writes)
-        DC_FlushRange(topBuf, 256 * 192 * 2);
-        dmaCopy(topBuf, topVram, 256 * 192 * 2);
+static void ui_copy_to_vram(int x0, int x1, int y0, int y1) {
+    DC_FlushRange(topBuf + y0 * 256, (y1 - y0) * 256 * 2);
+    if (x0 == 0 && x1 == 256) {
+        dmaCopy(topBuf + y0 * 256, topVram + y0 * 256, (y1 - y0) * 256 * 2);
+        return;
+    }
+    for (int y = y0; y < y1; y++)
+        dmaCopy(topBuf + y * 256 + x0, topVram + y * 256 + x0, (x1 - x0) * 2);
+}
+
+void ui_update(const GameState& gs, const TerrainMap& terrain) {
+    if (!minimapVram) return;
+    if (!topBgReady) {
+        topBgReady = true;
+        minimapVram = topBg;
+        ui_draw_panel_bg();
+        ui_draw_right_bg();
+        minimapVram = topBuf;
+    }
+
+    int phase = gs.frameCount & 3;
+#ifdef SHOWCASE
+    static int part[10];
+    u32 t0 = cpuGetTiming(), t1;
+#define UI_PART(n) t1 = cpuGetTiming(); part[n] = (int)((u64)(t1 - t0) * 100 / 560190); t0 = t1;
+#else
+#define UI_PART(n)
+#endif
+    if (phase == 0) {
+        // Left half (text that runs past the panel's edge stays in the
+        // buffer and is never copied to the screen)
+        for (int y = STATUS_BAR_H; y < 192; y++)
+            memcpy(topBuf + y * 256, topBg + y * 256, UI_SPLIT_X * 2);
+        UI_PART(0)
+        ui_draw_status_bar(gs);
+        UI_PART(1)
+        ui_draw_info_panel(gs, terrain);
+        UI_PART(2)
+#ifdef SHOWCASE
+        ui_draw_debug(gs);
+        {
+            char dbg[48];
+            extern int dbgG[5];
+            snprintf(dbg, sizeof(dbg), "G %d %d %d %d %d", dbgG[0], dbgG[1], dbgG[2], dbgG[3], dbgG[4]);
+            font_draw_str_16(minimapVram, 256, 192, 2, 40, dbg, COL_YELLOW, gameFont);
+        }
+        UI_PART(3)
+#endif
+        ui_copy_to_vram(0, 256, 0, STATUS_BAR_H);
+        ui_copy_to_vram(0, UI_SPLIT_X, STATUS_BAR_H, 192);
+        UI_PART(4)
+    } else if (phase == 2) {
+        // Right half
+        for (int y = STATUS_BAR_H; y < 192; y++)
+            memcpy(topBuf + y * 256 + UI_SPLIT_X, topBg + y * 256 + UI_SPLIT_X, (256 - UI_SPLIT_X) * 2);
+        UI_PART(5)
+        ui_draw_minimap(gs, terrain);
+        UI_PART(6)
+        ui_draw_controls(gs);
+        UI_PART(7)
+#ifdef SHOWCASE
+        ui_draw_debug(gs);
+        UI_PART(8)
+#endif
+        ui_copy_to_vram(UI_SPLIT_X, 256, STATUS_BAR_H, 192);
+        UI_PART(9)
     }
 }
