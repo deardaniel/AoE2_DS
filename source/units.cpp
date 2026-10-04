@@ -1745,10 +1745,37 @@ void units_update(GameState& gs, TerrainMap& terrain) {
             int utx = (u.x + TILE_PX / 2) / TILE_PX;
             int uty = (u.y + TILE_PX / 2) / TILE_PX;
 
+            // Enemy buildings that shoot: the scout keeps out of their range
+            // (it used to ride straight under the enemy Town Center and die)
+            struct { s8 tx, ty, r; } forts[8];
+            int fortCount = 0;
+            if (think) {
+                for (int b = 0; b < MAX_BUILDINGS && fortCount < 8; b++) {
+                    const Building& eb = buildings[b];
+                    if (!eb.alive || eb.owner == u.owner || !building_is_complete(b)) continue;
+                    int range = (eb.type == BLDG_TOWN_CENTER) ? 6 : (eb.type == BLDG_TOWER) ? 7 :
+                                (eb.type == BLDG_CASTLE) ? 8 : 0;
+                    if (range == 0) continue;
+                    forts[fortCount].tx = eb.x / TILE_PX + BLDG_STATS[eb.type].tileW / 2;
+                    forts[fortCount].ty = eb.y / TILE_PX + BLDG_STATS[eb.type].tileH / 2;
+                    forts[fortCount].r = range + 1;
+                    fortCount++;
+                }
+            }
+
             if (think) {
                 // Enemies within 4 tiles (sheep and villagers are no threat)
                 int nearestEnemyDist = 99999;
                 int enemyDX = 0, enemyDY = 0;
+                // Inside a fort's range counts as an enemy right there
+                for (int f = 0; f < fortCount; f++) {
+                    int dx = forts[f].tx - utx, dy = forts[f].ty - uty;
+                    if (dx * dx + dy * dy <= forts[f].r * forts[f].r) {
+                        nearestEnemyDist = 0;
+                        enemyDX = dx;
+                        enemyDY = dy;
+                    }
+                }
                 for (int j = 0; j < MAX_UNITS; j++) {
                     if (!units[j].alive || units[j].state == USTATE_DEAD) continue;
                     if (units[j].owner == u.owner) continue;
@@ -1788,6 +1815,12 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                             for (int tx = 0; tx < MAP_TILES; tx += 2) {
                                 if (fogMap.isExplored(u.owner, tx, ty)) continue;
                                 if (!terrain.passable(tx, ty)) continue;
+                                bool covered = false;  // under a fort's arrows
+                                for (int f = 0; f < fortCount && !covered; f++) {
+                                    int fx = tx - forts[f].tx, fy = ty - forts[f].ty;
+                                    covered = (fx * fx + fy * fy <= (forts[f].r + 1) * (forts[f].r + 1));
+                                }
+                                if (covered) continue;
                                 int dx = tx - utx;
                                 int dy = ty - uty;
                                 int dist = dx * dx + dy * dy;
