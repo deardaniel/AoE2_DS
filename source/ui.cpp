@@ -851,6 +851,27 @@ static void ui_draw_controls(const GameState& gs) {
             snprintf(dbg, sizeof(dbg), "AI %d %d %d %d p%d/%d v%d i%d", ai.resources[0], ai.resources[1],
                      ai.resources[2], ai.resources[3], ai.popCount, ai.popCap, vils, idle);
             font_draw_str_16(minimapVram, 256, 192, 2, 170, dbg, COL_YELLOW, gameFont);
+            // Its army: how many idle / moving / attacking, and where the first one is headed
+            int mi = 0, mm = 0, ma = 0, first = -1;
+            for (int i = 0; i < MAX_UNITS; i++) {
+                const Unit& m = units[i];
+                if (!m.alive || m.owner != 1 || m.state == USTATE_DEAD || !unit_is_military(m.type)) continue;
+                if (m.state == USTATE_IDLE) mi++;
+                else if (m.state == USTATE_MOVING) mm++;
+                else if (m.state == USTATE_ATTACKING) ma++;
+                if (first < 0 && m.type != UNIT_SCOUT) first = i;
+            }
+            if (first >= 0) {
+                const Unit& m = units[first];
+                snprintf(dbg, sizeof(dbg), "M i%d m%d a%d %d,%d>%d,%d b%d u%d", mi, mm, ma, m.x / TILE_PX, m.y / TILE_PX,
+                         m.pathDestTX, m.pathDestTY, m.attackBldgTarget, m.attackTarget);
+                font_draw_str_16(minimapVram, 256, 192, 2, 130, dbg, COL_YELLOW, gameFont);
+            }
+        }
+        {
+            extern char dbgKills[3][20];
+            for (int k = 0; k < 3; k++)
+                font_draw_str_16(minimapVram, 256, 192, 2, 160 - k * 10, dbgKills[k], COL_YELLOW, gameFont);
         }
         extern int profPathSearches;
         snprintf(dbg, sizeof(dbg), "g%d s%d i%d p%d/%d", profPct[2], profPct[3], profPct[4], profPathSearches, profPct[7]);

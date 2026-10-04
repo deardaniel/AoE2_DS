@@ -65,8 +65,13 @@ void projectiles_update(GameState& gs) {
                     gs.attackAlertTY = units[p.targetUnit].y / TILE_PX;
                 }
 
-                if (units[p.targetUnit].hp <= 0)
+                if (units[p.targetUnit].hp <= 0) {
+#ifdef SHOWCASE
+                    extern void dbg_log_kill(int killerOwner, int killerType, int victim);
+                    dbg_log_kill(p.attackerOwner, -1, p.targetUnit);
+#endif
                     unit_kill(p.targetUnit);
+                }
             }
             p.active = false;
         }
