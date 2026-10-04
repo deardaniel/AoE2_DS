@@ -63,8 +63,13 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     int mapY = tileY * TILE_PX + TILE_PX / 2;
 
     if (gs.inputMode == 1) {
-        // Placing building mode
-        int result = building_place(gs.placeBldgType, 0, tileX, tileY, gs, terrain);
+        // Placing building mode: the footprint is centred under the touch,
+        // exactly where the preview showed it
+        int originX, originY;
+        placementOrigin(screenX, screenY, gs.camX, gs.camY,
+                        BLDG_STATS[gs.placeBldgType].tileW, BLDG_STATS[gs.placeBldgType].tileH,
+                        originX, originY);
+        int result = building_place(gs.placeBldgType, 0, originX, originY, gs, terrain);
         if (result >= 0) {
             gs.inputMode = 0;
             // Send all selected villagers to build
@@ -573,13 +578,18 @@ void input_update(GameState& gs, TerrainMap& terrain) {
             int dy = gs.dragEndY - gs.dragStartY;
             if (dx < 0) dx = -dx;
             if (dy < 0) dy = -dy;
-            if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+            // While placing a building a drag moves the building, it doesn't
+            // start a selection box
+            if (gs.inputMode != 1 && (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD)) {
                 gs.isDragging = true;
             }
         } else if (touchReleased && gs.touchActive) {
             // Touch released — process action
             gs.touchActive = false;
-            if (gs.isDragging) {
+            if (gs.inputMode == 1) {
+                // Drop the building where the stylus was lifted
+                process_tap(gs, terrain, gs.dragEndX, gs.dragEndY);
+            } else if (gs.isDragging) {
                 process_drag_select(gs, gs.dragStartX, gs.dragStartY,
                                     gs.dragEndX, gs.dragEndY);
             } else {

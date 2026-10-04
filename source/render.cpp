@@ -1084,52 +1084,59 @@ void render_train_menu(u8* vram, const GameState& gs) {
 void render_placement_preview(u8* buf, const GameState& gs, const TerrainMap& terrain) {
     if (gs.inputMode != 1) return;
 
-    // Use current touch position if touching, otherwise last touch position
-    int screenX = gs.touchActive ? gs.dragEndX : gs.dragStartX;
-    int screenY = gs.touchActive ? gs.dragEndY : gs.dragStartY;
-
-    // Convert screen coords to tile coords
-    int baseTX, baseTY;
-    screenToTile(screenX, screenY, gs.camX, gs.camY, baseTX, baseTY);
-
+    // The building follows the stylus, and stays where it was last pointed
+    // while nothing is touching the screen
     const BuildingStats& st = BLDG_STATS[gs.placeBldgType];
+    int baseTX, baseTY;
+    placementOrigin(gs.dragEndX, gs.dragEndY, gs.camX, gs.camY, st.tileW, st.tileH, baseTX, baseTY);
 
-    // Draw diamond highlight for each tile in the building footprint
+    // Footprint tiles, green where the building can stand and red where not
+    bool allValid = true;
     for (int dy = 0; dy < st.tileH; dy++) {
         for (int dx = 0; dx < st.tileW; dx++) {
             int tx = baseTX + dx;
             int ty = baseTY + dy;
-
-            // Determine if this tile is valid for building
             bool valid = (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES &&
                           terrain.canBuild(tx, ty) && building_at_tile(tx, ty) < 0);
-
+            if (!valid) allValid = false;
             u8 color = valid ? PAL_GREEN : PAL_RED;
 
-            // Convert tile to iso screen position
             int isoX, isoY;
             tileToIso(tx, ty, isoX, isoY);
             int dstX = isoX - gs.camX;
             int dstY = isoY - gs.camY;
-
-            // Draw diamond outline using the mask tables
             for (int py = 0; py < ISO_TILE_H; py++) {
                 int sy = dstY + py;
                 if (sy < 0 || sy >= SCREEN_H) continue;
-
                 int xs = ISO_DIAMOND_XSTART[py];
                 int xe = ISO_DIAMOND_XEND[py];
-
-                // Draw only the outline (left edge, right edge, top/bottom row)
                 for (int px = xs; px < xe; px++) {
                     if (px == xs || px == xe - 1 || py == 0 || py == ISO_TILE_H - 1) {
                         int sx = dstX + px;
-                        if (sx >= 0 && sx < SCREEN_W) {
-                            buf[sy * 256 + sx] = color;
-                        }
+                        if (sx >= 0 && sx < SCREEN_W) buf[sy * 256 + sx] = color;
                     }
                 }
             }
+        }
+    }
+
+    // A see-through copy of the building itself (every other pixel), so you
+    // can judge how it sits; left out where it can't be built
+    const u8* sheet = buildingSheet[gs.placeBldgType];
+    if (!allValid || sheet == NULL) return;
+    const SpriteGeom& g = BLDG_GEOM[gs.placeBldgType];
+    int isoX, isoY;
+    tileToIso(baseTX, baseTY, isoX, isoY);
+    int cx = isoX - gs.camX + ISO_TILE_W / 2 + (st.tileW - st.tileH) * (ISO_TILE_W / 4);
+    int cy = isoY - gs.camY + (st.tileW + st.tileH) * (ISO_TILE_H / 4);
+    for (int py = 0; py < g.h; py++) {
+        int sy = cy - g.ay + py;
+        if (sy < 0 || sy >= SCREEN_H) continue;
+        for (int px = 0; px < g.w; px++) {
+            int sx = cx - g.ax + px;
+            if (sx < 0 || sx >= SCREEN_W || ((sx + sy) & 1)) continue;
+            u8 c = sheet[py * g.w + px];
+            if (c != 0 && c != SPR_SHADOW) buf[sy * 256 + sx] = c;
         }
     }
 }

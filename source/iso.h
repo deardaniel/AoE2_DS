@@ -59,6 +59,16 @@ static inline void screenToTile(int screenX, int screenY, int camX, int camY,
     tileY = isoFloorDiv(2 * rawY - rawX, ISO_TILE_W);
 }
 
+// Origin tile of a tileW x tileH footprint placed with its middle under a
+// screen point — where a building goes when you point at the ground. Shared
+// by the placement preview and the placement itself so they always agree.
+static inline void placementOrigin(int screenX, int screenY, int camX, int camY,
+                                   int tileW, int tileH, int& tileX, int& tileY) {
+    screenToTile(screenX, screenY, camX, camY, tileX, tileY);
+    tileX -= tileW / 2;
+    tileY -= tileH / 2;
+}
+
 // ---------------------------------------------------------------------------
 // Diamond mask for 32x16 isometric tile rendering
 // For each row (0-15), gives the start and end X pixel of the filled region.
