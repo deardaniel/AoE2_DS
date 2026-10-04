@@ -1324,9 +1324,13 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
 
         if (u.attackCooldown > 0) { u.attackCooldown--; return; }
 
-        // Damage building (buildings have no armor classes)
+        // Damage building. As in the game, buildings shrug off most of a
+        // sword or arrow (melee armour 3, pierce armour 5 here for all of
+        // them) and it takes siege to bring one down quickly; with no armour
+        // a few militia razed a Town Center in seconds.
         const s16* atk = playerUnitStats[u.owner][u.type].attack;
-        int dmg = atk[DMG_MELEE] + atk[DMG_PIERCE]; // sum base damage classes
+        int melee = atk[DMG_MELEE] - 3, pierce = atk[DMG_PIERCE] - 5;
+        int dmg = (melee > 0 ? melee : 0) + (pierce > 0 ? pierce : 0);
         // Siege units deal massive bonus damage to buildings
         if (u.type == UNIT_RAM) dmg += 125;
         else if (u.type == UNIT_MANGONEL) dmg += 35;
