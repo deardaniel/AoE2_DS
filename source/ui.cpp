@@ -804,22 +804,8 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
             x = font_draw_str_16(minimapVram, 256, 192, x, ty, ":", colText, gameFont);
             font_draw_num_16(minimapVram, 256, 192, x, ty, amt, colText, gameFont);
         }
-    } else {
-        // Nothing selected — show tech tree
-        u16 colDone = RGB15(10, 28, 10) | BIT(15);  // green for researched
-        u16 colLock = RGB15(16, 14, 12) | BIT(15);  // gray for locked
-        font_draw_str_16(minimapVram, 256, 192, TX, ty, "Tech Tree", colGold, gameFont);
-        ty += 12;
-        for (int t = 0; t < TECH_COUNT && ty + 10 < INFO_Y + INFO_H; t++) {
-            bool done = tech_is_researched(gs, 0, t);
-            bool avail = !done && gs.players[0].age >= TECH_TABLE[t].ageReq;
-            u16 col = done ? colDone : (avail ? colGold : colLock);
-            const char* mark = done ? "+" : (avail ? "-" : " ");
-            x = font_draw_str_16(minimapVram, 256, 192, TX, ty, mark, col, gameFont);
-            font_draw_str_16(minimapVram, 256, 192, x, ty, TECH_TABLE[t].name, col, gameFont);
-            ty += 10;
-        }
     }
+    // (Nothing selected: the panel stays clear)
 }
 
 // ---------------------------------------------------------------------------
