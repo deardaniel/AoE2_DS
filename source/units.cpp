@@ -180,7 +180,7 @@ static bool tile_walkable(int tx, int ty, int owner, const TerrainMap& terrain) 
     if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return false;
     if (!terrain.passable(tx, ty)) return false;
     int b = building_at_tile(tx, ty);
-    if (b < 0) return true;
+    if (b < 0 || !building_blocks_tile(b, tx, ty)) return true;
     return buildings[b].type == BLDG_WALL && buildings[b].owner == owner;
 }
 
@@ -208,7 +208,8 @@ static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1, bool ski
         for (int dy = 0; dy < bh; dy++)
             for (int dx = 0; dx < bw; dx++) {
                 int tx = bx + dx, ty = by + dy;
-                if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES)
+                if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES &&
+                    building_blocks_tile(i, tx, ty))
                     passMap[ty][tx] = false;
             }
     }

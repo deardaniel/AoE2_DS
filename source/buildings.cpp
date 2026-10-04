@@ -320,6 +320,30 @@ void building_cancel_train(int idx, GameState& gs) {
     }
 }
 
+// Which tiles of a footprint units cannot walk on. Most buildings are solid.
+// The Town Center only stands on the back of its 4x4 footprint — the centre
+// building on the back quarter and a lean-to at the left and right corners —
+// leaving the ground in front of it open. Farms are fields: nothing blocks.
+// Rows are tile y, columns tile x, from the footprint's origin tile (the top
+// corner on screen; x runs down-right, y down-left).
+static const u8 TC_SOLID[4][4] = {
+    { 1, 1, 1, 1 },   // centre building, right lean-to
+    { 1, 1, 0, 0 },   // centre building
+    { 1, 0, 0, 0 },   // left lean-to
+    { 1, 0, 0, 0 },
+};
+
+bool building_blocks_tile(int idx, int tx, int ty) {
+    const Building& b = buildings[idx];
+    int dx = tx - b.x / TILE_PX;
+    int dy = ty - b.y / TILE_PX;
+    if (dx < 0 || dy < 0 || dx >= BLDG_STATS[b.type].tileW || dy >= BLDG_STATS[b.type].tileH)
+        return false;
+    if (b.type == BLDG_FARM) return false;
+    if (b.type == BLDG_TOWN_CENTER) return TC_SOLID[dy][dx];
+    return true;
+}
+
 int building_at_tile(int tx, int ty) {
     for (int i = 0; i < MAX_BUILDINGS; i++) {
         if (!buildings[i].alive) continue;
