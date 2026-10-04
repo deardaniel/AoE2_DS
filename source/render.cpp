@@ -807,9 +807,31 @@ static void draw_static(u8* buf, const StaticSprite& sp) {
     }
 }
 
+// A unit's cell as drawn on screen, so whatever covers it can leave its
+// outline showing (see redraw_static)
+struct UnitCell {
+    const u8* src; int stride, w, h, x, y; bool hflip; u8 colour;
+    // Is there a body pixel at this screen position?
+    inline bool solid(int sx, int sy) const {
+        int px = sx - x, py = sy - y;
+        if (px < 0 || py < 0 || px >= w || py >= h) return false;
+        u8 val = src[py * stride + (hflip ? w - 1 - px : px)];
+        return val != 0 && val != SPR_SHADOW;
+    }
+    // ...and is it on the rim of the body?
+    inline bool rim(int sx, int sy) const {
+        return solid(sx, sy) && !(solid(sx - 1, sy) && solid(sx + 1, sy) &&
+                                  solid(sx, sy - 1) && solid(sx, sy + 1));
+    }
+};
+
 // Draw the solid pixels of a static sprite again inside a clip rectangle
-// (its shadow is already on the ground and must not darken it twice)
-static void redraw_static(u8* buf, const StaticSprite& sp, int cx0, int cy0, int cx1, int cy1) {
+// (its shadow is already on the ground and must not darken it twice).
+// With a unit cell, the unit's rim is drawn in its player's colour wherever
+// the sprite covers it — as in the game, a unit behind a building or a tree
+// shows as an outline instead of vanishing.
+static void redraw_static(u8* buf, const StaticSprite& sp, int cx0, int cy0, int cx1, int cy1,
+                          const UnitCell* unit = NULL) {
     int x0 = (cx0 > sp.x) ? cx0 : sp.x;
     int y0 = (cy0 > sp.y) ? cy0 : sp.y;
     int x1 = (cx1 < sp.x + sp.w) ? cx1 : sp.x + sp.w;
@@ -826,7 +848,7 @@ static void redraw_static(u8* buf, const StaticSprite& sp, int cx0, int cy0, int
         for (int x = x0; x < x1; x++) {
             u8 val = line[x];
             if (val == 0 || val == SPR_SHADOW) continue;
-            row[x] = remap ? remap[val] : val;
+            row[x] = (unit && unit->rim(x, y)) ? unit->colour : (remap ? remap[val] : val);
         }
     }
 }
@@ -1056,11 +1078,16 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain,
         blit_cell(buf, src, stride, g.cw, g.ch, gx - (hflip ? g.cw - g.ax : g.ax), gy - g.ay,
                   hflip, u.owner == 1 ? sprite_remap_bin : NULL);
 
-        // Anything static standing in front of the unit covers it again
-        for (int si = staticCount - 1; si >= 0 && statics[si].sortY > depth[k]; si--) {
+        // Anything static standing in front of the unit covers it again,
+        // farthest first, leaving the unit's outline (not a carcass's)
+        UnitCell cell = { src, stride, g.cw, g.ch, gx - (hflip ? g.cw - g.ax : g.ax), gy - g.ay,
+                          hflip, u.owner == 1 ? sprite_remap_bin[OUTLINE_COLOUR] : (u8)OUTLINE_COLOUR };
+        int first = staticCount;
+        while (first > 0 && statics[first - 1].sortY > depth[k]) first--;
+        for (int si = first; si < staticCount; si++) {
             const StaticSprite& sp = statics[si];
             if (sp.x >= x1 || sp.x + sp.w <= x0 || sp.y >= y1 || sp.y + sp.h <= y0) continue;
-            redraw_static(buf, sp, x0, y0, x1, y1);
+            redraw_static(buf, sp, x0, y0, x1, y1, u.state == USTATE_DEAD ? NULL : &cell);
         }
     }
 
