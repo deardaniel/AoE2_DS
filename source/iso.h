@@ -43,16 +43,20 @@ static inline void screenToTile(int screenX, int screenY, int camX, int camY,
     int isoX = screenX + camX;
     int isoY = screenY + camY;
 
-    // Undo the iso projection:
-    //   isoX = (tx - ty) * 16 + 512
+    // Undo the iso projection. tileToIso gives the LEFT edge of a tile's
+    // 32x16 cell; the diamond's top corner — the tile's own origin in tile
+    // space — is half a cell further right:
+    //   isoX = (tx - ty) * 16 + 512 + 16
     //   isoY = (tx + ty) * 8
     // So:
-    //   rawX = isoX - 512 = (tx - ty) * 16
-    //   rawY = isoY       = (tx + ty) * 8
+    //   rawX = isoX - 512 - 16 = (tx - ty) * 16
+    //   rawY = isoY            = (tx + ty) * 8
     // Therefore:
     //   tx = (rawX/16 + rawY/8) / 2 = (rawX + 2*rawY) / 32
     //   ty = (rawY/8 - rawX/16) / 2 = (2*rawY - rawX) / 32
-    int rawX = isoX - ISO_MAP_W / 2;
+    // (Leaving out the half cell resolves every point half a tile to the
+    // side: the left half of each diamond lands on its neighbour.)
+    int rawX = isoX - ISO_MAP_W / 2 - ISO_TILE_W / 2;
     int rawY = isoY;
 
     tileX = isoFloorDiv(rawX + 2 * rawY, ISO_TILE_W);

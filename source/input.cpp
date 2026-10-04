@@ -1,5 +1,6 @@
 #include "input.h"
 #include "render.h"
+#include "fog.h"
 #include "game.h"
 #include "units.h"
 #include "buildings.h"
@@ -88,20 +89,16 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         return;
     }
 
-    // Check if tapped on own unit (screen-space bounding box)
-    int tappedUnit = -1;
-    for (int i = 0; i < MAX_UNITS; i++) {
-        if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
-        if (units[i].owner != 0) continue;
-        int uIsoX, uIsoY;
-        worldToIso(units[i].x, units[i].y, uIsoX, uIsoY);
-        int usx = uIsoX - gs.camX;
-        int usy = uIsoY - gs.camY - (32 - ISO_TILE_H);
-        if (screenX >= usx && screenX < usx + 32 &&
-            screenY >= usy && screenY < usy + 32) {
-            tappedUnit = i;
-            break;
+    // Check if tapped on own unit (by its sprite). With units selected, a
+    // sheep carcass that still has meat counts too, so villagers can be sent
+    // back to it.
+    int tappedUnit = render_pick_unit(gs, screenX, screenY, 0, gs.selectionCount > 0);
+    if (tappedUnit >= 0 && units[tappedUnit].state == USTATE_DEAD) {
+        for (int i = 0; i < MAX_UNITS; i++) {
+            if (gs.unitSelected[i] && units[i].alive && units[i].type == UNIT_VILLAGER)
+                unit_command_attack(i, tappedUnit);
         }
+        return;
     }
 
     if (tappedUnit >= 0) {
@@ -185,20 +182,12 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         return;
     }
 
-    // Check if tapped on enemy unit (attack command)
-    int enemyUnit = -1;
-    for (int i = 0; i < MAX_UNITS; i++) {
-        if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
-        if (units[i].owner == 0) continue;
-        int uIsoX, uIsoY;
-        worldToIso(units[i].x, units[i].y, uIsoX, uIsoY);
-        int usx = uIsoX - gs.camX;
-        int usy = uIsoY - gs.camY - (32 - ISO_TILE_H);
-        if (screenX >= usx && screenX < usx + 32 &&
-            screenY >= usy && screenY < usy + 32) {
-            enemyUnit = i;
-            break;
-        }
+    // Check if tapped on a visible enemy unit (attack command)
+    int enemyUnit = render_pick_unit(gs, screenX, screenY, 1);
+    if (enemyUnit >= 0) {
+        int etx = (units[enemyUnit].x + TILE_PX / 2) / TILE_PX;
+        int ety = (units[enemyUnit].y + TILE_PX / 2) / TILE_PX;
+        if (!fogMap.isVisible(0, etx, ety)) enemyUnit = -1;
     }
     if (enemyUnit >= 0 && gs.selectionCount > 0) {
         for (int i = 0; i < MAX_UNITS; i++) {
@@ -372,7 +361,9 @@ static void process_drag_select(GameState& gs, int x0, int y0, int x1, int y1) {
     game_clear_selection(gs);
     for (int i = 0; i < MAX_UNITS; i++) {
         if (!units[i].alive || units[i].state == USTATE_DEAD) continue;
+        if (units[i].state == USTATE_GARRISONED) continue;  // inside a building
         if (units[i].owner != 0) continue;
+        if (units[i].type == UNIT_SHEEP) continue;  // livestock isn't boxed up with the army
         int uIsoX, uIsoY;
         worldToIso(units[i].x, units[i].y, uIsoX, uIsoY);
         int usx = uIsoX - gs.camX + 16; // center of 32px sprite
@@ -525,8 +516,13 @@ void input_update(GameState& gs, TerrainMap& terrain) {
 
     // B: cancel current action, or cancel building training
     if (keysPressed & KEY_B) {
-        if (gs.inputMode != 0 || gs.buildMenuOpen) {
+        if (gs.inputMode != 0) {
             gs.inputMode = 0;
+            gs.buildMenuOpen = false;
+        } else if (gs.selectionCount > 0) {
+            // Nothing in progress: B lets go of the selected units, so the
+            // next tap on a building selects it instead of sending them in
+            game_clear_selection(gs);
             gs.buildMenuOpen = false;
         } else if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
                    buildings[gs.selectedBldg].trainQueue[0] >= 0) {

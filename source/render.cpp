@@ -468,6 +468,32 @@ int render_pick_building(const GameState& gs, int screenX, int screenY) {
     return best;
 }
 
+// Which unit is under a screen pixel? Judged by the unit's standing sprite —
+// a box as wide as its cell and as tall as it stands, with a couple of pixels'
+// slack for a stylus — so a unit doesn't swallow taps meant for the ground or
+// a resource beside it. owner < 0 = anyone. Dead units don't count, except a
+// sheep carcass that still has meat when withCarcasses is set; garrisoned
+// units never do. Nearest ground point wins.
+int render_pick_unit(const GameState& gs, int screenX, int screenY, int owner, bool withCarcasses) {
+    int best = -1, bestDist = 0x7FFFFFFF;
+    for (int i = 0; i < MAX_UNITS; i++) {
+        const Unit& u = units[i];
+        if (!u.alive || u.state == USTATE_GARRISONED) continue;
+        if (owner >= 0 && u.owner != owner) continue;
+        if (u.state == USTATE_DEAD &&
+            !(withCarcasses && u.type == UNIT_SHEEP && u.carryAmount > 0)) continue;
+        const SheetGeom& g = *unitStandSheet[u.type].g;
+        int gx, gy;
+        unit_ground(u, gs, gx, gy);
+        int dx = screenX - gx, dy = screenY - gy;
+        int halfW = g.cw / 2 + 2;
+        if (dx < -halfW || dx > halfW || dy < -(g.ay + 2) || dy > 4) continue;
+        int dist = dx * dx + dy * dy;
+        if (dist < bestDist) { bestDist = dist; best = i; }
+    }
+    return best;
+}
+
 // Generous on-screen test for a unit (its sheets' cells differ in size)
 static bool unit_on_screen(int gx, int gy) {
     return gx > -48 && gx < SCREEN_W + 48 && gy > -48 && gy < SCREEN_H + 48;

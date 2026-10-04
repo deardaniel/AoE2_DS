@@ -9,11 +9,18 @@
 #                                         the capture cuts off the last 15 rows)
 #   tools/emu/emu.sh tap X Y              touch the bottom screen at pixel X,Y (0-255, 0-191)
 #   tools/emu/emu.sh drag X Y X2 Y2       touch-drag
-#   tools/emu/emu.sh key VK               press a key (Windows virtual-key code, see melonDS.toml)
+#   tools/emu/emu.sh key NAME             press a button: A B X Y START SELECT L R
+#                                         UP DOWN LEFT RIGHT, FF (toggle fast-forward),
+#                                         or a Windows virtual-key code
 #   tools/emu/emu.sh stop
 #
-# Assumes melonDS at C:\Users\me\Downloads\melonDS.exe, 150% display scaling and
-# the default window size (screens stacked, 2x logical).
+# Uses its own copy of melonDS in C:\Users\me\Downloads\aoe2_test_emu (exe +
+# melonDS.toml), so it can have its own key bindings and be muted without
+# touching the emulator Daniel plays in. The bindings this script expects, in
+# that folder's [Instance0.Keyboard]: A=68 B=83 X=87 Y=65 Start=84 Select=71
+# L=81 R=69 HK_FastForwardToggle=70; [Instance0.Audio] Volume=0.
+# Assumes 150% display scaling and the default window size (screens stacked,
+# 2x logical).
 set -e
 PS=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -28,8 +35,8 @@ case "$1" in
 start)
     OLD=$(cat "$PIDFILE" 2>/dev/null || true)
     # melonDS reads the ROM from a Windows path; a copy keeps rebuilds from racing it
-    cp "$ROOT/aoe2_dsi.nds" /mnt/c/Users/me/Downloads/aoe2_dsi_test.nds
-    $PS -NoProfile -Command "if ('$OLD' -ne '') { Stop-Process -Id $OLD -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 500; \$p = Start-Process 'C:\Users\me\Downloads\melonDS.exe' -ArgumentList 'C:\Users\me\Downloads\aoe2_dsi_test.nds' -PassThru; \$p.Id" 2>/dev/null | tr -d '\r\n ' > "$PIDFILE"
+    cp "$ROOT/aoe2_dsi.nds" /mnt/c/Users/me/Downloads/aoe2_test_emu/aoe2_dsi_test.nds
+    $PS -NoProfile -Command "if ('$OLD' -ne '') { Stop-Process -Id $OLD -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 500; \$p = Start-Process 'C:\Users\me\Downloads\aoe2_test_emu\melonDS.exe' -WorkingDirectory 'C:\Users\me\Downloads\aoe2_test_emu' -ArgumentList 'C:\Users\me\Downloads\aoe2_test_emu\aoe2_dsi_test.nds' -PassThru; \$p.Id" 2>/dev/null | tr -d '\r\n ' > "$PIDFILE"
     timeout "${2:-7}" tail -f /dev/null || true
     ;;
 stop)
@@ -55,7 +62,13 @@ drag)
     $PS -NoProfile -ExecutionPolicy Bypass -File "$WIN_TOOLS\\input_pid.ps1" -ProcId "$(cat "$PIDFILE")" -Action drag -X $(($2*2+1)) -Y $((409+$3*2+1)) -X2 $(($4*2+1)) -Y2 $((409+$5*2+1)) >/dev/null
     ;;
 key)
-    $PS -NoProfile -ExecutionPolicy Bypass -File "$WIN_TOOLS\\input_pid.ps1" -ProcId "$(cat "$PIDFILE")" -Action key -Key "$2" >/dev/null
+    case "$2" in
+        A) VK=68 ;; B) VK=83 ;; X) VK=87 ;; Y) VK=65 ;;
+        START) VK=84 ;; SELECT) VK=71 ;; L) VK=81 ;; R) VK=69 ;; FF) VK=70 ;;
+        LEFT) VK=37 ;; UP) VK=38 ;; RIGHT) VK=39 ;; DOWN) VK=40 ;;
+        *) VK="$2" ;;
+    esac
+    $PS -NoProfile -ExecutionPolicy Bypass -File "$WIN_TOOLS\\input_pid.ps1" -ProcId "$(cat "$PIDFILE")" -Action key -Key "$VK" >/dev/null
     ;;
 *)
     sed -n 2,16p "$0"; exit 1 ;;

@@ -7,6 +7,9 @@ struct TerrainMap;
 // Initialize HD sprite data — loads palette, sets up sprite sheet pointers
 void render_init();
 
+// Unit under a screen pixel, by its sprite (-1 = none); owner < 0 = anyone
+int render_pick_unit(const GameState& gs, int screenX, int screenY, int owner, bool withCarcasses = false);
+
 // Building under a screen pixel, by its sprite (-1 = none)
 int render_pick_building(const GameState& gs, int screenX, int screenY);
 
