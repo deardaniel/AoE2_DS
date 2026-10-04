@@ -108,7 +108,8 @@ static void game_start() {
     //   2 = one of every unit, turned to a new facing every 2 seconds
     //   3 = normal start, one villager scripted onto a sheep
     //   4 = the 4x4 buildings, each construction stage and an enemy building
-#if SHOWCASE != 3
+    //   5 = normal game watched from the AI's base with the fog lifted
+#if SHOWCASE != 3 && SHOWCASE != 5
     for (int ty = 0; ty < 26; ty++)
         for (int tx = 0; tx < 26; tx++)
             if (tx < 2 || tx > 5 || ty < 2 || ty > 5)
@@ -203,6 +204,10 @@ static void game_start() {
     if (gameState.camY < 0) gameState.camY = 0;
 #if defined(SHOWCASE) && SHOWCASE == 4
     tileToIso(14, 17, isoX, isoY);
+    gameState.camX = isoX - SCREEN_W / 2;
+    gameState.camY = isoY - SCREEN_H / 2;
+#elif defined(SHOWCASE) && SHOWCASE == 5
+    tileToIso(MAP_TILES - 7, MAP_TILES - 7, isoX, isoY);
     gameState.camX = isoX - SCREEN_W / 2;
     gameState.camY = isoY - SCREEN_H / 2;
 #elif defined(SHOWCASE) && SHOWCASE != 3
@@ -463,6 +468,10 @@ int main(void) {
         if ((gameState.frameCount & 1) == 0) {
             fogMap.update();
         }
+
+#if defined(SHOWCASE) && SHOWCASE == 5
+        memset(fogMap.state[0], FOG_VISIBLE, sizeof(fogMap.state[0]));
+#endif
 
         // AI
         ai_update(gameState, terrain);

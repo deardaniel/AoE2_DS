@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Preprocess HD sprite PNGs into NDS-ready indexed binary data.
+"""Preprocess sprite PNGs into NDS-ready indexed binary data.
 
-Creates a shared 256-color palette and indexed binary sprite data for all
-unit and building sprites. Output goes to data/ directory.
+The palette is the game's own (50500.bina), so sprite colours are exact: every
+sprite pixel is already one of its 256 entries, and nothing is quantised.
 
 Palette layout (NDS BGR555, 256 entries x 2 bytes = 512 bytes):
   Index 0:      Transparent
-  Index 1-15:   Reserved for UI colors (set at runtime by terrain_initPalette)
-  Index 16-N:   Shared colors from all sprites (including blue player colors)
-  Index N+1...: Red player color variants (for player 2 remapping)
+  Index 1-15:   UI colours (set at runtime by terrain_initPalette); index 1
+                doubles as the shadow marker in sprite data
+  Index 16-255: The game palette's entries 16-255, in place. Entries 0-15 of
+                the game palette that our sprites use are moved into entries
+                nothing uses.
 
-Also generates a 256-byte remap table for player 2 color swapping at runtime.
+Player colours are the game's ramps: player 1 at 16-23, player 2 at 32-39.
+sprite_remap.bin maps one onto the other for the second player.
 """
 
 import json
@@ -24,6 +27,7 @@ from shared_constants import rgb_to_bgr555, TC_CANVAS, TC_ANCHOR, PAL_SHADOW
 
 SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sprites')
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+GAME_PALETTE = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina'
 
 # Unit sprite sheets: (output_name, filename) — built by build_unit_sheets.py,
 # which documents the layouts
@@ -162,87 +166,49 @@ def load_rgba(filename, required=True):
     return np.array(img)
 
 
-def find_player_colors(all_rgba_images):
-    """Find blue player-color pixels across all sprites.
+def load_game_palette():
+    """The game's 256-colour palette as a list of (r, g, b)."""
+    with open(GAME_PALETTE) as f:
+        tokens = f.read().split()
+    if tokens[0] != 'JASC-PAL':
+        sys.exit(f"{GAME_PALETTE} is not a JASC palette")
+    n = int(tokens[2])
+    vals = [int(t) for t in tokens[3:3 + n * 3]]
+    return [tuple(vals[i * 3:i * 3 + 3]) for i in range(n)]
 
-    AoE2 player 1 (blue) colors are saturated blues used for team indicators.
-    Only match clearly saturated player blues, not every vaguely-blue pixel.
-    Returns list of (R, G, B) tuples to force into the palette.
+
+def build_palette(all_rgba_images):
+    """The 240 colours for NDS indices 16-255.
+
+    Slot i holds game palette entry i + 16. The game's entries 0-15 can't
+    keep their place (0 is transparent on the NDS and 1-15 are UI colours),
+    so the ones our sprites use are moved into entries no sprite uses.
     """
-    player_colors = set()
-    for img_data in all_rgba_images:
-        mask = img_data[:, :, 3] > 128
-        rgb = img_data[mask][:, :3]
-        for r, g, b in rgb:
-            r, g, b = int(r), int(g), int(b)
-            # Saturated player blues: high blue, very low red, blue dominates
-            if b > 120 and r < 80 and g < 120 and (b - r) > 80:
-                player_colors.add((r, g, b))
-    return sorted(player_colors, key=lambda c: c[2])
+    game = load_game_palette()
+    index_of = {}
+    for i, c in enumerate(game):
+        index_of.setdefault(c, i)
 
+    used = set()
+    for img in all_rgba_images:
+        for c in np.unique(img[img[:, :, 3] == 255][:, :3], axis=0):
+            c = tuple(int(v) for v in c)
+            if c in index_of:
+                used.add(index_of[c])
 
-def build_shared_palette(all_rgba_images, max_colors=248):
-    """Build a shared quantized palette from all sprite images.
-
-    Returns list of (R, G, B) tuples, length <= max_colors.
-    Reserves the 8 AoE2 player 1 colors (from 50500.bina indices 16-23)
-    at the START of the palette to ensure correct player color handling.
-    """
-    # AoE2 player 1 blue colors (50500.bina palette indices 16-23)
-    PLAYER_COLORS = [
-        (0, 0, 82),       # very dark blue
-        (0, 21, 130),      # dark blue
-        (19, 49, 161),     # medium blue
-        (48, 93, 182),     # medium-light blue
-        (74, 121, 208),    # light blue
-        (110, 166, 235),   # sky blue
-        (151, 206, 255),   # very light blue
-        (205, 250, 255),   # near white cyan
-    ]
-
-    # Collect all opaque pixels into one flat array
-    pixel_lists = []
-    for img_data in all_rgba_images:
-        mask = img_data[:, :, 3] > 128
-        rgb = img_data[mask][:, :3]
-        pixel_lists.append(rgb)
-
-    all_pixels = np.vstack(pixel_lists)
-    unique_colors = np.unique(all_pixels.reshape(-1, 3), axis=0)
-    print(f"  {len(all_pixels)} opaque pixels, {len(unique_colors)} unique colors")
-
-    # Reserve player colors, quantize rest with reduced budget
-    reserved = set(PLAYER_COLORS)
-    quant_budget = max_colors - len(PLAYER_COLORS)
-
-    if len(unique_colors) <= quant_budget:
-        palette = list(PLAYER_COLORS) + [tuple(c) for c in unique_colors if tuple(c) not in reserved]
-        return palette
-
-    # Create a composite image with all unique colors for PIL quantization
-    n = len(unique_colors)
-    w = min(n, 4096)
-    h = (n + w - 1) // w
-    composite = Image.new('RGB', (w, h), (0, 0, 0))
-    pixels = composite.load()
-    for i, (r, g, b) in enumerate(unique_colors):
-        pixels[i % w, i // w] = (int(r), int(g), int(b))
-
-    quantized = composite.quantize(colors=quant_budget, method=Image.Quantize.MEDIANCUT)
-    pal_flat = quantized.getpalette()
-
-    quant_colors = []
-    for i in range(quant_budget):
-        quant_colors.append((pal_flat[i * 3], pal_flat[i * 3 + 1], pal_flat[i * 3 + 2]))
-
-    # Build final palette: player colors first, then quantized (no duplicates)
-    palette = list(PLAYER_COLORS)
-    seen = set(PLAYER_COLORS)
-    for c in quant_colors:
-        if c not in seen:
-            seen.add(c)
-            palette.append(c)
-
+    palette = list(game[16:256])
+    # A colour that also exists at 16+ (the game palette repeats black and
+    # white) needs no move
+    high = set(palette)
+    movers = [i for i in sorted(used) if i < 16 and game[i] not in high]
+    # Never reuse the player ramps: the second player's remap targets 32-39
+    free = [i for i in range(40, 256) if i not in used]
+    if len(movers) > len(free):
+        sys.exit(f"{len(movers)} low palette entries in use but only {len(free)} free slots")
+    for src, dst in zip(movers, free):
+        palette[dst - 16] = game[src]
+    print(f"  {len(used)} game palette entries in use; moved {len(movers)} low entries "
+          f"into free slots, {len(free) - len(movers)} left")
     return palette
 
 
@@ -299,16 +265,6 @@ def index_rgba_image(img_data, palette_array, target_size=None, prealigned=False
         indexed[(alpha > 0) & ~opaque_mask] = PAL_SHADOW
 
     return bytes(indexed), w, h
-
-
-def find_blue_player_indices(palette):
-    """Find palette entries that correspond to blue player colors.
-
-    The first 8 entries in the palette are the reserved AoE2 player 1 colors
-    (from 50500.bina indices 16-23). Returns those indices directly.
-    """
-    # Player colors are reserved at palette indices 0-7 by build_shared_palette()
-    return list(range(8))
 
 
 def write_geom_header(building_geom, construction_geom):
@@ -459,86 +415,36 @@ def main():
         all_images.append(data)
         print(f"  {filename}: {data.shape[1]}x{data.shape[0]}")
 
-    # Load terrain texture samples so greens/blues are represented in palette
-    # Use large samples (256x256) to give terrain colors proper weight
-    TERRAIN_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/terrain/textures'
-    terrain_files = ['g_grs_00_color.png', 'g_for_00_color.png', 'g_wtr_00_color.png',
-                     'g_rd1_00_color.png', 'g_des_00_color.png',
-                     'g_gr2_00_color.png', 'g_gr3_00_color.png', 'g_gr6_00_color.png']
-    for tf in terrain_files:
-        tp = os.path.join(TERRAIN_DIR, tf)
-        if os.path.exists(tp):
-            timg = Image.open(tp).convert('RGBA')
-            # Sample a 256x256 region to give terrain adequate palette weight
-            crop = timg.crop((128, 128, 384, 384))
-            tdata = np.array(crop)
-            all_images.append(tdata)
-            print(f"  terrain/{tf}: sampled 256x256")
-
     if not all_images:
         print("ERROR: No sprite images found!")
         sys.exit(1)
 
-    # --- Build shared palette ---
-    print("\nBuilding shared palette...")
-    palette = build_shared_palette(all_images, max_colors=230)
-    print(f"  Quantized to {len(palette)} colors")
-
-    # --- Player color handling ---
-    blue_indices = find_blue_player_indices(palette)
-    print(f"  Found {len(blue_indices)} blue player color shades")
-
-    # Create red variants of blue player colors
-    red_remap = {}  # maps NDS index (16-based) to red NDS index
-    red_colors = []
-    for bi in blue_indices:
-        r, g, b = palette[bi]
-        # Create red variant: high red, low blue/green
-        red_r = min(255, b + 30)
-        red_g = g // 3
-        red_b = r // 4
-        red_colors.append((red_r, red_g, red_b))
-
-    # Add red colors to palette
-    red_start_idx = len(palette)
-    for i, rc in enumerate(red_colors):
-        palette.append(rc)
-        # Map blue NDS index (bi+16) to red NDS index (red_start_idx+i+16)
-        red_remap[blue_indices[i] + 16] = red_start_idx + i + 16
-
-    # Pad palette to 240 entries (indices 16-255 = 240 slots)
-    while len(palette) < 240:
-        palette.append((0, 0, 0))
-
-    print(f"  Final palette: {len(palette)} colors + transparent (index 0)")
-    print(f"  Red remap: {red_remap}")
+    # --- Palette ---
+    print("\nBuilding palette from the game's...")
+    palette = build_palette(all_images)
 
     # --- Save NDS palette (BGR555, 256 entries x 2 bytes = 512 bytes) ---
-    print("\nSaving palette...")
     pal_bin = bytearray(512)
     # Indices 0-15 reserved (0=transparent, 1-15=UI colors set at runtime)
     for i, (r, g, b) in enumerate(palette):
-        val = rgb_to_bgr555(r, g, b)
-        struct.pack_into('<H', pal_bin, (i + 16) * 2, val)
-
+        struct.pack_into('<H', pal_bin, (i + 16) * 2, rgb_to_bgr555(r, g, b))
     pal_path = os.path.join(DATA_DIR, 'sprite_pal.bin')
     with open(pal_path, 'wb') as f:
         f.write(pal_bin)
     print(f"  {pal_path}: {len(pal_bin)} bytes")
 
-    # --- Save red remap table (256 bytes, identity except for blue->red) ---
+    # --- Player colour remap: the game's player 1 ramp onto player 2's ---
     remap = bytearray(range(256))
-    for src, dst in red_remap.items():
-        if src < 256 and dst < 256:
-            remap[src] = dst
-
+    for i in range(8):
+        remap[16 + i] = 32 + i
     remap_path = os.path.join(DATA_DIR, 'sprite_remap.bin')
     with open(remap_path, 'wb') as f:
         f.write(remap)
     print(f"  {remap_path}: {len(remap)} bytes")
 
-    # --- Prepare palette array for indexing (exclude red variants and padding) ---
-    palette_array = np.array(palette[:red_start_idx], dtype=np.int32)
+    # Sprite pixels are exact palette colours, so nearest-colour lookup finds
+    # them at distance 0; icons and other hand-made art get the closest entry.
+    palette_array = np.array(palette, dtype=np.int32)
 
     # --- Process unit sprite sheets ---
     print("\nProcessing unit sprites...")

@@ -109,8 +109,10 @@ make sprites  # runs preprocess_sprites.py then preprocess_terrain.py
 ```
 
 This generates:
-- `data/sprite_pal.bin` — shared 256-color BGR555 palette
-- `data/sprite_remap.bin` — player color remap table (blue → red)
+- `data/sprite_pal.bin` — the game's own palette (`50500.bina`) in BGR555, so
+  sprite colours are exact; its entries 0-15 are moved to unused slots because
+  the NDS needs 0 for transparency and 1-15 hold UI colours
+- `data/sprite_remap.bin` — player 1's colour ramp (16-23) onto player 2's (32-39)
 - `data/spr_*.bin` — indexed pixel data for each sprite sheet
 - `data/terrain_*.bin` — terrain tile graphics and palette
 
