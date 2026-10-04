@@ -443,6 +443,31 @@ static void ui_draw_minimap(const GameState& gs, const TerrainMap& terrain) {
             if (e2 < dx)  { err += dx; y0 += sy; }
         }
     }
+
+    // Scores in the two dark corners under the map: yours left, the AI's right
+    {
+        int scores[NUM_PLAYERS] = {0, 0};
+        for (int p = 0; p < NUM_PLAYERS; p++) {
+            for (int r = 0; r < RES_COUNT; r++)
+                scores[p] += gs.players[p].resources[r];
+            scores[p] += gs.players[p].age * 500;
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (units[i].alive && units[i].owner == p && units[i].state != USTATE_DEAD)
+                    scores[p] += 50;
+            }
+            for (int i = 0; i < MAX_BUILDINGS; i++) {
+                if (buildings[i].alive && buildings[i].owner == p)
+                    scores[p] += 100;
+            }
+        }
+        char buf[12];
+        int sy = MINIMAP_Y + MINIMAP_H - gameFont.height - 1;
+        snprintf(buf, sizeof(buf), "%d", scores[0]);
+        font_draw_str_16(minimapVram, 256, 192, MINIMAP_X + 2, sy, buf, RGB15(10, 14, 31) | BIT(15), gameFont);
+        snprintf(buf, sizeof(buf), "%d", scores[1]);
+        font_draw_str_16(minimapVram, 256, 192, MINIMAP_X + MINIMAP_W - 2 - font_string_width(gameFont, buf), sy,
+                         buf, RGB15(31, 8, 6) | BIT(15), gameFont);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +494,6 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
     u16 colGold = RGB15(20, 16, 2) | BIT(15);
     u16 colRed  = RGB15(24, 4, 2) | BIT(15);
     u16 colYellow = RGB15(24, 20, 0) | BIT(15);
-    u16 colBlue = RGB15(2, 4, 24) | BIT(15);
 
     // --- Always-shown info ---
 
@@ -485,30 +509,6 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
             font_draw_str_16(minimapVram, 256, 192, x, ty, "%", colGold, gameFont);
             ty += 12;
         }
-    }
-
-    // Scores
-    {
-        int scores[NUM_PLAYERS] = {0, 0};
-        for (int p = 0; p < NUM_PLAYERS; p++) {
-            for (int r = 0; r < RES_COUNT; r++)
-                scores[p] += gs.players[p].resources[r];
-            scores[p] += gs.players[p].age * 500;
-            for (int i = 0; i < MAX_UNITS; i++) {
-                if (units[i].alive && units[i].owner == p && units[i].state != USTATE_DEAD)
-                    scores[p] += 50;
-            }
-            for (int i = 0; i < MAX_BUILDINGS; i++) {
-                if (buildings[i].alive && buildings[i].owner == p)
-                    scores[p] += 100;
-            }
-        }
-        x = font_draw_str_16(minimapVram, 256, 192, TX, ty, "You:", colBlue, gameFont);
-        font_draw_num_16(minimapVram, 256, 192, x, ty, scores[0], colText, gameFont);
-        ty += 12;
-        x = font_draw_str_16(minimapVram, 256, 192, TX, ty, " AI:", colRed, gameFont);
-        font_draw_num_16(minimapVram, 256, 192, x, ty, scores[1], colText, gameFont);
-        ty += 12;
     }
 
     // Difficulty + strategy indicator
