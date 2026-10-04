@@ -99,3 +99,4 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
 // Backed by tileOccupant grid rebuilt each frame in units_update().
 bool tile_has_unit(int tx, int ty);
 void tile_mark_unit(int tx, int ty, int unitIdx);
+int  tile_occupant(int tx, int ty);

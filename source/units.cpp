@@ -37,6 +37,12 @@ static void rebuild_occupancy() {
     }
 }
 
+// Debug readout: who holds a tile (-1 = nobody)
+int tile_occupant(int tx, int ty) {
+    if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return -1;
+    return tileOccupant[ty][tx];
+}
+
 // Record a unit placed mid-frame (spawn, ungarrison) so the next one placed
 // in the same frame doesn't land on the same tile.
 void tile_mark_unit(int tx, int ty, int unitIdx) {
@@ -635,65 +641,24 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     u.attackTarget = -1;
     u.buildTarget = -1;
     u.herdTarget = -1;
-    u.carryType = RES_COUNT;
-    u.carryAmount = 0;
 
-    // Determine carry type and role from terrain
+    // Determine carry type and role from terrain. A load of a different
+    // resource is dropped; more of the same is kept.
+    u8 oldCarry = u.carryType;
     if (tt == TERRAIN_FOREST) { u.carryType = RES_WOOD;  u.role = VROLE_LUMBERJACK; }
     else if (tt == TERRAIN_GOLD)   { u.carryType = RES_GOLD;  u.role = VROLE_MINER; }
     else if (tt == TERRAIN_STONE)  { u.carryType = RES_STONE; u.role = VROLE_MINER; }
     else if (tt == TERRAIN_FARM)    { u.carryType = RES_FOOD;  u.role = VROLE_FARMER; }
     else if (tt == TERRAIN_BERRIES) { u.carryType = RES_FOOD;  u.role = VROLE_FORAGER; }
+    if (u.carryType != oldCarry) u.carryAmount = 0;
 
-    // Find path to nearest adjacent passable tile of the resource
+    // Path to the resource itself. A tree, mine or bush blocks its tile, so
+    // the path ends on the nearest free tile beside it — never one a building
+    // or another gatherer is standing on. A farm is walked onto.
     int sx = u.x / TILE_PX;
     int sy = u.y / TILE_PX;
-
-    // Try adjacent tiles sorted by distance, preferring unoccupied tiles.
-    // The +10000 penalty ensures occupied tiles sort after all unoccupied ones,
-    // so multiple villagers gathering the same resource spread to different tiles.
-    bool pathed = false;
-    int adjOrder[8];
-    int adjDist[8];
-    for (int d = 0; d < 8; d++) {
-        adjOrder[d] = d;
-        int ax = tileTX + DX8[d];
-        int ay = tileTY + DY8[d];
-        int ddx = ax - sx, ddy = ay - sy;
-        adjDist[d] = ddx * ddx + ddy * ddy;
-        // Penalize occupied tiles so unoccupied ones are preferred
-        if (tile_has_unit(ax, ay)) adjDist[d] += 10000;
-    }
-    // Simple insertion sort by distance
-    for (int i = 1; i < 8; i++) {
-        int key = adjOrder[i], kd = adjDist[i];
-        int j = i - 1;
-        while (j >= 0 && adjDist[j] > kd) {
-            adjOrder[j + 1] = adjOrder[j];
-            adjDist[j + 1] = adjDist[j];
-            j--;
-        }
-        adjOrder[j + 1] = key;
-        adjDist[j + 1] = kd;
-    }
-    for (int i = 0; i < 8; i++) {
-        int d = adjOrder[i];
-        int ax = tileTX + DX8[d];
-        int ay = tileTY + DY8[d];
-        if (terrain.passable(ax, ay)) {
-            if (unit_find_path(sx, sy, ax, ay, terrain, u, idx)) {
-                u.state = USTATE_MOVING; // will switch to gathering on arrival
-                pathed = true;
-                break;
-            }
-        }
-    }
-    // If resource tile itself is passable (e.g., farm), go directly
-    if (!pathed && terrain.passable(tileTX, tileTY)) {
-        if (unit_find_path(sx, sy, tileTX, tileTY, terrain, u, idx)) {
-            u.state = USTATE_MOVING;
-        }
-    }
+    if (unit_find_path(sx, sy, tileTX, tileTY, terrain, u, idx))
+        u.state = USTATE_MOVING; // will switch to gathering on arrival
 }
 
 void unit_command_attack(int idx, int targetIdx) {
@@ -1622,7 +1587,16 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                 } else if (u.buildTarget >= 0 && u.type == UNIT_VILLAGER) {
                     u.state = USTATE_BUILDING;
                 } else if (u.gatherTX >= 0 && u.gatherTY >= 0 && u.type == UNIT_VILLAGER) {
-                    u.state = USTATE_GATHERING;
+                    // A gatherer finishes two kinds of walk: out to the
+                    // resource, and back to the drop-off with a load. Arriving
+                    // with a load somewhere that isn't beside the resource is
+                    // the second kind — hand it in. (Treating both as "start
+                    // gathering" sent the villager straight back out and
+                    // threw the load away.)
+                    int gtx = (u.x + TILE_PX / 2) / TILE_PX - u.gatherTX;
+                    int gty = (u.y + TILE_PX / 2) / TILE_PX - u.gatherTY;
+                    bool atResource = (gtx >= -1 && gtx <= 1 && gty >= -1 && gty <= 1);
+                    u.state = (u.carryAmount > 0 && !atResource) ? USTATE_RETURNING : USTATE_GATHERING;
                 } else if (u.attackTarget >= 0 || u.attackBldgTarget >= 0) {
                     u.state = USTATE_ATTACKING;
                 } else if (u.carryAmount > 0) {

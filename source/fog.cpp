@@ -8,9 +8,13 @@ FogMap fogMap;
 
 void FogMap::init() {
     memset(state, FOG_UNEXPLORED, sizeof(state));
+    version++;
 }
 
 void FogMap::update() {
+    static u8 before[MAP_TILES][MAP_TILES];
+    memcpy(before, state[0], sizeof(before));
+
     // Demote visible -> explored for both players
     for (int p = 0; p < NUM_PLAYERS; p++) {
         for (int ty = 0; ty < MAP_TILES; ty++) {
@@ -61,6 +65,20 @@ void FogMap::update() {
             }
         }
     }
+
+    if (memcmp(before, state[0], sizeof(before)) != 0) version++;
+}
+
+u32 FogMap::viewHash(int minTX, int minTY, int maxTX, int maxTY) const {
+    if (minTX < 0) minTX = 0;
+    if (minTY < 0) minTY = 0;
+    if (maxTX >= MAP_TILES) maxTX = MAP_TILES - 1;
+    if (maxTY >= MAP_TILES) maxTY = MAP_TILES - 1;
+    u32 h = 2166136261u;
+    for (int ty = minTY; ty <= maxTY; ty++)
+        for (int tx = minTX; tx <= maxTX; tx++)
+            h = (h ^ state[0][ty][tx]) * 16777619u;
+    return h;
 }
 
 bool FogMap::isVisible(int player, int tx, int ty) const {
@@ -75,6 +93,8 @@ bool FogMap::isExplored(int player, int tx, int ty) const {
 
 void FogMap::forceExplore(int player, int tx, int ty) {
     if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return;
-    if (state[player][ty][tx] == FOG_UNEXPLORED)
+    if (state[player][ty][tx] == FOG_UNEXPLORED) {
         state[player][ty][tx] = FOG_EXPLORED;
+        version++;
+    }
 }

@@ -22,6 +22,21 @@
 #include <filesystem.h>
 #include <fat.h>
 
+#ifdef SHOWCASE
+// Profiling for debug builds: how much of a 1/60 s frame each part of the
+// loop takes, in percent, shown under the minimap (ui.cpp).
+int profPct[5];  // units, buildings+projectiles+fog+ai, terrain+fog overlay, sprites, ui
+static u32 profMark;
+#define PROF_BEGIN() do { cpuStartTiming(2); profMark = 0; } while (0)
+#define PROF_LAP(slot) do { u32 now = cpuGetTiming(); \
+    profPct[slot] = (int)((u64)(now - profMark) * 100 / 560190); profMark = now; } while (0)
+#define PROF_END() cpuEndTiming()
+#else
+#define PROF_BEGIN()
+#define PROF_LAP(slot)
+#define PROF_END()
+#endif
+
 // Global game state (accessible by tech.cpp via extern)
 GameState gameState;
 
@@ -29,6 +44,9 @@ static TerrainMap terrain;
 
 // Main RAM framebuffer for bottom screen (NDS VRAM doesn't support byte writes)
 static u8 terrainBuf[256 * 192] __attribute__((aligned(4)));
+// The ground layer alone, redrawn only when it changes (see the main loop)
+static u8 groundBuf[256 * 192] __attribute__((aligned(4)));
+static u32 groundVersion = 0;
 
 // ---------------------------------------------------------------------------
 // Start a new game
@@ -292,8 +310,8 @@ int main(void) {
             }
 
             // Render game world frozen underneath
-            terrain.renderViewport(terrainBuf, gameState.camX, gameState.camY);
-            render_sprites_sw(terrainBuf, gameState, terrain);
+            terrain.renderViewport(groundBuf, gameState.camX, gameState.camY);
+            render_sprites_sw(terrainBuf, gameState, terrain, groundBuf, ++groundVersion);
 
             // Darken the entire bottom screen with checkerboard
             for (int py = 0; py < SCREEN_H; py++) {
@@ -459,7 +477,9 @@ int main(void) {
         }
 
         // Game logic
+        PROF_BEGIN();
         units_update(gameState, terrain);
+        PROF_LAP(0);
         buildings_update(gameState, terrain);
         projectiles_update(gameState);
         game_update(gameState);
@@ -502,91 +522,133 @@ int main(void) {
 
         // Sub screen: render terrain to main RAM buffer
         // (NDS VRAM doesn't support byte writes — STRB is silently dropped)
-        terrain.renderViewport(terrainBuf, gameState.camX, gameState.camY);
-
-        // Sub screen: fog overlay on buffer (isometric diamond tiles)
+        PROF_LAP(1);
+        // The ground (terrain plus fog) only changes when the camera moves or
+        // the fog or a tile changes, and drawing it costs more than a frame —
+        // so it is drawn into groundBuf when one of those happens and copied
+        // from there every frame.
         {
-            // Determine visible tile range from screen corners
-            int minTX, minTY, maxTX, maxTY;
-            int tmpTX, tmpTY;
+            static int gCamX = -1, gCamY = -1;
+            static u32 gFog = 0xFFFFFFFF, gFogVersion = 0xFFFFFFFF, gTerrain = 0xFFFFFFFF;
+            static bool gGrid = false;
+            bool memsetFog = false;
+#if defined(SHOWCASE) && SHOWCASE == 5
+            memsetFog = true;  // fog is forced visible every frame, version never moves
+#endif
+            // Only the fog on screen matters: a scout exploring the far side
+            // of the map changes the fog constantly but not this picture.
+            // (Trees reach up from a few rows below the screen, hence +5.)
+            u32 viewFog = gFog;
+            if (gFogVersion != fogMap.version || gCamX != gameState.camX || gCamY != gameState.camY) {
+                int x0, y0, x1, y1, tx, ty;
+                screenToTile(0, 0, gameState.camX, gameState.camY, x0, y0);
+                x1 = x0; y1 = y0;
+                static const int CORNER[3][2] = { { SCREEN_W, 0 }, { 0, SCREEN_H }, { SCREEN_W, SCREEN_H } };
+                for (int c = 0; c < 3; c++) {
+                    screenToTile(CORNER[c][0], CORNER[c][1], gameState.camX, gameState.camY, tx, ty);
+                    if (tx < x0) x0 = tx;
+                    if (tx > x1) x1 = tx;
+                    if (ty < y0) y0 = ty;
+                    if (ty > y1) y1 = ty;
+                }
+                viewFog = fogMap.viewHash(x0 - 1, y0 - 1, x1 + 5, y1 + 5);
+                gFogVersion = fogMap.version;
+            }
+            if (gCamX != gameState.camX || gCamY != gameState.camY || gFog != viewFog ||
+                gTerrain != terrain.version || gGrid != terrain.showTileGrid || memsetFog) {
+                gCamX = gameState.camX; gCamY = gameState.camY;
+                gFog = viewFog; gTerrain = terrain.version; gGrid = terrain.showTileGrid;
+                terrain.renderViewport(groundBuf, gameState.camX, gameState.camY);
 
-            screenToTile(0, 0, gameState.camX, gameState.camY, minTX, minTY);
-            maxTX = minTX; maxTY = minTY;
 
-            screenToTile(SCREEN_W, 0, gameState.camX, gameState.camY, tmpTX, tmpTY);
-            if (tmpTX < minTX) minTX = tmpTX;
-            if (tmpTX > maxTX) maxTX = tmpTX;
-            if (tmpTY < minTY) minTY = tmpTY;
-            if (tmpTY > maxTY) maxTY = tmpTY;
+            // Sub screen: fog overlay on buffer (isometric diamond tiles)
+            {
+                // Determine visible tile range from screen corners
+                int minTX, minTY, maxTX, maxTY;
+                int tmpTX, tmpTY;
 
-            screenToTile(0, SCREEN_H, gameState.camX, gameState.camY, tmpTX, tmpTY);
-            if (tmpTX < minTX) minTX = tmpTX;
-            if (tmpTX > maxTX) maxTX = tmpTX;
-            if (tmpTY < minTY) minTY = tmpTY;
-            if (tmpTY > maxTY) maxTY = tmpTY;
+                screenToTile(0, 0, gameState.camX, gameState.camY, minTX, minTY);
+                maxTX = minTX; maxTY = minTY;
 
-            screenToTile(SCREEN_W, SCREEN_H, gameState.camX, gameState.camY, tmpTX, tmpTY);
-            if (tmpTX < minTX) minTX = tmpTX;
-            if (tmpTX > maxTX) maxTX = tmpTX;
-            if (tmpTY < minTY) minTY = tmpTY;
-            if (tmpTY > maxTY) maxTY = tmpTY;
+                screenToTile(SCREEN_W, 0, gameState.camX, gameState.camY, tmpTX, tmpTY);
+                if (tmpTX < minTX) minTX = tmpTX;
+                if (tmpTX > maxTX) maxTX = tmpTX;
+                if (tmpTY < minTY) minTY = tmpTY;
+                if (tmpTY > maxTY) maxTY = tmpTY;
 
-            minTX -= 1; minTY -= 1;
-            maxTX += 1; maxTY += 1;
+                screenToTile(0, SCREEN_H, gameState.camX, gameState.camY, tmpTX, tmpTY);
+                if (tmpTX < minTX) minTX = tmpTX;
+                if (tmpTX > maxTX) maxTX = tmpTX;
+                if (tmpTY < minTY) minTY = tmpTY;
+                if (tmpTY > maxTY) maxTY = tmpTY;
 
-            int minSum = minTX + minTY;
-            int maxSum = maxTX + maxTY;
+                screenToTile(SCREEN_W, SCREEN_H, gameState.camX, gameState.camY, tmpTX, tmpTY);
+                if (tmpTX < minTX) minTX = tmpTX;
+                if (tmpTX > maxTX) maxTX = tmpTX;
+                if (tmpTY < minTY) minTY = tmpTY;
+                if (tmpTY > maxTY) maxTY = tmpTY;
 
-            for (int sum = minSum; sum <= maxSum; sum++) {
-                for (int tx = minTX; tx <= maxTX; tx++) {
-                    int ty = sum - tx;
-                    if (ty < minTY || ty > maxTY) continue;
-                    if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
+                minTX -= 1; minTY -= 1;
+                maxTX += 1; maxTY += 1;
 
-                    u8 fogState = fogMap.state[0][ty][tx];
-                    if (fogState == FOG_VISIBLE) continue;
+                int minSum = minTX + minTY;
+                int maxSum = maxTX + maxTY;
 
-                    int isoFX, isoFY;
-                    tileToIso(tx, ty, isoFX, isoFY);
-                    int dstX = isoFX - gameState.camX;
-                    int dstY = isoFY - gameState.camY;
+                for (int sum = minSum; sum <= maxSum; sum++) {
+                    for (int tx = minTX; tx <= maxTX; tx++) {
+                        int ty = sum - tx;
+                        if (ty < minTY || ty > maxTY) continue;
+                        if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
 
-                    if (dstX + ISO_TILE_W <= 0 || dstX >= SCREEN_W) continue;
-                    if (dstY + ISO_TILE_H <= 0 || dstY >= SCREEN_H) continue;
+                        u8 fogState = fogMap.state[0][ty][tx];
+                        if (fogState == FOG_VISIBLE) continue;
 
-                    for (int py = 0; py < ISO_TILE_H; py++) {
-                        int screenY = dstY + py;
-                        if (screenY < 0 || screenY >= SCREEN_H) continue;
+                        int isoFX, isoFY;
+                        tileToIso(tx, ty, isoFX, isoFY);
+                        int dstX = isoFX - gameState.camX;
+                        int dstY = isoFY - gameState.camY;
 
-                        int xs = ISO_DIAMOND_XSTART[py];
-                        int xe = ISO_DIAMOND_XEND[py];
+                        if (dstX + ISO_TILE_W <= 0 || dstX >= SCREEN_W) continue;
+                        if (dstY + ISO_TILE_H <= 0 || dstY >= SCREEN_H) continue;
 
-                        // Match the extended diamond used in renderViewport
-                        if (!terrain.showTileGrid) {
-                            if (xs > 0) xs--;
-                            if (xe < ISO_TILE_W) xe++;
-                        }
+                        for (int py = 0; py < ISO_TILE_H; py++) {
+                            int screenY = dstY + py;
+                            if (screenY < 0 || screenY >= SCREEN_H) continue;
 
-                        for (int px = xs; px < xe; px++) {
-                            int screenX = dstX + px;
-                            if (screenX < 0 || screenX >= SCREEN_W) continue;
-                            int idx = screenY * 256 + screenX;
-                            if (fogState == FOG_UNEXPLORED) {
-                                terrainBuf[idx] = PAL_BLACK;
-                            } else {
-                                // Explored but not visible: checkerboard dither
-                                if ((px + py) & 1) {
-                                    terrainBuf[idx] = PAL_BLACK;
+                            int xs = ISO_DIAMOND_XSTART[py];
+                            int xe = ISO_DIAMOND_XEND[py];
+
+                            // Match the extended diamond used in renderViewport
+                            if (!terrain.showTileGrid) {
+                                if (xs > 0) xs--;
+                                if (xe < ISO_TILE_W) xe++;
+                            }
+
+                            for (int px = xs; px < xe; px++) {
+                                int screenX = dstX + px;
+                                if (screenX < 0 || screenX >= SCREEN_W) continue;
+                                int idx = screenY * 256 + screenX;
+                                if (fogState == FOG_UNEXPLORED) {
+                                    groundBuf[idx] = PAL_BLACK;
+                                } else {
+                                    // Explored but not visible: checkerboard dither
+                                    if ((px + py) & 1) {
+                                        groundBuf[idx] = PAL_BLACK;
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+                groundVersion++;
+            }
         }
 
         // Sub screen: software-render units and buildings into buffer
-        render_sprites_sw(terrainBuf, gameState, terrain);
+        PROF_LAP(2);
+        render_sprites_sw(terrainBuf, gameState, terrain, groundBuf, groundVersion);
+        PROF_LAP(3);
 
         // Sub screen: move target marker
         render_move_target(terrainBuf, gameState);
@@ -617,6 +679,8 @@ int main(void) {
 
         // Top screen: minimap + info panel
         ui_update(gameState, terrain);
+        PROF_LAP(4);
+        PROF_END();
 
         // Stream music from NitroFS (manual mode)
         sound_music_update();

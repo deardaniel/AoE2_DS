@@ -5,6 +5,7 @@ struct TerrainMap {
     u8  tiles[MAP_TILES][MAP_TILES];
     s16 resourceAmt[MAP_TILES][MAP_TILES]; // remaining resource per tile
     bool showTileGrid;  // debug: show diamond grid lines between tiles
+    u32  version;       // bumped whenever a tile's type changes (redraw the ground)
 
     void generate(u32 seed);
     void renderViewport(u8* vram, int camX, int camY) const;

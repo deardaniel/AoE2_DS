@@ -182,6 +182,7 @@ void TerrainMap::initTileGfx() {
 // Procedural map generation
 // ---------------------------------------------------------------------------
 void TerrainMap::generate(u32 seed) {
+    version++;
     rngState = seed ? seed : 12345;
     showTileGrid = false;
 
@@ -431,20 +432,9 @@ void TerrainMap::renderViewport(u8* vram, int camX, int camY) const {
                 if (drawXe > SCREEN_W) drawXe = SCREEN_W;
                 if (drawXs >= drawXe) continue;
 
-                u8* dst = &vram[screenY * 256 + drawXs];
-                if (showTileGrid) {
-                    // Simple memcpy when grid is shown
-                    memcpy(dst, &src[py * ISO_TILE_W + srcOff], drawXe - drawXs);
-                } else {
-                    // Copy with edge clamping for extended pixels
-                    for (int px = drawXs; px < drawXe; px++) {
-                        int srcX = (px - dstX);
-                        // Clamp to diamond interior
-                        if (srcX < xs) srcX = xs;
-                        if (srcX >= xe) srcX = xe - 1;
-                        *dst++ = src[py * ISO_TILE_W + srcX];
-                    }
-                }
+                // A tile is the whole 32x16 rectangle of its ground texture, so
+                // the extra pixel either side of the diamond is simply copied
+                memcpy(&vram[screenY * 256 + drawXs], &src[py * ISO_TILE_W + srcOff], drawXe - drawXs);
             }
 
             // Blend higher-priority neighbor terrain onto this tile's edges
@@ -493,6 +483,7 @@ int TerrainMap::depleteResource(int tx, int ty, int amount) {
         // Resource exhausted — show dirt patch (was grass before)
         tiles[ty][tx] = TERRAIN_DIRT;
         resourceAmt[ty][tx] = 0;
+        version++;
     }
 
     return gathered;
@@ -500,6 +491,7 @@ int TerrainMap::depleteResource(int tx, int ty, int amount) {
 
 void TerrainMap::setTile(int tx, int ty, u8 type, int resAmt) {
     if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return;
+    if (tiles[ty][tx] != type) version++;
     tiles[ty][tx] = type;
     resourceAmt[ty][tx] = resAmt;
 }

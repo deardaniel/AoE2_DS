@@ -191,6 +191,31 @@ static const u8* const constructionSheet[4] = {
     spr_construction_1_bin, spr_construction_2_bin, spr_construction_3_bin, spr_construction_4_bin,
 };
 
+// Row spans: for big sprites, the first and one-past-last non-empty pixel of
+// each row, so the blit skips the empty margins (about half of a tree's cell).
+// Filled in at init; two bytes per row.
+static u8 spanPool[8192];
+static int spanUsed = 0;
+static const u8* buildingSpans[BLDG_TYPE_COUNT];
+static const u8* resourceSpans[4];   // tree, gold, stone, berries: [variant][row]
+
+static const u8* make_spans(const u8* src, int stride, int w, int h) {
+    if (spanUsed + h * 2 > (int)sizeof(spanPool)) return NULL;
+    u8* out = &spanPool[spanUsed];
+    for (int y = 0; y < h; y++) {
+        const u8* row = src + y * stride;
+        int x0 = 0, x1 = w;
+        while (x0 < w && row[x0] == 0) x0++;
+        while (x1 > x0 && row[x1 - 1] == 0) x1--;
+        out[y * 2] = x0;
+        out[y * 2 + 1] = x1;
+    }
+    spanUsed += h * 2;
+    return out;
+}
+
+static const u8* resource_sheet(u8 ttype, const ResGeom*& g, int& kind);
+
 // Building sprite pixels with this index are ground shadow: instead of being
 // drawn they darken whatever is already in the framebuffer (PAL_SHADOW in
 // scripts/shared_constants.py).
@@ -216,16 +241,6 @@ static const bool DIR_HFLIP[DIR_COUNT] = { true, true, true, false, false, false
 
 // Sheet row (SLP direction 0-4: S, SW, W, NW, N) for each tile direction
 static const int DIR_TO_SLP_DIR[DIR_COUNT] = { 3, 2, 1, 0, 1, 2, 3, 4 };
-
-// ---------------------------------------------------------------------------
-// Apply player color remap for player 2 (in-place, modifies buffer)
-// ---------------------------------------------------------------------------
-static void apply_color_remap(u8* buf, int size) {
-    const u8* remap = sprite_remap_bin;
-    for (int i = 0; i < size; i++) {
-        buf[i] = remap[buf[i]];
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Get the appropriate sprite sheet for a unit based on its state and role
@@ -388,6 +403,25 @@ void render_init() {
             if (dist < bestDist) { bestDist = dist; best = j; }
         }
         shadowLut[i] = best;
+    }
+
+    // Row spans for the big sprites
+    for (int t = 0; t < BLDG_TYPE_COUNT; t++) {
+        buildingSpans[t] = buildingSheet[t]
+            ? make_spans(buildingSheet[t], BLDG_GEOM[t].w, BLDG_GEOM[t].w, BLDG_GEOM[t].h) : NULL;
+    }
+    static const u8 RES_TERRAIN[4] = { TERRAIN_FOREST, TERRAIN_GOLD, TERRAIN_STONE, TERRAIN_BERRIES };
+    for (int k = 0; k < 4; k++) {
+        const ResGeom* g = &RES_GEOM_tree;
+        int kind = 0;
+        const u8* sheet = resource_sheet(RES_TERRAIN[k], g, kind);
+        const u8* first = NULL;
+        for (int v = 0; v < g->count; v++) {
+            const u8* sp = make_spans(sheet + v * g->cw, g->count * g->cw, g->cw, g->ch);
+            if (v == 0) first = sp;
+            if (!sp) first = NULL;
+        }
+        resourceSpans[k] = first;
     }
 }
 
@@ -570,58 +604,35 @@ static void blit_cell(u8* buf, const u8* src, int stride, int w, int h,
 }
 
 // Blit with ground shadow: SPR_SHADOW pixels darken the pixel underneath
-// instead of replacing it. stride = width of the sheet the cell is cut from.
-static void blit_shadowed(u8* buf, const u8* src, int stride, int w, int h, int sx, int sy) {
-    for (int py = 0; py < h; py++) {
-        int screenY = sy + py;
-        if (screenY < 0 || screenY >= SCREEN_H) continue;
-        u8* row = buf + screenY * 256;
+// instead of replacing it. stride = width of the sheet the cell is cut from;
+// spans (optional) = make_spans() output for these rows.
+static void blit_shadowed(u8* buf, const u8* src, int stride, int w, int h, int sx, int sy,
+                          const u8* spans = NULL) {
+    int py0 = (sy < 0) ? -sy : 0;
+    int py1 = (sy + h > SCREEN_H) ? SCREEN_H - sy : h;
+    for (int py = py0; py < py1; py++) {
+        int x0 = spans ? spans[py * 2] : 0;
+        int x1 = spans ? spans[py * 2 + 1] : w;
+        if (sx + x0 < 0) x0 = -sx;
+        if (sx + x1 > SCREEN_W) x1 = SCREEN_W - sx;
         const u8* line = src + py * stride;
-        for (int px = 0; px < w; px++) {
+        u8* row = buf + (sy + py) * 256 + sx;
+        for (int px = x0; px < x1; px++) {
             u8 val = line[px];
             if (val == 0) continue;
-            int screenX = sx + px;
-            if (screenX < 0 || screenX >= SCREEN_W) continue;
-            row[screenX] = (val == SPR_SHADOW) ? shadowLut[row[screenX]] : val;
+            row[px] = (val == SPR_SHADOW) ? shadowLut[row[px]] : val;
         }
     }
-}
-
-static void blit_building(u8* buf, const u8* frame, int fw, int fh, int sx, int sy) {
-    blit_shadowed(buf, frame, fw, fw, fh, sx, sy);
 }
 
 // Resource sheet for a terrain type (NULL if it has no sprite)
-static const u8* resource_sheet(u8 ttype, const ResGeom*& g) {
+static const u8* resource_sheet(u8 ttype, const ResGeom*& g, int& kind) {
     switch (ttype) {
-    case TERRAIN_FOREST:  g = &RES_GEOM_tree;    return spr_res_tree_bin;
-    case TERRAIN_GOLD:    g = &RES_GEOM_gold;    return spr_res_gold_bin;
-    case TERRAIN_STONE:   g = &RES_GEOM_stone;   return spr_res_stone_bin;
-    case TERRAIN_BERRIES: g = &RES_GEOM_berries; return spr_res_berries_bin;
+    case TERRAIN_FOREST:  g = &RES_GEOM_tree;    kind = 0; return spr_res_tree_bin;
+    case TERRAIN_GOLD:    g = &RES_GEOM_gold;    kind = 1; return spr_res_gold_bin;
+    case TERRAIN_STONE:   g = &RES_GEOM_stone;   kind = 2; return spr_res_stone_bin;
+    case TERRAIN_BERRIES: g = &RES_GEOM_berries; kind = 3; return spr_res_berries_bin;
     default: return NULL;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Render list entry for Y-sorted drawing (back-to-front depth ordering)
-// ---------------------------------------------------------------------------
-struct RenderEntry {
-    s16 sortY;   // bottom Y in world pixels (feet position) — lower = drawn first
-    u8  kind;    // 0 = building, 1 = unit, 2 = resource tile
-    u8  idx;     // index into units[] or buildings[], or packed tile coords (tx<<5|ty)
-    u8  tx, ty;  // tile coords (only used for resource tiles)
-};
-
-// Simple insertion sort — fast for small N (max ~80 entries)
-static void sort_render_list(RenderEntry* list, int count) {
-    for (int i = 1; i < count; i++) {
-        RenderEntry tmp = list[i];
-        int j = i - 1;
-        while (j >= 0 && list[j].sortY > tmp.sortY) {
-            list[j + 1] = list[j];
-            j--;
-        }
-        list[j + 1] = tmp;
     }
 }
 
@@ -703,320 +714,332 @@ static void draw_selection_diamond(u8* buf, int bScreenX, int bScreenY,
 }
 
 // ---------------------------------------------------------------------------
-// Draw a single building into the bitmap buffer
+// Scene rendering
+//
+// Drawing every tree and building each frame costs most of a frame, and they
+// don't move. So the scene is drawn in two layers:
+//
+//   static layer   ground + resources + buildings, kept in staticBuf and only
+//                  redrawn when the ground, a building or the selection
+//                  changes
+//   dynamic layer  units, drawn each frame over a copy of the static layer
+//
+// Depth still works: after a unit is drawn, any static sprite that stands in
+// front of it and overlaps it is drawn again, clipped to the unit's rectangle.
 // ---------------------------------------------------------------------------
-static void render_building_sw(u8* buf, const GameState& gs, int i) {
-    Building& b = buildings[i];
-    const SpriteGeom& g = bldg_geom(b);
-    int pw = g.w, ph = g.h;
-    int sx, sy;
-    bldg_sprite_pos(b, gs, sx, sy);
+struct StaticSprite {
+    s16 sortY;          // depth: larger = nearer the camera
+    s16 x, y, w, h;     // screen rectangle
+    const u8* src;      // top-left pixel of the sprite in its sheet
+    u16 stride;         // sheet width
+    const u8* spans;    // row spans (may be NULL)
+    bool remap;         // second player's colours
+};
 
-    const u8* sprData;
+enum { MAX_STATIC = MAX_BUILDINGS + 192 };
+static StaticSprite statics[MAX_STATIC];
+static int staticCount = 0;
+static u8 staticBuf[256 * 192] __attribute__((aligned(4)));
+
+// The pixels a building currently shows: its construction stage or itself
+static const u8* bldg_pixels(const Building& b) {
+    const SpriteGeom& g = bldg_geom(b);
     if (!bldg_complete(b)) {
-        // Construction site: the stages of the game's own CNSTn_NN graphic
-        // for this footprint, spread evenly over the build time.
         int stage = b.buildProgress * CONSTRUCTION_STAGES / BLDG_STATS[b.type].buildTime;
         if (stage >= CONSTRUCTION_STAGES) stage = CONSTRUCTION_STAGES - 1;
-        sprData = constructionSheet[BLDG_STATS[b.type].tileW - 1] + stage * pw * ph;
-    } else {
-        sprData = buildingSheet[b.type];
-        if (sprData == NULL) return;  // farm: drawn as terrain
+        return constructionSheet[BLDG_STATS[b.type].tileW - 1] + stage * g.w * g.h;
     }
+    return buildingSheet[b.type];  // NULL for a farm: drawn as terrain
+}
 
-    if (b.owner == 1) {
-        static u8 frame[160 * 128];  // largest building sprite (castle with shadow, 146x117)
-        memcpy(frame, sprData, pw * ph);
-        apply_color_remap(frame, pw * ph);
-        sprData = frame;
+// Draw one static sprite in full (with its shadow)
+static void draw_static(u8* buf, const StaticSprite& sp) {
+    if (!sp.remap) {
+        blit_shadowed(buf, sp.src, sp.stride, sp.w, sp.h, sp.x, sp.y, sp.spans);
+        return;
     }
-    blit_building(buf, sprData, pw, ph, sx, sy);
-
-    // Fire overlay on damaged buildings
-    int maxHp = BLDG_STATS[b.type].hp;
-    if (bldg_complete(b) && maxHp > 0 && b.hp < maxHp / 2) {
-        int fireW = 16, fireH = 16;
-        int fireFrame = (gs.frameCount / 8) % 4;
-        const u8* fireSrc = spr_fire_bin + fireFrame * fireW * fireH;
-
-        // First fire: centered horizontally, 1/4 down from top
-        blit_frame(buf, fireSrc, fireW, fireH, sx + pw / 2 - fireW / 2, sy + ph / 4 - fireH / 2, false);
-
-        // Second fire at < 25% HP: offset left, 1/3 down
-        if (b.hp < maxHp / 4) {
-            int fireFrame2 = ((gs.frameCount + 13) / 8) % 4;
-            const u8* fireSrc2 = spr_fire_bin + fireFrame2 * fireW * fireH;
-            blit_frame(buf, fireSrc2, fireW, fireH, sx + pw / 3 - fireW / 2, sy + ph / 3 - fireH / 2, false);
+    const u8* remap = sprite_remap_bin;
+    int py0 = (sp.y < 0) ? -sp.y : 0;
+    int py1 = (sp.y + sp.h > SCREEN_H) ? SCREEN_H - sp.y : sp.h;
+    for (int py = py0; py < py1; py++) {
+        int x0 = (sp.x < 0) ? -sp.x : 0;
+        int x1 = (sp.x + sp.w > SCREEN_W) ? SCREEN_W - sp.x : sp.w;
+        const u8* line = sp.src + py * sp.stride;
+        u8* row = buf + (sp.y + py) * 256 + sp.x;
+        for (int px = x0; px < x1; px++) {
+            u8 val = line[px];
+            if (val == 0) continue;
+            row[px] = (val == SPR_SHADOW) ? shadowLut[row[px]] : remap[val];
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Draw a resource sprite (tree, gold mine, stone mine) into the bitmap buffer
-// ---------------------------------------------------------------------------
-static void render_resource_sw(u8* buf, const GameState& gs, int tx, int ty, const TerrainMap& terrain) {
-    const ResGeom* g;
-    const u8* sheet = resource_sheet(terrain.tileAt(tx, ty), g);
-    if (!sheet) return;
-
-    int isoX, isoY;
-    tileToIso(tx, ty, isoX, isoY);
-
-    // Each tile shows one of the game's variants, fixed by its position
-    u32 hash = (u32)(tx * 73856093) ^ (u32)(ty * 19349663);
-    int variant = (hash >> 4) % g->count;
-    blit_shadowed(buf, sheet + variant * g->cw, g->count * g->cw, g->cw, g->ch,
-                  isoX - gs.camX + ISO_TILE_W / 2 - g->ax,
-                  isoY - gs.camY + ISO_TILE_H / 2 - g->ay);
-
-    // Selection diamond when this tile is selected
-    if (gs.selectedTileX == tx && gs.selectedTileY == ty) {
-        int dsx = isoX - gs.camX;
-        int dsy = isoY - gs.camY;
-        int hw = ISO_TILE_W / 2;
-        int hh = ISO_TILE_H / 2;
-        int cx = dsx + hw;
-        int cy = dsy + hh;
-        draw_line_buf(buf, cx, cy - hh, cx + hw, cy, PAL_WHITE);
-        draw_line_buf(buf, cx + hw, cy, cx, cy + hh, PAL_WHITE);
-        draw_line_buf(buf, cx, cy + hh, cx - hw, cy, PAL_WHITE);
-        draw_line_buf(buf, cx - hw, cy, cx, cy - hh, PAL_WHITE);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Draw a single unit into the bitmap buffer
-// ---------------------------------------------------------------------------
-static void render_unit_sw(u8* buf, const GameState& gs, int i) {
-    Unit& u = units[i];
-    const UnitSheet& sheet = get_unit_sheet(u);
-    const SheetGeom& g = *sheet.g;
-
-    // Frame within the direction: looping, or played once over animFrame 0-9
-    int f = g.once ? ((u.animFrame > 9 ? 9 : u.animFrame) * g.fpd / 10) : (u.animFrame % g.fpd);
-    int frameIdx = DIR_TO_SLP_DIR[u.direction] * g.fpd + f;
-    bool hflip = DIR_HFLIP[u.direction];
-
-    int stride = g.cols * g.cw;
-    const u8* src = sheet.data + (frameIdx / g.cols) * g.ch * stride + (frameIdx % g.cols) * g.cw;
-
-    int gx, gy;
-    unit_ground(u, gs, gx, gy);
-    blit_cell(buf, src, stride, g.cw, g.ch, gx - (hflip ? g.cw - g.ax : g.ax), gy - g.ay,
-              hflip, u.owner == 1 ? sprite_remap_bin : NULL);
-}
-
-// ---------------------------------------------------------------------------
-// Software-render all visible units and buildings into bitmap buffer
-// Y-sorted back-to-front so entities behind others draw first.
-// ---------------------------------------------------------------------------
-void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) {
-    // Build a combined render list of all visible entities
-    // Max visible on screen: ~50 units + 30 buildings + ~100 resource tiles
-    static RenderEntry renderList[MAX_UNITS + MAX_BUILDINGS + 128];
-    int count = 0;
-
-    // Add visible resource tiles (trees, gold mines, stone mines)
-    {
-        int minTX, minTY, maxTX, maxTY;
-        int tmpTX, tmpTY;
-
-        screenToTile(0, 0, gs.camX, gs.camY, minTX, minTY);
-        maxTX = minTX; maxTY = minTY;
-
-        screenToTile(SCREEN_W, 0, gs.camX, gs.camY, tmpTX, tmpTY);
-        if (tmpTX < minTX) minTX = tmpTX; if (tmpTX > maxTX) maxTX = tmpTX;
-        if (tmpTY < minTY) minTY = tmpTY; if (tmpTY > maxTY) maxTY = tmpTY;
-
-        screenToTile(0, SCREEN_H, gs.camX, gs.camY, tmpTX, tmpTY);
-        if (tmpTX < minTX) minTX = tmpTX; if (tmpTX > maxTX) maxTX = tmpTX;
-        if (tmpTY < minTY) minTY = tmpTY; if (tmpTY > maxTY) maxTY = tmpTY;
-
-        screenToTile(SCREEN_W, SCREEN_H, gs.camX, gs.camY, tmpTX, tmpTY);
-        if (tmpTX < minTX) minTX = tmpTX; if (tmpTX > maxTX) maxTX = tmpTX;
-        if (tmpTY < minTY) minTY = tmpTY; if (tmpTY > maxTY) maxTY = tmpTY;
-
-        minTX -= 1; minTY -= 1;
-        maxTX += 1; maxTY += 1;
-
-        for (int tx = minTX; tx <= maxTX; tx++) {
-            for (int ty = minTY; ty <= maxTY; ty++) {
-                if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
-                if (count >= MAX_UNITS + MAX_BUILDINGS + 128) break;
-                u8 ttype = terrain.tileAt(tx, ty);
-                if (ttype != TERRAIN_FOREST && ttype != TERRAIN_GOLD && ttype != TERRAIN_STONE &&
-                    ttype != TERRAIN_BERRIES) continue;
-
-                // Fog check — don't show resources in unexplored tiles
-                if (!fogMap.isExplored(0, tx, ty)) continue;
-
-                int isoX, isoY;
-                tileToIso(tx, ty, isoX, isoY);
-                // Generous bounds: an oak is 67px tall and 48 wide
-                int sx = isoX - gs.camX;
-                int sy = isoY - gs.camY;
-                if (sx < -64 || sx >= SCREEN_W + 32 || sy < -16 || sy >= SCREEN_H + 72) continue;
-
-                // Sort by bottom of tile (tile center bottom in iso)
-                renderList[count].sortY = isoY + ISO_TILE_H;
-                renderList[count].kind = 2;
-                renderList[count].idx = 0;
-                renderList[count].tx = tx;
-                renderList[count].ty = ty;
-                count++;
-            }
+// Draw the solid pixels of a static sprite again inside a clip rectangle
+// (its shadow is already on the ground and must not darken it twice)
+static void redraw_static(u8* buf, const StaticSprite& sp, int cx0, int cy0, int cx1, int cy1) {
+    int x0 = (cx0 > sp.x) ? cx0 : sp.x;
+    int y0 = (cy0 > sp.y) ? cy0 : sp.y;
+    int x1 = (cx1 < sp.x + sp.w) ? cx1 : sp.x + sp.w;
+    int y1 = (cy1 < sp.y + sp.h) ? cy1 : sp.y + sp.h;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > SCREEN_W) x1 = SCREEN_W;
+    if (y1 > SCREEN_H) y1 = SCREEN_H;
+    if (x0 >= x1 || y0 >= y1) return;
+    const u8* remap = sp.remap ? sprite_remap_bin : NULL;
+    for (int y = y0; y < y1; y++) {
+        const u8* line = sp.src + (y - sp.y) * sp.stride - sp.x;
+        u8* row = buf + y * 256;
+        for (int x = x0; x < x1; x++) {
+            u8 val = line[x];
+            if (val == 0 || val == SPR_SHADOW) continue;
+            row[x] = remap ? remap[val] : val;
         }
     }
+}
 
-    // Add visible buildings
+// What the static layer depends on besides the ground: every building's
+// look, and what is selected (selection outlines are drawn into the layer)
+static u32 static_signature(const GameState& gs) {
+    u32 sig = (u32)(gs.selectedBldg + 1) * 31 + (u32)(gs.selectedTileX + 1) * 131 +
+              (u32)(gs.selectedTileY + 1) * 517;
     for (int i = 0; i < MAX_BUILDINGS; i++) {
-        Building& b = buildings[i];
+        const Building& b = buildings[i];
         if (!b.alive) continue;
+        u32 stage = bldg_complete(b) ? CONSTRUCTION_STAGES
+                  : (u32)(b.buildProgress * CONSTRUCTION_STAGES / BLDG_STATS[b.type].buildTime);
+        sig = sig * 16777619u ^ ((u32)i | (u32)b.type << 8 | (u32)b.owner << 16 | stage << 20);
+        sig = sig * 16777619u ^ ((u32)(u16)b.x | (u32)(u16)b.y << 16);
+    }
+    return sig;
+}
 
-        int pw = bldg_geom(b).w;
-        int ph = bldg_geom(b).h;
-        int tileW = BLDG_STATS[b.type].tileW;
-        int tileH = BLDG_STATS[b.type].tileH;
-        int bIsoX, bIsoY;
-        worldToIso(b.x, b.y, bIsoX, bIsoY);
+// Rebuild the static layer over a fresh copy of the ground
+static void build_static_layer(const u8* ground, const GameState& gs, const TerrainMap& terrain) {
+    memcpy(staticBuf, ground, sizeof(staticBuf));
+    staticCount = 0;
+
+    // Resource tiles in view (trees, mines, bushes)
+    int minTX, minTY, maxTX, maxTY, tTX, tTY;
+    screenToTile(0, 0, gs.camX, gs.camY, minTX, minTY);
+    maxTX = minTX; maxTY = minTY;
+    static const int CORNER[3][2] = { { SCREEN_W, 0 }, { 0, SCREEN_H }, { SCREEN_W, SCREEN_H } };
+    for (int c = 0; c < 3; c++) {
+        screenToTile(CORNER[c][0], CORNER[c][1], gs.camX, gs.camY, tTX, tTY);
+        if (tTX < minTX) minTX = tTX;
+        if (tTX > maxTX) maxTX = tTX;
+        if (tTY < minTY) minTY = tTY;
+        if (tTY > maxTY) maxTY = tTY;
+    }
+    // A tree is 67px tall, so tiles a few rows below the screen still show
+    minTX -= 1; minTY -= 1; maxTX += 5; maxTY += 5;
+
+    for (int tx = minTX; tx <= maxTX; tx++) {
+        for (int ty = minTY; ty <= maxTY; ty++) {
+            if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) continue;
+            if (staticCount >= MAX_STATIC) break;
+            const ResGeom* g;
+            int kind;
+            const u8* sheet = resource_sheet(terrain.tileAt(tx, ty), g, kind);
+            if (!sheet) continue;
+            if (!fogMap.isExplored(0, tx, ty)) continue;
+
+            int isoX, isoY;
+            tileToIso(tx, ty, isoX, isoY);
+            // Each tile shows one of the game's variants, fixed by its position
+            u32 hash = (u32)(tx * 73856093) ^ (u32)(ty * 19349663);
+            int variant = (hash >> 4) % g->count;
+            StaticSprite& sp = statics[staticCount];
+            sp.x = isoX - gs.camX + ISO_TILE_W / 2 - g->ax;
+            sp.y = isoY - gs.camY + ISO_TILE_H / 2 - g->ay;
+            sp.w = g->cw;
+            sp.h = g->ch;
+            if (sp.x + sp.w <= 0 || sp.x >= SCREEN_W || sp.y + sp.h <= 0 || sp.y >= SCREEN_H) continue;
+            sp.sortY = isoY + ISO_TILE_H;
+            sp.src = sheet + variant * g->cw;
+            sp.stride = g->count * g->cw;
+            sp.spans = resourceSpans[kind] ? resourceSpans[kind] + variant * g->ch * 2 : NULL;
+            sp.remap = false;
+            staticCount++;
+        }
+    }
+
+    // Buildings
+    for (int i = 0; i < MAX_BUILDINGS && staticCount < MAX_STATIC; i++) {
+        const Building& b = buildings[i];
+        if (!b.alive) continue;
+        const u8* pixels = bldg_pixels(b);
+        if (!pixels) continue;
+        if (b.owner != 0 && !fogMap.isExplored(0, b.x / TILE_PX, b.y / TILE_PX)) continue;
+
+        const SpriteGeom& g = bldg_geom(b);
+        const BuildingStats& st = BLDG_STATS[b.type];
+        StaticSprite& sp = statics[staticCount];
         int sx, sy;
         bldg_sprite_pos(b, gs, sx, sy);
-        if (sx < -pw || sx >= SCREEN_W || sy < -ph || sy >= SCREEN_H) continue;
-
-        // Fog check
-        if (b.owner != 0) {
-            int tx = b.x / TILE_PX;
-            int ty = b.y / TILE_PX;
-            if (!fogMap.isExplored(0, tx, ty)) continue;
-        }
-
-        // Sort by isoY of bottom-right corner (higher isoY = closer to camera)
-        int bCornerIsoX, bCornerIsoY;
-        worldToIso(b.x + tileW * TILE_PX, b.y + tileH * TILE_PX, bCornerIsoX, bCornerIsoY);
-        renderList[count].sortY = bCornerIsoY;
-        // The TC only stands on the back half of its footprint (the front is
-        // open ground under its shadow), so units beside the front edges must
-        // draw over it: sort it by the footprint centre instead.
-        if (b.type == BLDG_TOWN_CENTER)
-            renderList[count].sortY = (bIsoY + bCornerIsoY) / 2;
-        renderList[count].kind = 0;
-        renderList[count].idx = i;
-        renderList[count].tx = 0;
-        renderList[count].ty = 0;
-        count++;
+        sp.x = sx; sp.y = sy; sp.w = g.w; sp.h = g.h;
+        if (sp.x + sp.w <= 0 || sp.x >= SCREEN_W || sp.y + sp.h <= 0 || sp.y >= SCREEN_H) continue;
+        // Depth: the footprint's near corner. The TC only stands on the back
+        // half of its footprint (the front is open ground under its shadow),
+        // so units beside its front edges must draw over it: use the centre.
+        int topX, topY, cornerX, cornerY;
+        worldToIso(b.x, b.y, topX, topY);
+        worldToIso(b.x + st.tileW * TILE_PX, b.y + st.tileH * TILE_PX, cornerX, cornerY);
+        sp.sortY = (b.type == BLDG_TOWN_CENTER) ? (topY + cornerY) / 2 : cornerY;
+        sp.src = pixels;
+        sp.stride = g.w;
+        sp.spans = bldg_complete(b) ? buildingSpans[b.type] : NULL;
+        sp.remap = (b.owner == 1);
+        staticCount++;
     }
 
-    // Add visible units
-    for (int i = 0; i < MAX_UNITS; i++) {
-        Unit& u = units[i];
-        if (!u.alive || u.state == USTATE_GARRISONED) continue;
+    // Back to front (insertion sort; the list is short and nearly sorted)
+    for (int i = 1; i < staticCount; i++) {
+        StaticSprite tmp = statics[i];
+        int j = i - 1;
+        while (j >= 0 && statics[j].sortY > tmp.sortY) { statics[j + 1] = statics[j]; j--; }
+        statics[j + 1] = tmp;
+    }
 
+    // Selection outlines lie on the ground, under the sprites
+    if (gs.selectedBldg >= 0 && gs.selectedBldg < MAX_BUILDINGS && buildings[gs.selectedBldg].alive) {
+        const Building& b = buildings[gs.selectedBldg];
+        int isoX, isoY;
+        worldToIso(b.x, b.y, isoX, isoY);
+        draw_selection_diamond(staticBuf, isoX - gs.camX, isoY - gs.camY,
+                               BLDG_STATS[b.type].tileW, BLDG_STATS[b.type].tileH);
+    }
+    if (gs.selectedTileX >= 0 && gs.selectedTileX < MAP_TILES &&
+        gs.selectedTileY >= 0 && gs.selectedTileY < MAP_TILES) {
+        int isoX, isoY;
+        tileToIso(gs.selectedTileX, gs.selectedTileY, isoX, isoY);
+        draw_selection_diamond(staticBuf, isoX - gs.camX, isoY - gs.camY, 1, 1);
+    }
+
+    for (int i = 0; i < staticCount; i++) draw_static(staticBuf, statics[i]);
+}
+
+// ---------------------------------------------------------------------------
+// Draw the scene: ground + static layer (cached), then units, fire, HP bars.
+// `ground` is the terrain/fog layer and groundVersion changes whenever it was
+// redrawn.
+// ---------------------------------------------------------------------------
+void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain,
+                       const u8* ground, u32 groundVersion) {
+    static u32 haveGround = 0xFFFFFFFF, haveSig = 0;
+    u32 sig = static_signature(gs);
+    if (haveGround != groundVersion || haveSig != sig) {
+        haveGround = groundVersion;
+        haveSig = sig;
+        build_static_layer(ground, gs, terrain);
+    }
+    memcpy(buf, staticBuf, sizeof(staticBuf));
+
+    // Visible units, back to front by where their feet are
+    static u8 order[MAX_UNITS];
+    static s16 depth[MAX_UNITS];
+    int n = 0;
+    for (int i = 0; i < MAX_UNITS; i++) {
+        const Unit& u = units[i];
+        if (!u.alive || u.state == USTATE_GARRISONED) continue;
         int gx, gy;
         unit_ground(u, gs, gx, gy);
         if (!unit_on_screen(gx, gy)) continue;
-
-        // Fog check
         if (u.owner != 0) {
-            int tx = (u.x + TILE_PX/2) / TILE_PX;
-            int ty = (u.y + TILE_PX/2) / TILE_PX;
+            int tx = (u.x + TILE_PX / 2) / TILE_PX;
+            int ty = (u.y + TILE_PX / 2) / TILE_PX;
             if (!fogMap.isVisible(0, tx, ty)) continue;
         }
-
-        // Sort by isoY of feet position (higher isoY = closer to camera)
-        int feetIsoX, feetIsoY;
-        worldToIso(u.x + TILE_PX/2, u.y + TILE_PX, feetIsoX, feetIsoY);
-        renderList[count].sortY = feetIsoY;
-        renderList[count].kind = 1;
-        renderList[count].idx = i;
-        renderList[count].tx = 0;
-        renderList[count].ty = 0;
-        count++;
+        int feetX, feetY;
+        worldToIso(u.x + TILE_PX / 2, u.y + TILE_PX, feetX, feetY);
+        int j = n++;
+        while (j > 0 && depth[j - 1] > feetY) { depth[j] = depth[j - 1]; order[j] = order[j - 1]; j--; }
+        depth[j] = feetY;
+        order[j] = i;
     }
 
-    // Sort by Y (back-to-front)
-    sort_render_list(renderList, count);
+    for (int k = 0; k < n; k++) {
+        const Unit& u = units[order[k]];
+        const UnitSheet& sheet = get_unit_sheet(u);
+        const SheetGeom& g = *sheet.g;
 
-    // --- Pre-render pass: draw selection indicators UNDER sprites ---
-    // Selection circles for units
-    for (int i = 0; i < MAX_UNITS; i++) {
-        if (!gs.unitSelected[i]) continue;
-        Unit& u = units[i];
-        if (!u.alive || u.state == USTATE_GARRISONED) continue;
-        int uIsoX, uIsoY;
-        worldToIso(u.x, u.y, uIsoX, uIsoY);
-        int cx = uIsoX - gs.camX + ISO_TILE_W / 2;
-        int cy = uIsoY - gs.camY + ISO_TILE_H / 2 + 1;
-        if (cx >= -12 && cx < SCREEN_W + 12 && cy >= -6 && cy < SCREEN_H + 6) {
-            draw_ellipse_buf(buf, cx, cy, 9, 4, PAL_WHITE);
+        // Frame within the direction: looping, or played once over animFrame 0-9
+        int f = g.once ? ((u.animFrame > 9 ? 9 : u.animFrame) * g.fpd / 10) : (u.animFrame % g.fpd);
+        int frameIdx = DIR_TO_SLP_DIR[u.direction] * g.fpd + f;
+        bool hflip = DIR_HFLIP[u.direction];
+        int stride = g.cols * g.cw;
+        const u8* src = sheet.data + (frameIdx / g.cols) * g.ch * stride + (frameIdx % g.cols) * g.cw;
+
+        int gx, gy;
+        unit_ground(u, gs, gx, gy);
+        int x0 = gx - (hflip ? g.cw - g.ax : g.ax);
+        int y0 = gy - g.ay;
+        int x1 = x0 + g.cw, y1 = y0 + g.ch;
+
+        // Selection ring on the ground under the unit
+        if (gs.unitSelected[order[k]]) {
+            draw_ellipse_buf(buf, gx, gy + 1, 9, 4, PAL_WHITE);
+            if (gx - 10 < x0) x0 = gx - 10;
+            if (gx + 11 > x1) x1 = gx + 11;
+            if (gy + 6 > y1) y1 = gy + 6;
+        }
+        blit_cell(buf, src, stride, g.cw, g.ch, gx - (hflip ? g.cw - g.ax : g.ax), gy - g.ay,
+                  hflip, u.owner == 1 ? sprite_remap_bin : NULL);
+
+        // Anything static standing in front of the unit covers it again
+        for (int si = staticCount - 1; si >= 0 && statics[si].sortY > depth[k]; si--) {
+            const StaticSprite& sp = statics[si];
+            if (sp.x >= x1 || sp.x + sp.w <= x0 || sp.y >= y1 || sp.y + sp.h <= y0) continue;
+            redraw_static(buf, sp, x0, y0, x1, y1);
         }
     }
-    // Selection diamond for buildings
-    if (gs.selectedBldg >= 0 && gs.selectedBldg < MAX_BUILDINGS && buildings[gs.selectedBldg].alive) {
-        Building& b = buildings[gs.selectedBldg];
-        int tileW = BLDG_STATS[b.type].tileW;
-        int tileH = BLDG_STATS[b.type].tileH;
-        int bIsoX, bIsoY;
-        worldToIso(b.x, b.y, bIsoX, bIsoY);
-        int bScreenX = bIsoX - gs.camX;
-        int bScreenY = bIsoY - gs.camY;
-        draw_selection_diamond(buf, bScreenX, bScreenY, tileW, tileH);
-    }
 
-    // Render in sorted order
-    for (int r = 0; r < count; r++) {
-        switch (renderList[r].kind) {
-        case 0: render_building_sw(buf, gs, renderList[r].idx); break;
-        case 1: render_unit_sw(buf, gs, renderList[r].idx); break;
-        case 2: render_resource_sw(buf, gs, renderList[r].tx, renderList[r].ty, terrain); break;
+    // Fire on damaged buildings
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        const Building& b = buildings[i];
+        int maxHp = BLDG_STATS[b.type].hp;
+        if (!b.alive || !bldg_complete(b) || buildingSheet[b.type] == NULL || b.hp >= maxHp / 2) continue;
+        if (b.owner != 0 && !fogMap.isExplored(0, b.x / TILE_PX, b.y / TILE_PX)) continue;
+        const SpriteGeom& g = BLDG_GEOM[b.type];
+        int sx, sy;
+        bldg_sprite_pos(b, gs, sx, sy);
+        const int fireW = 16, fireH = 16;
+        // First fire: centered horizontally, 1/4 down from top
+        const u8* fire = spr_fire_bin + ((gs.frameCount / 8) % 4) * fireW * fireH;
+        blit_frame(buf, fire, fireW, fireH, sx + g.w / 2 - fireW / 2, sy + g.h / 4 - fireH / 2, false);
+        // Second fire at < 25% HP: offset left, 1/3 down
+        if (b.hp < maxHp / 4) {
+            fire = spr_fire_bin + (((gs.frameCount + 13) / 8) % 4) * fireW * fireH;
+            blit_frame(buf, fire, fireW, fireH, sx + g.w / 3 - fireW / 2, sy + g.h / 3 - fireH / 2, false);
         }
     }
 
     // --- Overlay pass: HP bars drawn on top of everything ---
-    for (int i = 0; i < MAX_UNITS; i++) {
-        Unit& u = units[i];
-        if (!u.alive || u.state == USTATE_GARRISONED) continue;
-
+    for (int k = 0; k < n; k++) {
+        const Unit& u = units[order[k]];
         int gx, gy;
         unit_ground(u, gs, gx, gy);
-        if (!unit_on_screen(gx, gy)) continue;
-
-        if (u.owner != 0) {
-            int tx = (u.x + TILE_PX/2) / TILE_PX;
-            int ty = (u.y + TILE_PX/2) / TILE_PX;
-            if (!fogMap.isVisible(0, tx, ty)) continue;
-        }
-
         // Just above the head: the standing sheet's anchor row is its height
         draw_hp_bar(buf, gx, gy - unitStandSheet[u.type].g->ay - 4, 12,
-                    u.hp, playerUnitStats[u.owner][u.type].hp, gs.unitSelected[i]);
+                    u.hp, playerUnitStats[u.owner][u.type].hp, gs.unitSelected[order[k]]);
     }
 
-    // Building HP bars
     for (int i = 0; i < MAX_BUILDINGS; i++) {
-        Building& b = buildings[i];
+        const Building& b = buildings[i];
         if (!b.alive) continue;
-
-        int tileW = BLDG_STATS[b.type].tileW;
-        int tileH = BLDG_STATS[b.type].tileH;
-        int bIsoX, bIsoY;
-        worldToIso(b.x, b.y, bIsoX, bIsoY);
-        int bScreenX = bIsoX - gs.camX;
-
-        int pw = bldg_geom(b).w;
-        int ph = bldg_geom(b).h;
+        const SpriteGeom& g = bldg_geom(b);
         int bsx, bsy;
         bldg_sprite_pos(b, gs, bsx, bsy);
-        if (bsx < -pw || bsx >= SCREEN_W || bsy < -ph || bsy >= SCREEN_H) continue;
-
-        int hpCx = bScreenX + ISO_TILE_W / 2 + (tileW - tileH) * (ISO_TILE_W / 4);
-        int hpW = (tileW + tileH) * 4 + 8;
-        draw_hp_bar(buf, hpCx, bsy - 3, hpW, b.hp, BLDG_STATS[b.type].hp);
+        if (bsx < -g.w || bsx >= SCREEN_W || bsy < -g.h || bsy >= SCREEN_H) continue;
+        int cx, cy;
+        bldg_centre(b, gs, cx, cy);
+        int hpW = (BLDG_STATS[b.type].tileW + BLDG_STATS[b.type].tileH) * 4 + 8;
+        draw_hp_bar(buf, cx, bsy - 3, hpW, b.hp, BLDG_STATS[b.type].hp);
     }
 }
 
-
 // ---------------------------------------------------------------------------
-// Build menu bar (drawn into bitmap buffer, uses palette indices)
+// Menu bars
 // ---------------------------------------------------------------------------
 // One 32x32 menu slot. An item you can't afford is darkened; one that needs
 // a later age is darker still, so the two read differently at a glance.

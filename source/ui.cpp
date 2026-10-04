@@ -654,6 +654,20 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         font_draw_num_16(minimapVram, 256, 192, x, ty, st.speed, colText, gameFont);
         ty += 12;
 
+#ifdef SHOWCASE
+        // Debug builds: tile, path progress and destination, gather target
+        {
+            char dbg[40];
+            snprintf(dbg, sizeof(dbg), "t%d,%d p%d/%d>%d,%d", (u.x + 8) / 16, (u.y + 8) / 16,
+                     u.pathIdx, u.pathLen, u.pathDestTX, u.pathDestTY);
+            font_draw_str_16(minimapVram, 256, 192, TX, ty, dbg, colText, gameFont);
+            ty += 12;
+            snprintf(dbg, sizeof(dbg), "g%d,%d w%d s%d o%d i%d", u.gatherTX, u.gatherTY, u.waitCounter,
+                     u.state, tile_occupant(5, 5), gs.selectedUnit);
+            font_draw_str_16(minimapVram, 256, 192, TX, ty, dbg, colText, gameFont);
+            ty += 12;
+        }
+#endif
         // Carry info
         if (u.carryAmount > 0) {
             const char* resNames[] = {"Food","Wood","Gold","Stone"};
@@ -816,6 +830,18 @@ static void ui_draw_controls(const GameState& gs) {
     int cy = CONTROLS_Y;
     int cx = MINIMAP_X + 4;
     u16 colCtrl = RGB15(24, 22, 18) | BIT(15);  // light text on dark wood
+
+#ifdef SHOWCASE
+    // Debug builds: percent of a frame spent in units / other logic /
+    // terrain / sprites / this screen (the last is a frame behind)
+    {
+        extern int profPct[5];
+        char dbg[40];
+        snprintf(dbg, sizeof(dbg), "u%d l%d t%d s%d i%d", profPct[0], profPct[1], profPct[2],
+                 profPct[3], profPct[4]);
+        font_draw_str_16(minimapVram, 256, 192, 130, 2, dbg, COL_YELLOW, gameFont);
+    }
+#endif
 
     if (gs.phase == PHASE_VICTORY || gs.phase == PHASE_DEFEAT) {
         bool won = (gs.phase == PHASE_VICTORY);

@@ -13,8 +13,11 @@ int render_pick_unit(const GameState& gs, int screenX, int screenY, int owner, b
 // Building under a screen pixel, by its sprite (-1 = none)
 int render_pick_building(const GameState& gs, int screenX, int screenY);
 
-// Software-render all visible units and buildings into bitmap buffer
-void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain);
+// Draw the scene into buf: the cached static layer (ground, resources,
+// buildings) and then the units. `ground` is the terrain + fog layer;
+// groundVersion must change whenever its contents do.
+void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain,
+                       const u8* ground, u32 groundVersion);
 
 // Menu bar layout, shared with input.cpp. The bar has 8 slots of 32px; the
 // build menu shows 7 buildings and uses the last slot to turn the page.
