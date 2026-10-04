@@ -713,6 +713,7 @@ void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
     if (!building_is_complete(bldgIdx)) return;
     if (b.type != BLDG_TOWN_CENTER) return;
     if (b.owner != units[idx].owner) return;
+    if (units[idx].type == UNIT_SHEEP) return;
 
     Unit& u = units[idx];
     u.garrisonTarget = bldgIdx;

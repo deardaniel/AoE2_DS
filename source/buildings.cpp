@@ -385,6 +385,7 @@ bool building_garrison(int bldgIdx, int unitIdx) {
     if (!building_is_complete(bldgIdx)) return false;
     if (b.type != BLDG_TOWN_CENTER) return false; // only TC supports garrison
     if (b.owner != units[unitIdx].owner) return false;
+    if (units[unitIdx].type == UNIT_SHEEP) return false; // livestock can't garrison
     if (b.garrisonCount >= MAX_GARRISON) return false;
 
     // Add to garrison

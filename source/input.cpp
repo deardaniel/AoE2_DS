@@ -162,6 +162,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
             bool commanded = false;
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (!gs.unitSelected[i] || !units[i].alive) continue;
+                if (units[i].type == UNIT_SHEEP) continue;
                 unit_command_garrison(i, tappedBldg, terrain);
                 commanded = true;
             }
