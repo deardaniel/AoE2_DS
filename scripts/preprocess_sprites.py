@@ -25,13 +25,12 @@ from shared_constants import (ISO_TILE_H, footprint_height, rgb_to_bgr555,
 SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sprites')
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
 
-# Unit sprite sheets: (output_name, filename)
-# All are 160x96 (5 cols x 3 rows of 32x32 cells = 15 frames max)
+# Unit sprite sheets: (output_name, filename) — built by build_unit_sheets.py,
+# which documents the layouts
 UNIT_SHEETS = [
     ('spr_villager',         'villager.png'),
     ('spr_villager_walk',    'villager_walk.png'),
     ('spr_villager_attack',  'villager_attack.png'),
-    ('spr_villager_f',       'villager_f.png'),
     ('spr_villager_carry',   'villager_carry.png'),
     ('spr_lumberjack',       'lumberjack.png'),
     ('spr_lumberjack_walk',  'lumberjack_walk.png'),
@@ -67,6 +66,7 @@ UNIT_SHEETS = [
     ('spr_spearman_die',     'spearman_die.png'),
     ('spr_scout',            'scout.png'),
     ('spr_scout_walk',       'scout_walk.png'),
+    ('spr_scout_fight',      'scout_fight.png'),
     ('spr_scout_die',        'scout_die.png'),
     ('spr_villager_die',     'villager_die.png'),
     ('spr_sheep_stand',      'sheep_stand.png'),
