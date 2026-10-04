@@ -734,7 +734,7 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
             ty += 12;
             font_draw_str_16(minimapVram, 256, 192, TX, ty, "L/R:Cycle", colText, gameFont);
             ty += 12;
-            font_draw_str_16(minimapVram, 256, 192, TX, ty, "START:Trade", colText, gameFont);
+            font_draw_str_16(minimapVram, 256, 192, TX, ty, "A:Trade", colText, gameFont);
             ty += 12;
         } else {
             if (b.trainQueue[0] >= 0) {
@@ -905,7 +905,7 @@ static void ui_draw_controls(const GameState& gs) {
                UNIT_STATS[gs.trainUnitType].bldgReq == sel->type) {
         itemName = UNIT_NAMES[gs.trainUnitType];
         itemCost = UNIT_STATS[gs.trainUnitType].cost;
-        hint = "START:Train";
+        hint = "Tap icon:Train";
     }
 
     if (itemName) {
@@ -927,7 +927,7 @@ static void ui_draw_controls(const GameState& gs) {
     } else {
         font_draw_str_16(minimapVram, 256, 192, cx, cy, "L/R:Idle villager", colCtrl, gameFont);
         font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "Y:Town Center", colCtrl, gameFont);
-        font_draw_str_16(minimapVram, 256, 192, cx, cy + 24, "B:Cancel", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 24, "START:Menu", colCtrl, gameFont);
     }
 }
 

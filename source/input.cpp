@@ -442,27 +442,6 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         if (!didStance) gs.followCam = !gs.followCam;
     }
 
-    // START = toggle music (when no building selected; training handled in main.cpp)
-    // When market selected: execute trade
-    if (keysPressed & KEY_START) {
-        if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
-            buildings[gs.selectedBldg].type == BLDG_MARKET &&
-            buildings[gs.selectedBldg].owner == 0 &&
-            building_is_complete(gs.selectedBldg)) {
-            // Market trade: sell 100 of one resource, buy 70 of another
-            static const int TRADE_SELL_RES[4] = { RES_FOOD, RES_WOOD, RES_GOLD, RES_STONE };
-            static const int TRADE_BUY_RES[4]  = { RES_GOLD, RES_FOOD, RES_STONE, RES_WOOD };
-            int sellRes = TRADE_SELL_RES[gs.marketTradeIdx];
-            int buyRes  = TRADE_BUY_RES[gs.marketTradeIdx];
-            if (gs.players[0].resources[sellRes] >= 100) {
-                gs.players[0].resources[sellRes] -= 100;
-                gs.players[0].resources[buyRes]  += 70;
-            }
-        } else if (gs.selectedBldg < 0) {
-            sound_music_toggle();
-        }
-    }
-
     // D-pad: camera scroll, or market trade cycling when market selected
     bool marketSelected = (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
                            buildings[gs.selectedBldg].type == BLDG_MARKET &&
@@ -541,6 +520,19 @@ void input_update(GameState& gs, TerrainMap& terrain) {
     // A: ungarrison TC if selected and has garrison, else select first military unit
     if (keysPressed & KEY_A) {
         if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
+            buildings[gs.selectedBldg].type == BLDG_MARKET &&
+            buildings[gs.selectedBldg].owner == 0 &&
+            building_is_complete(gs.selectedBldg)) {
+            // Market trade: sell 100 of one resource, buy 70 of another
+            static const int TRADE_SELL_RES[4] = { RES_FOOD, RES_WOOD, RES_GOLD, RES_STONE };
+            static const int TRADE_BUY_RES[4]  = { RES_GOLD, RES_FOOD, RES_STONE, RES_WOOD };
+            int sellRes = TRADE_SELL_RES[gs.marketTradeIdx];
+            int buyRes  = TRADE_BUY_RES[gs.marketTradeIdx];
+            if (gs.players[0].resources[sellRes] >= 100) {
+                gs.players[0].resources[sellRes] -= 100;
+                gs.players[0].resources[buyRes]  += 70;
+            }
+        } else if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
             buildings[gs.selectedBldg].type == BLDG_TOWN_CENTER &&
             buildings[gs.selectedBldg].garrisonCount > 0) {
             building_ungarrison_all(gs.selectedBldg, terrain);

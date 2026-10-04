@@ -8,240 +8,206 @@
 #include "ai.h"
 #include "projectiles.h"
 #include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
 
-static const char SAVE_PATH[] = "fat:/aoe2dsi.sav";
-static const u32  SAVE_MAGIC  = 0xA0E2D51;
-static const u16  SAVE_VERSION = 3;
+// ---------------------------------------------------------------------------
+// Saved games
+//
+// One routine, transfer(), walks every saved field and either writes it or
+// reads it, so the two directions cannot fall out of step. Bump SAVE_VERSION
+// whenever the list of fields (or a struct written whole, like Player)
+// changes; older files are then refused rather than misread.
+//
+// Not saved: paths (a unit on the move works its route out again on load),
+// selection, and anything derived (population, technology bonuses).
+// ---------------------------------------------------------------------------
+static const u32 SAVE_MAGIC   = 0xA0E2D51;
+static const u16 SAVE_VERSION = 4;
 
 extern GameState gameState;
 
-static bool write_all(FILE* f, const void* data, size_t size) {
-    return fwrite(data, 1, size, f) == size;
+// The card: a flashcart's (fat:) or the DSi's SD slot (sd:)
+static const char* save_device() {
+    static const char* device = NULL;
+    static bool looked = false;
+    if (!looked) {
+        looked = true;
+        struct stat st;
+        if (stat("fat:/", &st) == 0) device = "fat:/";
+        else if (stat("sd:/", &st) == 0) device = "sd:/";
+    }
+    return device;
 }
 
-static bool read_all(FILE* f, void* data, size_t size) {
-    return fread(data, 1, size, f) == size;
+bool save_available() {
+    return save_device() != NULL;
 }
 
-bool save_game(TerrainMap& terrain) {
-    FILE* f = fopen(SAVE_PATH, "wb");
-    if (!f) return false;
+static bool slot_path(int slot, char* out, size_t size) {
+    if (slot < 0 || slot >= SAVE_SLOTS || !save_device()) return false;
+    snprintf(out, size, "%saoe2dsi_%d.sav", save_device(), slot + 1);
+    return true;
+}
 
-    bool ok = true;
+static FILE* file;
+static bool writing, ok;
 
-    // Header
-    ok = ok && write_all(f, &SAVE_MAGIC, 4);
-    ok = ok && write_all(f, &SAVE_VERSION, 2);
+static void io(void* data, size_t size) {
+    if (!ok) return;
+    size_t n = writing ? fwrite(data, 1, size, file) : fread(data, 1, size, file);
+    ok = (n == size);
+}
+#define IO(field) io(&(field), sizeof(field))
 
-    // Player state
-    for (int p = 0; p < NUM_PLAYERS; p++)
-        ok = ok && write_all(f, &gameState.players[p], sizeof(Player));
-    ok = ok && write_all(f, &gameState.camX, sizeof(int));
-    ok = ok && write_all(f, &gameState.camY, sizeof(int));
-    ok = ok && write_all(f, &gameState.phase, sizeof(GamePhase));
-    ok = ok && write_all(f, &gameState.frameCount, sizeof(int));
-    ok = ok && write_all(f, &gameState.aiDifficulty, sizeof(u8));
-    ok = ok && write_all(f, gameState.unitsKilled, sizeof(gameState.unitsKilled));
-    ok = ok && write_all(f, gameState.unitsLost, sizeof(gameState.unitsLost));
-    ok = ok && write_all(f, gameState.bldgsDestroyed, sizeof(gameState.bldgsDestroyed));
+// Header: identifies the file and carries the summary the menu shows
+static bool transfer_header(SaveInfo& info) {
+    u32 magic = SAVE_MAGIC;
+    u16 version = SAVE_VERSION;
+    IO(magic);
+    IO(version);
+    IO(info.age);
+    IO(info.pop);
+    IO(info.popCap);
+    IO(info.frames);
+    return ok && magic == SAVE_MAGIC && version == SAVE_VERSION;
+}
 
-    // Units
+static void transfer_body(TerrainMap& terrain) {
+    GameState& gs = gameState;
+    for (int p = 0; p < NUM_PLAYERS; p++) IO(gs.players[p]);
+    IO(gs.camX);
+    IO(gs.camY);
+    IO(gs.phase);
+    IO(gs.frameCount);
+    IO(gs.aiDifficulty);
+    IO(gs.unitsKilled);
+    IO(gs.unitsLost);
+    IO(gs.bldgsDestroyed);
+
+    if (!writing) units_init();
     for (int i = 0; i < MAX_UNITS; i++) {
         Unit& u = units[i];
-        ok = ok && write_all(f, &u.alive, 1);
+        IO(u.alive);
         if (!u.alive) continue;
-        ok = ok && write_all(f, &u.owner, 1);
-        ok = ok && write_all(f, &u.type, 1);
-        ok = ok && write_all(f, &u.x, sizeof(s16));
-        ok = ok && write_all(f, &u.y, sizeof(s16));
-        ok = ok && write_all(f, &u.hp, sizeof(s16));
-        ok = ok && write_all(f, &u.state, 1);
-        ok = ok && write_all(f, &u.direction, 1);
-        ok = ok && write_all(f, &u.carryType, 1);
-        ok = ok && write_all(f, &u.carryAmount, 1);
-        ok = ok && write_all(f, &u.role, 1);
-        ok = ok && write_all(f, &u.gatherTX, 1);
-        ok = ok && write_all(f, &u.gatherTY, 1);
-        ok = ok && write_all(f, &u.attackTarget, 1);
-        ok = ok && write_all(f, &u.attackBldgTarget, 1);
-        ok = ok && write_all(f, &u.buildTarget, 1);
-        ok = ok && write_all(f, &u.stance, 1);
-        ok = ok && write_all(f, &u.convertProgress, 1);
-        ok = ok && write_all(f, &u.deadTimer, sizeof(u16));
-        ok = ok && write_all(f, &u.patrolAX, sizeof(s16));
-        ok = ok && write_all(f, &u.patrolAY, sizeof(s16));
-        ok = ok && write_all(f, &u.patrolBX, sizeof(s16));
-        ok = ok && write_all(f, &u.patrolBY, sizeof(s16));
+        IO(u.owner); IO(u.type);
+        IO(u.x); IO(u.y);
+        IO(u.hp);
+        IO(u.state); IO(u.direction);
+        IO(u.carryType); IO(u.carryAmount); IO(u.role);
+        IO(u.gatherTX); IO(u.gatherTY); IO(u.gatherTick);
+        IO(u.attackTarget); IO(u.attackBldgTarget); IO(u.attackCooldown);
+        IO(u.buildTarget); IO(u.garrisonTarget); IO(u.herdTarget);
+        IO(u.stance); IO(u.convertProgress);
+        IO(u.deadTimer);
+        IO(u.pathDestTX); IO(u.pathDestTY);
+        IO(u.finalX); IO(u.finalY);
+        IO(u.patrolAX); IO(u.patrolAY); IO(u.patrolBX); IO(u.patrolBY);
     }
 
-    // Buildings
+    if (!writing) buildings_init();
     for (int i = 0; i < MAX_BUILDINGS; i++) {
         Building& b = buildings[i];
-        ok = ok && write_all(f, &b.alive, 1);
+        IO(b.alive);
         if (!b.alive) continue;
-        ok = ok && write_all(f, &b.owner, 1);
-        ok = ok && write_all(f, &b.type, 1);
-        ok = ok && write_all(f, &b.x, sizeof(s16));
-        ok = ok && write_all(f, &b.y, sizeof(s16));
-        ok = ok && write_all(f, &b.hp, sizeof(s16));
-        ok = ok && write_all(f, &b.buildProgress, sizeof(s16));
-        ok = ok && write_all(f, b.trainQueue, sizeof(b.trainQueue));
-        ok = ok && write_all(f, &b.trainProgress, sizeof(s16));
-        ok = ok && write_all(f, &b.garrisonCount, 1);
-        ok = ok && write_all(f, b.garrison, sizeof(b.garrison));
-        ok = ok && write_all(f, &b.rallyTX, 1);
-        ok = ok && write_all(f, &b.rallyTY, 1);
+        IO(b.owner); IO(b.type);
+        IO(b.x); IO(b.y);
+        IO(b.hp);
+        IO(b.buildProgress);
+        IO(b.trainQueue); IO(b.trainProgress);
+        IO(b.attackCooldown);
+        IO(b.garrisonCount); IO(b.garrison);
+        IO(b.rallyTX); IO(b.rallyTY);
     }
 
-    // Terrain (tiles + resource amounts)
-    ok = ok && write_all(f, terrain.tiles, sizeof(terrain.tiles));
-    ok = ok && write_all(f, terrain.resourceAmt, sizeof(terrain.resourceAmt));
+    IO(terrain.tiles);
+    IO(terrain.resourceAmt);
+    IO(fogMap.state);
 
-    // Fog of war
-    ok = ok && write_all(f, fogMap.state, sizeof(fogMap.state));
+    int strategy = ai_get_strategy();
+    IO(strategy);
+    if (!writing && ok) ai_set_strategy(strategy);
+}
 
-    // Tech economy state
-    ok = ok && write_all(f, playerGatherRate, sizeof(playerGatherRate));
-    ok = ok && write_all(f, &playerCarryMax, sizeof(playerCarryMax));
-    ok = ok && write_all(f, playerFarmFood, sizeof(playerFarmFood));
+bool save_info(int slot, SaveInfo& info) {
+    char path[32];
+    if (!slot_path(slot, path, sizeof(path))) return false;
+    file = fopen(path, "rb");
+    if (!file) return false;
+    writing = false;
+    ok = true;
+    bool good = transfer_header(info);
+    fclose(file);
+    return good;
+}
 
-    // AI strategy
-    int strat = ai_get_strategy();
-    ok = ok && write_all(f, &strat, sizeof(int));
-
-    fclose(f);
+bool save_game(int slot, TerrainMap& terrain) {
+    char path[32];
+    if (!slot_path(slot, path, sizeof(path))) return false;
+    file = fopen(path, "wb");
+    if (!file) return false;
+    writing = true;
+    ok = true;
+    SaveInfo info = { gameState.players[0].age, (u8)gameState.players[0].popCount,
+                      (u8)gameState.players[0].popCap, gameState.frameCount };
+    transfer_header(info);
+    transfer_body(terrain);
+    if (fclose(file) != 0) ok = false;
     return ok;
 }
 
-bool load_game(TerrainMap& terrain) {
-    FILE* f = fopen(SAVE_PATH, "rb");
-    if (!f) return false;
-
-    bool ok = true;
-    u32 magic;
-    u16 version;
-    ok = ok && read_all(f, &magic, 4);
-    ok = ok && read_all(f, &version, 2);
-    if (!ok || magic != SAVE_MAGIC || version != SAVE_VERSION) {
-        fclose(f);
+bool load_game(int slot, TerrainMap& terrain) {
+    char path[32];
+    if (!slot_path(slot, path, sizeof(path))) return false;
+    file = fopen(path, "rb");
+    if (!file) return false;
+    writing = false;
+    ok = true;
+    SaveInfo info;
+    if (!transfer_header(info)) {
+        fclose(file);
         return false;
     }
 
-    // Player state
-    for (int p = 0; p < NUM_PLAYERS; p++)
-        ok = ok && read_all(f, &gameState.players[p], sizeof(Player));
-    ok = ok && read_all(f, &gameState.camX, sizeof(int));
-    ok = ok && read_all(f, &gameState.camY, sizeof(int));
-    ok = ok && read_all(f, &gameState.phase, sizeof(GamePhase));
-    ok = ok && read_all(f, &gameState.frameCount, sizeof(int));
-    ok = ok && read_all(f, &gameState.aiDifficulty, sizeof(u8));
-    ok = ok && read_all(f, gameState.unitsKilled, sizeof(gameState.unitsKilled));
-    ok = ok && read_all(f, gameState.unitsLost, sizeof(gameState.unitsLost));
-    ok = ok && read_all(f, gameState.bldgsDestroyed, sizeof(gameState.bldgsDestroyed));
+    // From here the running game is being replaced
+    game_init(gameState);
+    projectiles_init();
+    transfer_body(terrain);
+    fclose(file);
 
-    // Clear transient state
-    gameState.selectedUnit = -1;
-    gameState.selectedBldg = -1;
-    gameState.selectionCount = 0;
-    for (int i = 0; i < MAX_UNITS; i++) gameState.unitSelected[i] = false;
-    gameState.inputMode = 0;
-    gameState.buildMenuOpen = false;
-    gameState.touchActive = false;
-    gameState.isDragging = false;
-    gameState.moveTargetTimer = 0;
-    gameState.underAttackTimer = 0;
-    gameState.trainUnitType = -1;
-    gameState.menuKind = -1;
-    gameState.selectedTileX = -1;
-    gameState.selectedTileY = -1;
-
-    // Units — first clear all
-    units_init();
-    for (int i = 0; i < MAX_UNITS; i++) {
-        Unit& u = units[i];
-        ok = ok && read_all(f, &u.alive, 1);
-        if (!u.alive) continue;
-        ok = ok && read_all(f, &u.owner, 1);
-        ok = ok && read_all(f, &u.type, 1);
-        ok = ok && read_all(f, &u.x, sizeof(s16));
-        ok = ok && read_all(f, &u.y, sizeof(s16));
-        ok = ok && read_all(f, &u.hp, sizeof(s16));
-        ok = ok && read_all(f, &u.state, 1);
-        ok = ok && read_all(f, &u.direction, 1);
-        ok = ok && read_all(f, &u.carryType, 1);
-        ok = ok && read_all(f, &u.carryAmount, 1);
-        ok = ok && read_all(f, &u.role, 1);
-        ok = ok && read_all(f, &u.gatherTX, 1);
-        ok = ok && read_all(f, &u.gatherTY, 1);
-        ok = ok && read_all(f, &u.attackTarget, 1);
-        ok = ok && read_all(f, &u.attackBldgTarget, 1);
-        ok = ok && read_all(f, &u.buildTarget, 1);
-        ok = ok && read_all(f, &u.stance, 1);
-        ok = ok && read_all(f, &u.convertProgress, 1);
-        ok = ok && read_all(f, &u.deadTimer, sizeof(u16));
-        u.herdTarget = -1;
-        u.pathLen = 0;  // paths aren't saved: a unit on the move stops
-        u.finalX = u.finalY = -1;
-        u.pathIdx = 0;
-        u.subX = u.subY = 0;
-        ok = ok && read_all(f, &u.patrolAX, sizeof(s16));
-        ok = ok && read_all(f, &u.patrolAY, sizeof(s16));
-        ok = ok && read_all(f, &u.patrolBX, sizeof(s16));
-        ok = ok && read_all(f, &u.patrolBY, sizeof(s16));
-    }
-
-    // Buildings — first clear all
-    buildings_init();
-    for (int i = 0; i < MAX_BUILDINGS; i++) {
-        Building& b = buildings[i];
-        ok = ok && read_all(f, &b.alive, 1);
-        if (!b.alive) continue;
-        ok = ok && read_all(f, &b.owner, 1);
-        ok = ok && read_all(f, &b.type, 1);
-        ok = ok && read_all(f, &b.x, sizeof(s16));
-        ok = ok && read_all(f, &b.y, sizeof(s16));
-        ok = ok && read_all(f, &b.hp, sizeof(s16));
-        ok = ok && read_all(f, &b.buildProgress, sizeof(s16));
-        ok = ok && read_all(f, b.trainQueue, sizeof(b.trainQueue));
-        ok = ok && read_all(f, &b.trainProgress, sizeof(s16));
-        ok = ok && read_all(f, &b.garrisonCount, 1);
-        ok = ok && read_all(f, b.garrison, sizeof(b.garrison));
-        ok = ok && read_all(f, &b.rallyTX, 1);
-        ok = ok && read_all(f, &b.rallyTY, 1);
-    }
-
-    // Terrain
-    ok = ok && read_all(f, terrain.tiles, sizeof(terrain.tiles));
-    ok = ok && read_all(f, terrain.resourceAmt, sizeof(terrain.resourceAmt));
-
-    // Fog of war
-    ok = ok && read_all(f, fogMap.state, sizeof(fogMap.state));
-
-    // Tech economy state
-    ok = ok && read_all(f, playerGatherRate, sizeof(playerGatherRate));
-    ok = ok && read_all(f, &playerCarryMax, sizeof(playerCarryMax));
-    ok = ok && read_all(f, playerFarmFood, sizeof(playerFarmFood));
-
-    // AI strategy
-    int strat;
-    ok = ok && read_all(f, &strat, sizeof(int));
-    ai_set_strategy(strat);
-
-    fclose(f);
-
-    // Recalculate derived state
-    for (int p = 0; p < NUM_PLAYERS; p++)
-        game_update_pop_cap(gameState, p);
+    // Derived state
     tech_apply_bonuses(0);
     tech_apply_bonuses(1);
-    projectiles_init();
+    for (int p = 0; p < NUM_PLAYERS; p++)
+        game_update_pop_cap(gameState, p);
+    terrain.version++;      // redraw the ground and everything on it
+    fogMap.version++;
 
+    // Units that were walking somewhere set off again (paths aren't saved).
+    // Gatherers, builders and fighters pick their work back up by themselves
+    // from the states and targets that were.
+    for (int i = 0; i < MAX_UNITS; i++) {
+        Unit& u = units[i];
+        if (!u.alive || u.state != USTATE_MOVING) continue;
+        s8 attack = u.attackTarget, attackBldg = u.attackBldgTarget;
+        s8 gatherTX = u.gatherTX;
+        s16 pax = u.patrolAX, pay = u.patrolAY, pbx = u.patrolBX, pby = u.patrolBY;
+        u.state = USTATE_IDLE;
+        if (u.garrisonTarget >= 0) {
+            unit_command_garrison(i, u.garrisonTarget, terrain, true);
+        } else if (u.buildTarget >= 0) {
+            unit_command_build(i, u.buildTarget, terrain);
+        } else if (attack >= 0 || attackBldg >= 0) {
+            u.state = USTATE_ATTACKING;     // closes in on the target again
+        } else if (gatherTX >= 0) {
+            u.state = (u.carryAmount > 0) ? USTATE_RETURNING : USTATE_GATHERING;
+        } else {
+            bool exact = (u.finalX >= 0);
+            int px = exact ? u.finalX + TILE_PX / 2 : u.pathDestTX * TILE_PX + TILE_PX / 2;
+            int py = exact ? u.finalY + TILE_PX / 2 : u.pathDestTY * TILE_PX + TILE_PX / 2;
+            unit_command_move(i, px, py, terrain, exact);
+            u.patrolAX = pax; u.patrolAY = pay; u.patrolBX = pbx; u.patrolBY = pby;
+        }
+    }
     return ok;
-}
-
-bool save_exists() {
-    FILE* f = fopen(SAVE_PATH, "rb");
-    if (!f) return false;
-    fclose(f);
-    return true;
 }

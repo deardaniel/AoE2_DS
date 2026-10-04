@@ -19,6 +19,7 @@
 #include "font.h"
 #include "projectiles.h"
 #include "save.h"
+#include "pause.h"
 #include <filesystem.h>
 #include <fat.h>
 
@@ -290,6 +291,18 @@ int main(void) {
 
     // === Main Loop ===
     while (pmMainLoop()) {
+        // Pause menu: the game stands still under it. The last frame drawn
+        // is still in terrainBuf; the menu dims it and draws on top.
+        if (pause_is_open()) {
+            scanKeys();
+            PauseResult r = pause_frame(terrainBuf, gameState, terrain);
+            if (r == PAUSE_NEW_GAME) game_start();
+            if (r == PAUSE_STAY) dmaCopy(terrainBuf, subVram, 256 * 192);
+            sound_music_update();
+            swiWaitForVBlank();
+            continue;
+        }
+
         // Handle game-over touch-to-restart
         if (gameState.phase != PHASE_PLAYING) {
             scanKeys();
@@ -297,9 +310,9 @@ int main(void) {
             if (kd & KEY_TOUCH) {
                 game_start();
             }
-            // START: load saved game
-            if ((kd & KEY_START) && save_exists()) {
-                load_game(terrain);
+            // START: the saved games
+            if ((kd & KEY_START) && save_available()) {
+                pause_open(true);
             }
             // L/R cycle AI difficulty on game-over screen
             if (kd & KEY_R) {
@@ -358,8 +371,8 @@ int main(void) {
                 sy += 14;
                 font_draw_str_8(terrainBuf, 256, 192, lx, sy, "L/R:Change", sc, gameFont);
                 sy += 14;
-                if (save_exists())
-                    font_draw_str_8(terrainBuf, 256, 192, lx, sy, "START:Load", sc, gameFont);
+                if (save_available())
+                    font_draw_str_8(terrainBuf, 256, 192, lx, sy, "START:Load game", sc, gameFont);
                 sy += 20;
 
                 const char* hint = "Touch to restart";
@@ -382,28 +395,20 @@ int main(void) {
         // Input
         input_update(gameState, terrain);
 
-        // Save game: L+R held, press SELECT
-        {
-            int kh = keysHeld();
-            int kd2 = keysDown();
-            if ((kh & (KEY_L | KEY_R)) == (KEY_L | KEY_R) && (kd2 & KEY_SELECT)) {
-                save_game(terrain);
-            }
+        // START: pause menu (resume, save, load, music, new game)
+        if (keysDown() & KEY_START) {
+            pause_open();
+            continue;
         }
 
-        // Handle training/research from selected building via START
-        // Note: scanKeys() already called in input_update() — reuse keysDown()
+        // D-pad up/down: move the highlight along a building's unit list
         {
             int kp = keysDown();
-
-            // D-pad up/down: cycle train unit type when military building selected
             if ((kp & KEY_UP) || (kp & KEY_DOWN)) {
                 if (gameState.selectedBldg >= 0 && buildings[gameState.selectedBldg].alive &&
                     building_is_complete(gameState.selectedBldg) &&
                     buildings[gameState.selectedBldg].owner == 0) {
                     Building& b = buildings[gameState.selectedBldg];
-                    // Only for buildings that train units (not market, not farm, etc.)
-                    // Build list of trainable unit types for this building
                     int trainable[UNIT_TYPE_COUNT];
                     int trainCount = 0;
                     for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
@@ -413,7 +418,6 @@ int main(void) {
                         }
                     }
                     if (trainCount > 1) {
-                        // Find current index
                         int curIdx = 0;
                         for (int t = 0; t < trainCount; t++) {
                             if (trainable[t] == gameState.trainUnitType) { curIdx = t; break; }
@@ -421,35 +425,6 @@ int main(void) {
                         if (kp & KEY_DOWN) curIdx = (curIdx + 1) % trainCount;
                         if (kp & KEY_UP)   curIdx = (curIdx + trainCount - 1) % trainCount;
                         gameState.trainUnitType = trainable[curIdx];
-                    }
-                }
-            }
-
-            if (kp & KEY_START) {
-                if (gameState.selectedBldg >= 0 && buildings[gameState.selectedBldg].alive &&
-                    building_is_complete(gameState.selectedBldg)) {
-                    Building& b = buildings[gameState.selectedBldg];
-                    bool didAction = false;
-
-                    // START trains the highlighted unit (or the first one).
-                    // Ages and technologies are bought by tapping their slot;
-                    // START used to buy whichever came first, so pressing it
-                    // for a villager could spend the gold on Loom instead.
-                    // Train selected unit type (or first available if none selected)
-                    if (!didAction) {
-                        if (gameState.trainUnitType >= 0 &&
-                            UNIT_STATS[gameState.trainUnitType].bldgReq == b.type &&
-                            gameState.players[0].age >= UNIT_STATS[gameState.trainUnitType].ageReq) {
-                            building_train(gameState.selectedBldg, gameState.trainUnitType, gameState);
-                        } else {
-                            for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
-                                if (UNIT_STATS[ut].bldgReq == b.type &&
-                                    gameState.players[0].age >= UNIT_STATS[ut].ageReq) {
-                                    building_train(gameState.selectedBldg, ut, gameState);
-                                    break;
-                                }
-                            }
-                        }
                     }
                 }
             }
