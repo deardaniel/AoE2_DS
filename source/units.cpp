@@ -143,7 +143,38 @@ struct AStarNode {
 
 static AStarNode astarGrid[MAP_TILES][MAP_TILES];
 static bool passMap[MAP_TILES][MAP_TILES]; // combined terrain + building passability
-static s16 openList[MAP_TILES * MAP_TILES]; // encoded as y * MAP_TILES + x
+// Open set: a binary min-heap of (f << 16 | tile). A tile whose f improves is
+// pushed again and the stale entry is skipped when it surfaces, so the heap
+// holds at most one entry per edge relaxed.
+static u32 openHeap[MAP_TILES * MAP_TILES * 8];
+static int openCount;
+
+static void heap_push(u32 v) {
+    int i = openCount++;
+    while (i > 0) {
+        int p = (i - 1) >> 1;
+        if (openHeap[p] <= v) break;
+        openHeap[i] = openHeap[p];
+        i = p;
+    }
+    openHeap[i] = v;
+}
+
+static u32 heap_pop() {
+    u32 top = openHeap[0];
+    u32 v = openHeap[--openCount];
+    int i = 0;
+    for (;;) {
+        int c = i * 2 + 1;
+        if (c >= openCount) break;
+        if (c + 1 < openCount && openHeap[c + 1] < openHeap[c]) c++;
+        if (openHeap[c] >= v) break;
+        openHeap[i] = openHeap[c];
+        i = c;
+    }
+    openHeap[i] = v;
+    return top;
+}
 
 // Idle animation timing at 60 fps, from the standing graphics in the .dat:
 // frames x seconds-per-frame for one play-through, then the replay delay.
@@ -284,8 +315,27 @@ static bool line_clear(int x0, int y0, int x1, int y1) {
 // really ends on. Returns false, leaving the unit's path untouched, if there
 // is nowhere better to go than where it stands and the target isn't adjacent.
 // ---------------------------------------------------------------------------
+int profPathSearches = 0;  // debug builds: path searches this frame
+u32 profPathTicks = 0;     // and the timer ticks they took
+
+static bool find_path_impl(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
+                           Unit& u, int selfIdx, bool skipUnits, bool allowPartial);
+
 bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
                     Unit& u, int selfIdx, bool skipUnits, bool allowPartial) {
+#ifdef SHOWCASE
+    profPathSearches++;
+    u32 t0 = cpuGetTiming();
+    bool ok = find_path_impl(sx, sy, tx, ty, terrain, u, selfIdx, skipUnits, allowPartial);
+    profPathTicks += cpuGetTiming() - t0;
+    return ok;
+#else
+    return find_path_impl(sx, sy, tx, ty, terrain, u, selfIdx, skipUnits, allowPartial);
+#endif
+}
+
+static bool find_path_impl(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
+                           Unit& u, int selfIdx, bool skipUnits, bool allowPartial) {
     // Clamp to map
     if (tx < 0) tx = 0;
     if (tx >= MAP_TILES) tx = MAP_TILES - 1;
@@ -305,27 +355,22 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
         for (int x = 0; x < MAP_TILES; x++)
             astarGrid[y][x].parentX = astarGrid[y][x].parentY = -1;
 
-    int openCount = 0;
+    openCount = 0;
     astarGrid[sy][sx].g = 0;
     astarGrid[sy][sx].f = heuristic(sx, sy, tx, ty);
     astarGrid[sy][sx].open = true;
-    openList[openCount++] = sy * MAP_TILES + sx;
+    heap_push(((u32)astarGrid[sy][sx].f << 16) | (u32)(sy * MAP_TILES + sx));
 
     int endX = -1, endY = -1;           // tile the path will end on
     int bestX = sx, bestY = sy;         // closest tile to the target seen so far
     int bestH = heuristic(sx, sy, tx, ty);
 
     while (openCount > 0) {
-        // Open node with the lowest f
-        int pick = 0;
-        int pickF = astarGrid[openList[0] / MAP_TILES][openList[0] % MAP_TILES].f;
-        for (int i = 1; i < openCount; i++) {
-            int f = astarGrid[openList[i] / MAP_TILES][openList[i] % MAP_TILES].f;
-            if (f < pickF) { pickF = f; pick = i; }
-        }
-        int cx = openList[pick] % MAP_TILES;
-        int cy = openList[pick] / MAP_TILES;
-        openList[pick] = openList[--openCount];
+        // Open node with the lowest f (skipping entries a better one replaced)
+        int node = heap_pop() & 0xFFFF;
+        int cx = node % MAP_TILES;
+        int cy = node / MAP_TILES;
+        if (astarGrid[cy][cx].closed) continue;
         astarGrid[cy][cx].open = false;
         astarGrid[cy][cx].closed = true;
 
@@ -357,10 +402,8 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
                 astarGrid[ny][nx].f = ng + heuristic(nx, ny, tx, ty);
                 astarGrid[ny][nx].parentX = cx;
                 astarGrid[ny][nx].parentY = cy;
-                if (!astarGrid[ny][nx].open) {
-                    astarGrid[ny][nx].open = true;
-                    openList[openCount++] = ny * MAP_TILES + nx;
-                }
+                astarGrid[ny][nx].open = true;
+                heap_push(((u32)astarGrid[ny][nx].f << 16) | (u32)(ny * MAP_TILES + nx));
             }
         }
     }
@@ -1621,23 +1664,25 @@ void units_update(GameState& gs, TerrainMap& terrain) {
             unit_update_building(u, gs, terrain);
             break;
 
-        case USTATE_SCOUTING:
-            // Auto-scout: move toward unexplored tiles
-            // First check for nearby enemies and flee
-            {
-                int utx = (u.x + TILE_PX / 2) / TILE_PX;
-                int uty = (u.y + TILE_PX / 2) / TILE_PX;
+        case USTATE_SCOUTING: {
+            // Auto-scout: head for the nearest unexplored ground, keeping
+            // clear of enemies. The thinking (and its path search) runs four
+            // times a second, staggered between units — done every frame it
+            // cost most of a frame whenever a target could not be reached.
+            bool think = (((u32)gs.frameCount + (u32)i * 5) & 15) == 0;
+            int utx = (u.x + TILE_PX / 2) / TILE_PX;
+            int uty = (u.y + TILE_PX / 2) / TILE_PX;
 
-                // Check for enemies within 4 tiles
+            if (think) {
+                // Enemies within 4 tiles (sheep and villagers are no threat)
                 int nearestEnemyDist = 99999;
                 int enemyDX = 0, enemyDY = 0;
                 for (int j = 0; j < MAX_UNITS; j++) {
                     if (!units[j].alive || units[j].state == USTATE_DEAD) continue;
                     if (units[j].owner == u.owner) continue;
-                    int etx = units[j].x / TILE_PX;
-                    int ety = units[j].y / TILE_PX;
-                    int dx = etx - utx;
-                    int dy = ety - uty;
+                    if (units[j].type == UNIT_SHEEP || units[j].type == UNIT_VILLAGER) continue;
+                    int dx = units[j].x / TILE_PX - utx;
+                    int dy = units[j].y / TILE_PX - uty;
                     int dist = dx * dx + dy * dy;
                     if (dist < nearestEnemyDist && dist <= 4 * 4) {
                         nearestEnemyDist = dist;
@@ -1647,86 +1692,52 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                 }
 
                 if (nearestEnemyDist <= 4 * 4) {
-                    // Flee: move in opposite direction, 7 tiles away
+                    // Flee: 7 tiles the other way, or as near to that as the
+                    // ground allows
                     int fleeDX = -enemyDX;
                     int fleeDY = -enemyDY;
-                    // Normalize to 7 tiles
                     if (fleeDX == 0 && fleeDY == 0) { fleeDX = 1; fleeDY = 1; }
-                    int fleeTX = utx + fleeDX * 7 / ((fleeDX < 0 ? -fleeDX : fleeDX) + (fleeDY < 0 ? -fleeDY : fleeDY) + 1);
-                    int fleeTY = uty + fleeDY * 7 / ((fleeDX < 0 ? -fleeDX : fleeDX) + (fleeDY < 0 ? -fleeDY : fleeDY) + 1);
-                    // Clamp to map
+                    int norm = (fleeDX < 0 ? -fleeDX : fleeDX) + (fleeDY < 0 ? -fleeDY : fleeDY) + 1;
+                    int fleeTX = utx + fleeDX * 7 / norm;
+                    int fleeTY = uty + fleeDY * 7 / norm;
                     if (fleeTX < 1) fleeTX = 1;
                     if (fleeTY < 1) fleeTY = 1;
                     if (fleeTX >= MAP_TILES - 1) fleeTX = MAP_TILES - 2;
                     if (fleeTY >= MAP_TILES - 1) fleeTY = MAP_TILES - 2;
-                    // Find passable tile near flee target
-                    bool fled = false;
-                    for (int r = 0; r <= 3 && !fled; r++) {
-                        for (int dy = -r; dy <= r && !fled; dy++) {
-                            for (int dx = -r; dx <= r && !fled; dx++) {
-                                int ftx = fleeTX + dx;
-                                int fty = fleeTY + dy;
-                                if (ftx >= 0 && ftx < MAP_TILES && fty >= 0 && fty < MAP_TILES &&
-                                    terrain.passable(ftx, fty)) {
-                                    if (unit_find_path(utx, uty, ftx, fty, terrain, u, i, true)) {
-                                        fled = true;
-                                    }
+                    unit_find_path(utx, uty, fleeTX, fleeTY, terrain, u, i, true, true);
+                } else if (u.pathLen == 0) {
+                    // Nearest unexplored walkable tile (every 2nd tile), at
+                    // least 5 tiles off so the scout doesn't dither; failing
+                    // that, any distance
+                    int bestTX = -1, bestTY = -1;
+                    for (int minDist = 5 * 5; minDist >= 0 && bestTX < 0; minDist -= 5 * 5) {
+                        int bestDist = 999999;
+                        for (int ty = 0; ty < MAP_TILES; ty += 2) {
+                            for (int tx = 0; tx < MAP_TILES; tx += 2) {
+                                if (fogMap.isExplored(u.owner, tx, ty)) continue;
+                                if (!terrain.passable(tx, ty)) continue;
+                                int dx = tx - utx;
+                                int dy = ty - uty;
+                                int dist = dx * dx + dy * dy;
+                                if (dist >= minDist && dist < bestDist) {
+                                    bestDist = dist;
+                                    bestTX = tx;
+                                    bestTY = ty;
                                 }
                             }
                         }
                     }
-                    break;
-                }
-            }
-
-            // Only pick a new target when idle (reached previous one)
-            if (u.pathLen == 0) {
-                int utx = (u.x + TILE_PX / 2) / TILE_PX;
-                int uty = (u.y + TILE_PX / 2) / TILE_PX;
-                int bestDist = 999999;
-                int bestTX = -1, bestTY = -1;
-                // Sample every 2nd tile for performance
-                // Require minimum distance of 5 tiles to avoid micro-oscillation
-                int minDist = 5 * 5;
-                for (int ty = 0; ty < MAP_TILES; ty += 2) {
-                    for (int tx = 0; tx < MAP_TILES; tx += 2) {
-                        if (fogMap.isExplored(u.owner, tx, ty)) continue;
-                        if (!terrain.passable(tx, ty)) continue;
-                        int dx = tx - utx;
-                        int dy = ty - uty;
-                        int dist = dx * dx + dy * dy;
-                        if (dist >= minDist && dist < bestDist) {
-                            bestDist = dist;
-                            bestTX = tx;
-                            bestTY = ty;
-                        }
+                    if (bestTX < 0) {
+                        u.state = USTATE_IDLE; // map fully explored
+                        break;
                     }
-                }
-                // Fallback: if no target at min distance, accept any
-                if (bestTX < 0) {
-                    bestDist = 999999;
-                    for (int ty = 0; ty < MAP_TILES; ty += 2) {
-                        for (int tx = 0; tx < MAP_TILES; tx += 2) {
-                            if (fogMap.isExplored(u.owner, tx, ty)) continue;
-                            if (!terrain.passable(tx, ty)) continue;
-                            int dx = tx - utx;
-                            int dy = ty - uty;
-                            int dist = dx * dx + dy * dy;
-                            if (dist < bestDist) {
-                                bestDist = dist;
-                                bestTX = tx;
-                                bestTY = ty;
-                            }
-                        }
-                    }
-                }
-                if (bestTX >= 0) {
                     u.targetX = bestTX * TILE_PX + TILE_PX / 2;
                     u.targetY = bestTY * TILE_PX + TILE_PX / 2;
-                    int sx = u.x / TILE_PX;
-                    int sy = u.y / TILE_PX;
-                    if (!unit_find_path(sx, sy, bestTX, bestTY, terrain, u, i, true)) {
-                        // Path failed — mark nearby tiles as explored to avoid retrying
+                    // Go as near as we can get. If that is where we already
+                    // stand, write the area off so it isn't picked again.
+                    if (!unit_find_path(utx, uty, bestTX, bestTY, terrain, u, i, true, true) ||
+                        u.pathLen == 0) {
+                        u.pathLen = 0;
                         for (int dy2 = -2; dy2 <= 2; dy2++)
                             for (int dx2 = -2; dx2 <= 2; dx2++) {
                                 int ex = bestTX + dx2, ey = bestTY + dy2;
@@ -1734,18 +1745,16 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                                     fogMap.forceExplore(u.owner, ex, ey);
                             }
                     }
-                } else {
-                    u.state = USTATE_IDLE; // map fully explored
-                    break;
                 }
             }
-            // Move along path
-            unit_step_path(u, i, terrain);
-            // Stay in scouting state after reaching target
-            if (u.state == USTATE_IDLE) {
-                u.state = USTATE_SCOUTING;
+
+            // Move along the path; stay a scout on arrival
+            if (u.pathLen > 0) {
+                unit_step_path(u, i, terrain);
+                if (u.state == USTATE_IDLE) u.state = USTATE_SCOUTING;
             }
             break;
+        }
         }
 
         // Update pop count
