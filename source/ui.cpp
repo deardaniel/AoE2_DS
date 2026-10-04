@@ -839,6 +839,19 @@ static void ui_draw_controls(const GameState& gs) {
         char dbg[48];
         snprintf(dbg, sizeof(dbg), "u%d b%d f%d a%d", profPct[0], profPct[5], profPct[6], profPct[1]);
         font_draw_str_16(minimapVram, 256, 192, 2, 180, dbg, COL_YELLOW, gameFont);
+        {
+            // The AI's stockpile, population and how many of its villagers stand idle
+            const Player& ai = gs.players[1];
+            int idle = 0, vils = 0;
+            for (int i = 0; i < MAX_UNITS; i++)
+                if (units[i].alive && units[i].owner == 1 && units[i].type == UNIT_VILLAGER) {
+                    vils++;
+                    if (units[i].state == USTATE_IDLE) idle++;
+                }
+            snprintf(dbg, sizeof(dbg), "AI %d %d %d %d p%d/%d v%d i%d", ai.resources[0], ai.resources[1],
+                     ai.resources[2], ai.resources[3], ai.popCount, ai.popCap, vils, idle);
+            font_draw_str_16(minimapVram, 256, 192, 2, 170, dbg, COL_YELLOW, gameFont);
+        }
         extern int profPathSearches;
         snprintf(dbg, sizeof(dbg), "g%d s%d i%d p%d/%d", profPct[2], profPct[3], profPct[4], profPathSearches, profPct[7]);
         font_draw_str_16(minimapVram, 256, 192, 130, 180, dbg, COL_YELLOW, gameFont);
