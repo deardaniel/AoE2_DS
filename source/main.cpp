@@ -102,6 +102,42 @@ static void game_start() {
     unit_spawn(UNIT_SHEEP, 0, 0 * TILE_PX, 4 * TILE_PX);
     unit_spawn(UNIT_SHEEP, 0, 1 * TILE_PX, 4 * TILE_PX);
 
+#ifdef SHOWCASE
+    // Debug build (make SHOWCASE=1 or 2): lay out every building, or every
+    // unit, next to the player's TC so sprites can be checked in one screenshot.
+    for (int ty = 0; ty < 18; ty++)
+        for (int tx = 0; tx < 18; tx++)
+            if (tx < 2 || tx > 5 || ty < 2 || ty > 5)
+                terrain.setTile(tx, ty, TERRAIN_GRASS, 0);
+#if SHOWCASE == 1
+    {
+        static const struct { u8 type, owner, tx, ty; } LAYOUT[] = {
+            { BLDG_HOUSE, 0, 7, 3 },      { BLDG_HOUSE, 1, 12, 7 },    { BLDG_TOWER, 0, 9, 3 },
+            { BLDG_WALL, 0, 11, 5 },      { BLDG_WALL, 0, 12, 5 },     { BLDG_MINING_CAMP, 0, 2, 7 },
+            { BLDG_LUMBER_CAMP, 0, 2, 9 },{ BLDG_BARRACKS, 0, 8, 6 },  { BLDG_ARCHERY_RANGE, 0, 10, 8 },
+            { BLDG_STABLE, 0, 4, 8 },     { BLDG_MARKET, 0, 7, 10 },   { BLDG_MONASTERY, 0, 10, 11 },
+            { BLDG_UNIVERSITY, 0, 13, 9 },{ BLDG_CASTLE, 0, 5, 12 },
+        };
+        for (unsigned i = 0; i < sizeof(LAYOUT) / sizeof(LAYOUT[0]); i++) {
+            u8 savedAge = gameState.players[LAYOUT[i].owner].age;
+            gameState.players[LAYOUT[i].owner].age = AGE_IMPERIAL;
+            gameState.players[LAYOUT[i].owner].resources[RES_WOOD]  = 9999;
+            gameState.players[LAYOUT[i].owner].resources[RES_STONE] = 9999;
+            int bi = building_place(LAYOUT[i].type, LAYOUT[i].owner, LAYOUT[i].tx, LAYOUT[i].ty,
+                                    gameState, terrain);
+            if (bi >= 0) buildings[bi].buildProgress = BLDG_STATS[LAYOUT[i].type].buildTime;
+            gameState.players[LAYOUT[i].owner].age = savedAge;
+        }
+    }
+#else
+    // One of each unit type in two rows; main loop turns them every 2 seconds
+    for (int t = 0; t < UNIT_TYPE_COUNT; t++) {
+        int k = t % 5, row = t / 5;
+        unit_spawn(t, 0, (5 + row * 2 + k) * TILE_PX, (9 + row * 2 - k) * TILE_PX);
+    }
+#endif
+#endif
+
     // --- Player 1 (AI) — bottom-right corner ---
     int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 6, MAP_TILES - 6, gameState, terrain);
     if (tc1 >= 0) {
@@ -150,6 +186,9 @@ static void game_start() {
     gameState.camY = isoY - SCREEN_H / 2;
     if (gameState.camX < 0) gameState.camX = 0;
     if (gameState.camY < 0) gameState.camY = 0;
+#ifdef SHOWCASE
+    gameState.camY = 24;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -408,6 +447,12 @@ int main(void) {
 
         // AI
         ai_update(gameState, terrain);
+#if defined(SHOWCASE) && SHOWCASE == 2
+        if (gameState.frameCount % 120 == 0)
+            for (int i = 0; i < MAX_UNITS; i++)
+                if (units[i].alive && units[i].state == USTATE_IDLE)
+                    units[i].direction = (units[i].direction + 1) % DIR_COUNT;
+#endif
 
         // Under attack alert timer
         if (gameState.underAttackTimer > 0) gameState.underAttackTimer--;

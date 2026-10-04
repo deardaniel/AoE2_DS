@@ -40,6 +40,10 @@ CFLAGS	:=	-g -Wall -O2 -ffunction-sections -fdata-sections\
 		$(ARCH)
 
 CFLAGS	+=	$(INCLUDE) -DARM9
+# make SHOWCASE=1 (buildings) or SHOWCASE=2 (units): debug layout, see main.cpp
+ifdef SHOWCASE
+CFLAGS	+=	-DSHOWCASE=$(SHOWCASE)
+endif
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS	:=	-g $(ARCH)
