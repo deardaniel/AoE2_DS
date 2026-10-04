@@ -22,11 +22,11 @@ static const SpriteGeom BLDG_GEOM[] = {
     {   0,   0,   0,   0 },  // farm (terrain)
     {  57,  34,  28,  22 },  // mining_camp
     {  64,  43,  36,  29 },  // lumber_camp
-    {  33,  34,  16,  26 },  // wall
-    {  35,  67,  17,  61 },  // tower
-    { 125, 102,  64,  73 },  // market
-    { 116, 117,  56,  93 },  // castle
-    {  90, 102,  43,  81 },  // monastery
+    {  37,  34,  20,  26 },  // wall
+    {  59,  67,  41,  61 },  // tower
+    { 126, 104,  65,  74 },  // market
+    { 146, 117,  86,  93 },  // castle
+    { 119, 102,  72,  81 },  // monastery
     { 132,  81,  65,  53 },  // university
 };
 
@@ -44,9 +44,9 @@ static const SpriteGeom CONSTRUCTION_GEOM[] = {
 // each a cw x ch cell with (ax, ay) on the centre of its tile.
 struct ResGeom { u8 cw, ch, ax, ay, count; };
 static const ResGeom RES_GEOM_tree = { 48, 67, 24, 57, 14 };
-static const ResGeom RES_GEOM_gold = { 30, 19, 13, 8, 7 };
-static const ResGeom RES_GEOM_stone = { 29, 18, 15, 12, 7 };
-static const ResGeom RES_GEOM_berries = { 28, 20, 15, 15, 4 };
+static const ResGeom RES_GEOM_gold = { 29, 17, 13, 7, 7 };
+static const ResGeom RES_GEOM_stone = { 28, 17, 14, 12, 7 };
+static const ResGeom RES_GEOM_berries = { 30, 22, 16, 16, 4 };
 
 // Unit sheets, named after their data/spr_*.bin
 static const SheetGeom GEOM_villager = { 7, 15, 4, 13, 5, 5, false };

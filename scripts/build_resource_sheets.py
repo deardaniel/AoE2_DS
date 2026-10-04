@@ -26,8 +26,7 @@ import tempfile
 import numpy as np
 from PIL import Image
 
-from downscale import reduce_exact, SCALE
-from shared_constants import SHADOW_ALPHA
+from downscale import reduce_layers
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SLP_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics'
@@ -60,23 +59,6 @@ def load_slp(slp, tmp_dirs):
     return frames
 
 
-def reduce_shadow(img, hx, hy):
-    """Reduce a shadow frame to a boolean mask and its anchor.
-
-    genie-slp draws SLP shadow commands as pure red; a block is shadow when
-    most of it is.
-    """
-    h, w = img.shape[:2]
-    is_shadow = (img[:, :, 3] > 0) & (img[:, :, 0] == 255) & (img[:, :, 1] == 0) & (img[:, :, 2] == 0)
-    bx0, by0 = (0 - hx) // SCALE, (0 - hy) // SCALE
-    bx1, by1 = -(-(w - hx) // SCALE), -(-(h - hy) // SCALE)
-    padded = np.zeros(((by1 - by0) * SCALE, (bx1 - bx0) * SCALE), dtype=np.int32)
-    ox, oy = -hx - bx0 * SCALE, -hy - by0 * SCALE
-    padded[oy:oy + h, ox:ox + w] = is_shadow
-    cover = padded.reshape(by1 - by0, SCALE, bx1 - bx0, SCALE).sum(axis=(1, 3))
-    return cover * 2 > SCALE * SCALE, -bx0, -by0
-
-
 def main():
     geom = {}
     tmp_dirs = []
@@ -85,31 +67,11 @@ def main():
             frames = load_slp(slp, tmp_dirs)
             shadows = load_slp(shadow_slp, tmp_dirs) if shadow_slp else None
             variants = []
-            for i, (img, hx, hy) in enumerate(frames):
-                # Layers bottom to top: shadow, the under graphic's own pixels
-                # (the gold pile's rock is there, not in GOLDM_NN), the sprite
-                layers = []
-                if shadows:
-                    simg, shx, shy = shadows[i]
-                    mask, sax, say = reduce_shadow(simg, shx, shy)
-                    shade = np.zeros(mask.shape + (4,), dtype=np.uint8)
-                    shade[mask] = (0, 0, 0, SHADOW_ALPHA)
-                    layers.append((shade, sax, say))
-                    under = simg.copy()
-                    under[(simg[:, :, 0] == 255) & (simg[:, :, 1] == 0) & (simg[:, :, 2] == 0)] = 0
-                    if under[:, :, 3].any():
-                        layers.append(reduce_exact(under, shx, shy))
-                layers.append(reduce_exact(img, hx, hy))
-
-                left = max(ax for _, ax, _ in layers)
-                up = max(ay for _, _, ay in layers)
-                w = left + max(l.shape[1] - ax for l, ax, _ in layers)
-                h = up + max(l.shape[0] - ay for l, _, ay in layers)
-                out = np.zeros((h, w, 4), dtype=np.uint8)
-                for l, ax, ay in layers:
-                    region = out[up - ay:up - ay + l.shape[0], left - ax:left - ax + l.shape[1]]
-                    region[l[:, :, 3] > 0] = l[l[:, :, 3] > 0]
-                variants.append((out, left, up))
+            for i, frame in enumerate(frames):
+                # Under graphic first: its shadow, and for gold the rock the
+                # nuggets sit on (GOLDM_NN is only the nuggets)
+                layers = ([shadows[i]] if shadows else []) + [frame]
+                variants.append(reduce_layers(layers))
             left = int(max(ax for _, ax, _ in variants))
             up = int(max(ay for _, _, ay in variants))
             cw = left + int(max(v.shape[1] - ax for v, ax, _ in variants))

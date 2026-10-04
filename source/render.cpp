@@ -621,34 +621,6 @@ static void draw_ellipse_buf(u8* buf, int cx, int cy, int rx, int ry, u8 color) 
     #undef EPLOT
 }
 
-// Filled ellipse ground shadow: darkens the terrain under it
-static void draw_shadow_ellipse(u8* buf, int cx, int cy, int rx, int ry) {
-    for (int y = -ry; y <= ry; y++) {
-        int sy = cy + y;
-        if (sy < 0 || sy >= SCREEN_H) continue;
-        // Ellipse half-width at this y
-        long hw = (long)rx * rx * ((long)ry * ry - (long)y * y);
-        if (hw < 0) continue;
-        // Integer sqrt approximation
-        long r2 = (long)ry * ry;
-        int xw = 0;
-        if (r2 > 0) {
-            // xw = rx * sqrt(1 - y^2/ry^2)
-            long num = (long)ry * ry - (long)y * y;
-            // Fast integer sqrt
-            long val = (long)rx * rx * num / r2;
-            int s = 0;
-            while ((long)s * s < val) s++;
-            xw = s;
-        }
-        for (int x = -xw; x <= xw; x++) {
-            int sx = cx + x;
-            if (sx < 0 || sx >= SCREEN_W) continue;
-            buf[sy * 256 + sx] = shadowLut[buf[sy * 256 + sx]];
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Draw a Bresenham line into the bitmap buffer
 // ---------------------------------------------------------------------------
@@ -712,7 +684,7 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
     }
 
     if (b.owner == 1) {
-        static u8 frame[128 * 128];  // largest building sprite (castle 116x117)
+        static u8 frame[160 * 128];  // largest building sprite (castle with shadow, 146x117)
         memcpy(frame, sprData, pw * ph);
         apply_color_remap(frame, pw * ph);
         sprData = frame;
@@ -922,25 +894,6 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
 
     // Sort by Y (back-to-front)
     sort_render_list(renderList, count);
-
-    // --- Pre-render pass: building ground shadows ---
-    for (int i = 0; i < MAX_BUILDINGS; i++) {
-        Building& b = buildings[i];
-        if (!b.alive) continue;
-        if (b.type == BLDG_WALL || b.type == BLDG_FARM) continue; // walls/farms too small
-        if (b.type == BLDG_TOWN_CENTER) continue; // shadow is part of its sprite
-        int tileW = BLDG_STATS[b.type].tileW;
-        int tileH = BLDG_STATS[b.type].tileH;
-        // Shadow center at building footprint center in iso
-        int bIsoX, bIsoY;
-        worldToIso(b.x + tileW * TILE_PX / 2, b.y + tileH * TILE_PX / 2, bIsoX, bIsoY);
-        int cx = bIsoX - gs.camX + ISO_TILE_W / 2;
-        int cy = bIsoY - gs.camY + ISO_TILE_H / 2;
-        // A soft patch inside the footprint (the diamond is 16 x 8 per tile)
-        int rx = tileW * 11;
-        int ry = tileH * 5;
-        draw_shadow_ellipse(buf, cx, cy, rx, ry);
-    }
 
     // --- Pre-render pass: draw selection indicators UNDER sprites ---
     // Selection circles for units

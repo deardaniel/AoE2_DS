@@ -19,7 +19,7 @@ import struct
 import sys
 import numpy as np
 from PIL import Image
-from downscale import reduce_exact
+from downscale import reduce_exact, reduce_layers
 from shared_constants import rgb_to_bgr555, TC_CANVAS, TC_ANCHOR, PAL_SHADOW
 
 SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sprites')
@@ -88,8 +88,9 @@ UNIT_SHEETS = [
 
 # Building sprites in BuildingTypeId order (source/config.h); None = no sprite.
 # Each PNG is a raw SLP frame with a sidecar .json holding its hotspot
-# (extract_buildings.py). It is reduced by exactly 3 around the hotspot, which
-# the renderer puts on the centre of the building's footprint.
+# (extract_buildings.py), and some a <name>_shadow.png. It is reduced by
+# exactly 3 around the hotspot, which the renderer puts on the centre of the
+# building's footprint; shadow pixels become the PAL_SHADOW marker.
 BUILDING_SPRITES = [
     'town_center',  # composite_tc.py output, already reduced: see PREALIGNED
     'house', 'barracks', 'archery_range', 'stable',
@@ -150,11 +151,12 @@ def load_hotspot(name):
     return meta['hotspotX'], meta['hotspotY']
 
 
-def load_rgba(filename):
+def load_rgba(filename, required=True):
     """Load a PNG as RGBA numpy array."""
     path = os.path.join(SPRITES_DIR, filename)
     if not os.path.exists(path):
-        print(f"  WARNING: {path} not found, skipping")
+        if required:
+            print(f"  WARNING: {path} not found, skipping")
         return None
     img = Image.open(path).convert('RGBA')
     return np.array(img)
@@ -394,8 +396,12 @@ def main():
             if (data.shape[1], data.shape[0]) != (cw, ch):
                 sys.exit(f"{name}.png is {data.shape[1]}x{data.shape[0]}, expected {cw}x{ch}")
         else:
-            hx, hy = load_hotspot(name)
-            data, ax, ay = reduce_exact(data, hx, hy)
+            layers = []
+            shadow = load_rgba(name + '_shadow.png', required=False)
+            if shadow is not None:
+                layers.append((shadow, *load_hotspot(name + '_shadow')))
+            layers.append((data, *load_hotspot(name)))
+            data, ax, ay = reduce_layers(layers)
         building_data[name] = data
         building_geom.append((data.shape[1], data.shape[0], int(ax), int(ay)))
         all_images.append(data)
@@ -549,7 +555,7 @@ def main():
     # --- Process building sprites ---
     print("\nProcessing building sprites...")
     for name, data in building_data.items():
-        indexed, w, h = index_rgba_image(data, palette_array, prealigned=name in PREALIGNED)
+        indexed, w, h = index_rgba_image(data, palette_array, prealigned=True)
         out_path = os.path.join(DATA_DIR, f'spr_{name}.bin')
         with open(out_path, 'wb') as f:
             f.write(indexed)

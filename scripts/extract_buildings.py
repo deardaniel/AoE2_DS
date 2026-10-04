@@ -47,6 +47,16 @@ BUILDINGS = [
     ('university',    209, 3835, 0, 'UNIV3NNW'),
 ]
 
+# Shadow graphics (the N0 delta of the standing graphic), same frame as the
+# building. The others either have their shadow in the main frame or use an
+# SLP that isn't shipped with HD (mining camp 3487, lumber camp 3499,
+# university 1359).
+SHADOWS = {
+    'wall':      (4682, 'WALL1N0G'),
+    'tower':     (4351, 'WCTW1N0GW'),
+    'castle':    (297,  'CSTL3N0W'),
+    'monastery': (273,  'CRCH3N0W'),
+}
 
 # Construction sites: one SLP per footprint size (CNST1..4_NN), three frames
 # for the stages of building. Every building's constructionGraphic in the
@@ -59,6 +69,9 @@ def main():
     for size, slp in CONSTRUCTION:
         for frame in range(3):
             jobs.append((f'construction_{size}_{frame}', -1, slp, frame, f'CNST{size}_NN'))
+    for name, unit_id, slp, frame, gname in BUILDINGS:
+        if name in SHADOWS:
+            jobs.append((f'{name}_shadow', unit_id, SHADOWS[name][0], frame, SHADOWS[name][1]))
     for name, unit_id, slp, frame, gname in jobs:
         slp_path = os.path.join(SLP_DIR, f'{slp}.slp')
         if not os.path.exists(slp_path):
