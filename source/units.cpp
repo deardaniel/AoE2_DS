@@ -67,6 +67,7 @@ void units_init() {
         units[i].buildTarget = -1;
         units[i].garrisonTarget = -1;
         units[i].herdTarget = -1;
+        units[i].finalX = units[i].finalY = -1;
         units[i].gatherTX = -1;
         units[i].gatherTY = -1;
         units[i].oamSlot = -1;
@@ -108,6 +109,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.spriteGfx = NULL;
             u.oamSlot = -1;
             u.pathLen = 0;
+            u.finalX = u.finalY = -1;
             u.pathIdx = 0;
             u.subX = u.subY = 0;
             u.cmdQueueLen = 0;
@@ -487,6 +489,7 @@ static void nudge_unit(int idx, const TerrainMap& terrain) {
         other.pathIdx = 0;
         other.pathDestTX = nx;
         other.pathDestTY = ny;
+        other.finalX = other.finalY = -1;
         other.state = USTATE_MOVING;
         other.waitCounter = 0;
         tileOccupant[ny][nx] = idx;  // claimed, so two units aren't nudged onto it
@@ -548,6 +551,15 @@ static void unit_step_path(Unit& u, int selfIdx, const TerrainMap& terrain) {
 
     int targetPX = u.wpX[u.pathIdx] * TILE_PX;
     int targetPY = u.wpY[u.pathIdx] * TILE_PX;
+    // The last leg of an exact move ends on the spot that was pointed at,
+    // not on the tile's origin
+    if (u.finalX >= 0 && u.pathIdx == u.pathLen - 1 &&
+        u.wpX[u.pathIdx] == u.pathDestTX && u.wpY[u.pathIdx] == u.pathDestTY &&
+        (u.finalX + TILE_PX / 2) / TILE_PX == u.pathDestTX &&
+        (u.finalY + TILE_PX / 2) / TILE_PX == u.pathDestTY) {
+        targetPX = u.finalX;
+        targetPY = u.finalY;
+    }
     int dx = targetPX - u.x;
     int dy = targetPY - u.y;
     int dist = isqrt(dx * dx + dy * dy);
@@ -694,14 +706,18 @@ static bool path_to_building(Unit& u, int idx, const Building& b, const TerrainM
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
-void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
+void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain, bool exact) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     Unit& u = units[idx];
     u.cmdQueueLen = 0; // new direct command clears queue
     u.patrolAX = -1;   // cancel patrol
+    if (px < 0) px = 0;
+    if (py < 0) py = 0;
+    if (px >= MAP_PX) px = MAP_PX - 1;
+    if (py >= MAP_PX) py = MAP_PX - 1;
 
-    int sx = u.x / TILE_PX;
-    int sy = u.y / TILE_PX;
+    int sx = (u.x + TILE_PX / 2) / TILE_PX;
+    int sy = (u.y + TILE_PX / 2) / TILE_PX;
     int tx = px / TILE_PX;
     int ty = py / TILE_PX;
 
@@ -709,6 +725,32 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
     // the spot itself can't be reached
     if (unit_find_path(sx, sy, tx, ty, terrain, u, idx, false, true)) {
         u.state = USTATE_MOVING;
+        // Exact order, and the path really ends on the tile pointed at: stop
+        // centred on the point itself, provided the unit's box stays on
+        // walkable ground there
+        u.finalX = u.finalY = -1;
+        if (exact && u.pathDestTX == tx && u.pathDestTY == ty) {
+            int fx = px - TILE_PX / 2, fy = py - TILE_PX / 2;
+            if (fx < 0) fx = 0;
+            if (fy < 0) fy = 0;
+            if (fx > MAP_PX - TILE_PX) fx = MAP_PX - TILE_PX;
+            if (fy > MAP_PX - TILE_PX) fy = MAP_PX - TILE_PX;
+            int x1 = (fx + TILE_PX - 1) / TILE_PX, y1 = (fy + TILE_PX - 1) / TILE_PX;
+            if (tile_walkable(fx / TILE_PX, fy / TILE_PX, u.owner, terrain) &&
+                tile_walkable(x1, fy / TILE_PX, u.owner, terrain) &&
+                tile_walkable(fx / TILE_PX, y1, u.owner, terrain) &&
+                tile_walkable(x1, y1, u.owner, terrain)) {
+                u.finalX = fx;
+                u.finalY = fy;
+                if (u.pathLen == 0 || u.wpX[u.pathLen - 1] != tx || u.wpY[u.pathLen - 1] != ty) {
+                    if (u.pathLen < Unit::PATH_WP_MAX) {   // already on the tile: one short leg
+                        u.wpX[u.pathLen] = tx;
+                        u.wpY[u.pathLen] = ty;
+                        u.pathLen++;
+                    }
+                }
+            }
+        }
         u.attackTarget = -1;
         u.attackBldgTarget = -1;
         u.buildTarget = -1;
@@ -726,6 +768,7 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
 void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     Unit& u = units[idx];
+    u.finalX = u.finalY = -1;
     if (u.type != UNIT_VILLAGER) return;
     u.cmdQueueLen = 0;
     u.patrolAX = -1;
@@ -1520,7 +1563,7 @@ static bool unit_exec_next_command(int idx, TerrainMap& terrain) {
 
     switch (cmd.type) {
     case Unit::CMD_MOVE:
-        unit_command_move(idx, cmd.x, cmd.y, terrain);
+        unit_command_move(idx, cmd.x, cmd.y, terrain, true);
         break;
     case Unit::CMD_ATTACK:
         if (cmd.target >= 0 && cmd.target < MAX_UNITS && units[cmd.target].alive)

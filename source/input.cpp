@@ -12,6 +12,15 @@
 // Drag threshold in pixels — beyond this, touch becomes a drag-select
 enum { DRAG_THRESHOLD = 8 };
 
+// Show what an order pointed at (render_move_target draws it)
+static void mark(GameState& gs, int kind, int ref, int ref2, u8 colour) {
+    gs.markKind = kind;
+    gs.markRef = ref;
+    gs.markRef2 = ref2;
+    gs.markColour = colour;
+    gs.moveTargetTimer = MARK_FRAMES;
+}
+
 // ---------------------------------------------------------------------------
 // Process a single tap at screen position (called on touch release if not drag)
 // ---------------------------------------------------------------------------
@@ -86,8 +95,6 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     // Convert screen coords to tile coords via isometric projection
     int tileX, tileY;
     screenToTile(screenX, screenY, gs.camX, gs.camY, tileX, tileY);
-    int mapX = tileX * TILE_PX + TILE_PX / 2;
-    int mapY = tileY * TILE_PX + TILE_PX / 2;
 
     if (gs.inputMode == 1) {
         // Placing building mode: the footprint is centred under the touch,
@@ -124,6 +131,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
             if (gs.unitSelected[i] && units[i].alive && units[i].type == UNIT_VILLAGER)
                 unit_command_attack(i, tappedUnit);
         }
+        mark(gs, MARK_UNIT, tappedUnit, 0, PAL_GREEN);
         return;
     }
 
@@ -140,7 +148,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                     sentGatherer = true;
                 }
             }
-            if (sentGatherer) return;
+            if (sentGatherer) { mark(gs, MARK_UNIT, tappedUnit, 0, PAL_GREEN); return; }
         }
 
         // Double-tap: if tapping already-selected unit, select all visible of same type
@@ -185,7 +193,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                     sentBuilder = true;
                 }
             }
-            if (sentBuilder) return;
+            if (sentBuilder) { mark(gs, MARK_BUILDING, tappedBldg, 0, PAL_GREEN); return; }
         }
         // If units selected and tapping on TC, garrison them
         if (gs.selectionCount > 0 && buildings[tappedBldg].type == BLDG_TOWN_CENTER &&
@@ -198,6 +206,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                 commanded = true;
             }
             if (commanded) {
+                mark(gs, MARK_BUILDING, tappedBldg, 0, PAL_GREEN);
                 game_clear_selection(gs);
                 gs.selectedBldg = tappedBldg;
                 return;
@@ -224,6 +233,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                     unit_command_attack(i, enemyUnit);
             }
         }
+        mark(gs, MARK_UNIT, enemyUnit, 0, PAL_RED);
         return;
     }
 
@@ -237,6 +247,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                     unit_command_attack_building(i, tappedBldg);
             }
         }
+        mark(gs, MARK_BUILDING, tappedBldg, 0, PAL_RED);
         return;
     }
 
@@ -256,7 +267,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                     sentGatherer = true;
                 }
             }
-            if (sentGatherer) return;
+            if (sentGatherer) { mark(gs, MARK_TILE, tileX, tileY, PAL_GREEN); return; }
         }
     }
 
@@ -271,12 +282,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                 building_is_complete(gs.selectedBldg)) {
                 buildings[gs.selectedBldg].rallyTX = tileX;
                 buildings[gs.selectedBldg].rallyTY = tileY;
-                // Show rally marker
-                int mtIsoX, mtIsoY;
-                worldToIso(mapX, mapY, mtIsoX, mtIsoY);
-                gs.moveTargetIsoX = mtIsoX;
-                gs.moveTargetIsoY = mtIsoY;
-                gs.moveTargetTimer = 30;
+                mark(gs, MARK_TILE, tileX, tileY, PAL_YELLOW);
                 return;
             }
             game_clear_selection(gs);
@@ -301,12 +307,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         }
         buildings[gs.selectedBldg].rallyTX = tileX;
         buildings[gs.selectedBldg].rallyTY = tileY;
-        // Show rally marker
-        int mtIsoX, mtIsoY;
-        worldToIso(mapX, mapY, mtIsoX, mtIsoY);
-        gs.moveTargetIsoX = mtIsoX;
-        gs.moveTargetIsoY = mtIsoY;
-        gs.moveTargetTimer = 30;
+        mark(gs, MARK_TILE, tileX, tileY, PAL_YELLOW);
         return;
     }
 
@@ -320,15 +321,16 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         gs.selectedTileY = -1;
         sound_play_random(SFX_VILL_CMD_FIRST, SFX_VILL_CMD_COUNT);
 
-        // Set move target marker
-        int mtIsoX, mtIsoY;
-        worldToIso(mapX, mapY, mtIsoX, mtIsoY);
-        gs.moveTargetIsoX = mtIsoX;
-        gs.moveTargetIsoY = mtIsoY;
-        gs.moveTargetTimer = 30; // 0.5s at 60fps
+        // The order goes to the very spot under the stylus, and the marker
+        // shows there (it used to snap to the tile and draw at its corner)
+        int pointX, pointY;
+        screenToWorld(screenX, screenY, gs.camX, gs.camY, pointX, pointY);
+        gs.moveTargetIsoX = screenX + gs.camX;
+        gs.moveTargetIsoY = screenY + gs.camY;
+        mark(gs, MARK_POINT, 0, 0, PAL_GREEN);
 
-        int centerTX = mapX / TILE_PX;
-        int centerTY = mapY / TILE_PX;
+        int centerTX = tileX;
+        int centerTY = tileY;
 
         // Build spiral offset table: center, then ring-1, ring-2
         static const int MAX_OFFSETS = 25; // 1 + 8 + 16
@@ -373,13 +375,14 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                 }
             }
 
+            // Each unit keeps the point's place within its own tile, so a
+            // group arrives in the same formation around the spot
+            int destX = pointX + (destTX - centerTX) * TILE_PX;
+            int destY = pointY + (destTY - centerTY) * TILE_PX;
             if (queue)
-                unit_queue_command(i, Unit::CMD_MOVE,
-                                   destTX * TILE_PX + TILE_PX / 2,
-                                   destTY * TILE_PX + TILE_PX / 2);
+                unit_queue_command(i, Unit::CMD_MOVE, destX, destY);
             else
-                unit_command_move(i, destTX * TILE_PX + TILE_PX / 2,
-                                  destTY * TILE_PX + TILE_PX / 2, terrain);
+                unit_command_move(i, destX, destY, terrain, true);
         }
     }
 }

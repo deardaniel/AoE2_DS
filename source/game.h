@@ -36,6 +36,9 @@ enum AIDifficulty {
 // ---------------------------------------------------------------------------
 // Game state — holds everything
 // ---------------------------------------------------------------------------
+enum { MARK_POINT, MARK_TILE, MARK_BUILDING, MARK_UNIT };
+enum { MARK_FRAMES = 36 };
+
 struct GameState {
     Player   players[NUM_PLAYERS];
     int      camX, camY;
@@ -70,6 +73,12 @@ struct GameState {
     // Move target marker (flashing diamond at destination)
     s16   moveTargetIsoX, moveTargetIsoY;
     u8    moveTargetTimer;  // frames remaining (0 = not showing)
+    // What the last order pointed at, shown for a moment so a tap can be
+    // seen to have landed: a spot on the ground (moveTargetIso), a tile, a
+    // building or a unit (markRef), in markColour
+    u8    markKind;         // MARK_*
+    u8    markColour;
+    s16   markRef, markRef2;
 
     // Under attack alert
     u8    underAttackTimer;  // frames remaining for alert display (0 = not active)

@@ -181,6 +181,7 @@ bool load_game(TerrainMap& terrain) {
         ok = ok && read_all(f, &u.deadTimer, sizeof(u16));
         u.herdTarget = -1;
         u.pathLen = 0;  // paths aren't saved: a unit on the move stops
+        u.finalX = u.finalY = -1;
         u.pathIdx = 0;
         u.subX = u.subY = 0;
         ok = ok && read_all(f, &u.patrolAX, sizeof(s16));

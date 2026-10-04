@@ -63,6 +63,16 @@ static inline void screenToTile(int screenX, int screenY, int camX, int camY,
     tileY = isoFloorDiv(2 * rawY - rawX, ISO_TILE_W);
 }
 
+// Screen pixel + camera -> the exact point on the ground under it, in world
+// pixels (16 per tile). The inverse of where a point is drawn: a unit whose
+// 16px box is centred on (wx, wy) has its feet at this screen pixel.
+static inline void screenToWorld(int screenX, int screenY, int camX, int camY, int& wx, int& wy) {
+    int rawX = screenX + camX - ISO_MAP_W / 2 - ISO_TILE_W / 2;   // = wx - wy
+    int rawY = (screenY + camY) * 2;                              // = wx + wy
+    wx = isoFloorDiv(rawY + rawX, 2);
+    wy = isoFloorDiv(rawY - rawX, 2);
+}
+
 // Origin tile of a tileW x tileH footprint placed with its middle under a
 // screen point — where a building goes when you point at the ground. Shared
 // by the placement preview and the placement itself so they always agree.

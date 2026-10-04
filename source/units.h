@@ -42,6 +42,7 @@ struct Unit {
     u8   pathIdx;                // waypoint being walked to
     s8   wpX[PATH_WP_MAX], wpY[PATH_WP_MAX];
     s8   pathDestTX, pathDestTY; // tile the full path ends on
+    s16  finalX, finalY;         // exact spot to stop on within that tile (-1 = its origin)
     u8   subX, subY;             // position fraction, 1/256 px
 
     // Patrol waypoints (pixel coords; patrolling = patrolAX >= 0)
@@ -72,7 +73,8 @@ void units_init();
 int  unit_spawn(u8 type, u8 owner, s16 px, s16 py);
 void unit_kill(int idx);
 void units_update(GameState& gs, TerrainMap& terrain);
-void unit_command_move(int idx, s16 tx, s16 ty, TerrainMap& terrain);
+// exact: stop with the unit centred on (px, py) rather than on the tile grid
+void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain, bool exact = false);
 void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain);
 void unit_command_attack(int idx, int targetIdx);
 void unit_command_attack_building(int idx, int bldgIdx);

@@ -729,7 +729,7 @@ static void draw_line_buf(u8* buf, int x0, int y0, int x1, int y1, u8 color) {
 // Draw a diamond selection outline for a building's isometric footprint
 // ---------------------------------------------------------------------------
 static void draw_selection_diamond(u8* buf, int bScreenX, int bScreenY,
-                                   int tileW, int tileH) {
+                                   int tileW, int tileH, u8 colour = PAL_WHITE) {
     // 4 vertices of the footprint diamond relative to worldToIso origin
     int topX  = bScreenX + ISO_TILE_W / 2;
     int topY  = bScreenY;
@@ -740,10 +740,10 @@ static void draw_selection_diamond(u8* buf, int bScreenX, int bScreenY,
     int leftX  = bScreenX - (tileH - 1) * (ISO_TILE_W / 2);
     int leftY  = bScreenY + tileH * (ISO_TILE_H / 2);
 
-    draw_line_buf(buf, topX, topY, rightX, rightY, PAL_WHITE);
-    draw_line_buf(buf, rightX, rightY, bottomX, bottomY, PAL_WHITE);
-    draw_line_buf(buf, bottomX, bottomY, leftX, leftY, PAL_WHITE);
-    draw_line_buf(buf, leftX, leftY, topX, topY, PAL_WHITE);
+    draw_line_buf(buf, topX, topY, rightX, rightY, colour);
+    draw_line_buf(buf, rightX, rightY, bottomX, bottomY, colour);
+    draw_line_buf(buf, bottomX, bottomY, leftX, leftY, colour);
+    draw_line_buf(buf, leftX, leftY, topX, topY, colour);
 }
 
 // ---------------------------------------------------------------------------
@@ -1402,31 +1402,52 @@ void render_drag_box(u8* buf, const GameState& gs) {
 }
 
 // ---------------------------------------------------------------------------
-// Draw move target marker — flashing yellow diamond at move destination
+// Order marker: what the last order pointed at (set by mark() in input.cpp)
 // ---------------------------------------------------------------------------
 void render_move_target(u8* buf, GameState& gs) {
     if (gs.moveTargetTimer == 0) return;
-    gs.moveTargetTimer--;
+    int t = --gs.moveTargetTimer;          // MARK_FRAMES-1 .. 0
+    u8 col = gs.markColour;
+    bool blink = ((t / 6) & 1) == 1;       // three flashes
 
-    // Flash: visible every other 4 frames
-    if ((gs.moveTargetTimer / 4) & 1) return;
-
-    int sx = gs.moveTargetIsoX - gs.camX;
-    int sy = gs.moveTargetIsoY - gs.camY;
-
-    // Draw a small 8x4 yellow diamond
-    static const int DH = 4;
-    for (int py = 0; py < DH; py++) {
-        int half = (py < DH/2) ? (py + 1) : (DH - py);
-        int cx = sx;
-        int cy = sy - DH / 2 + py;
-        if (cy < 0 || cy >= SCREEN_H) continue;
-        for (int px = -half; px < half; px++) {
-            int x = cx + px;
-            if (x < 0 || x >= SCREEN_W) continue;
-            if (px == -half || px == half - 1 || py == 0 || py == DH - 1)
-                buf[cy * 256 + x] = PAL_YELLOW;
+    switch (gs.markKind) {
+    case MARK_POINT: {
+        // A ring closing in on the spot, then a small cross left for a moment
+        int sx = gs.moveTargetIsoX - gs.camX;
+        int sy = gs.moveTargetIsoY - gs.camY;
+        if (t > 12) {
+            int r = 3 + (t - 12) / 2;      // 14 -> 3
+            draw_ellipse_buf(buf, sx, sy, r, r / 2, col);
+            draw_ellipse_buf(buf, sx, sy, r - 1, (r - 1) / 2, PAL_WHITE);
         }
+        draw_line_buf(buf, sx - 3, sy, sx + 3, sy, t > 12 ? PAL_WHITE : col);
+        draw_line_buf(buf, sx, sy - 2, sx, sy + 2, t > 12 ? PAL_WHITE : col);
+        break;
+    }
+    case MARK_TILE: {
+        if (!blink) break;
+        int isoX, isoY;
+        tileToIso(gs.markRef, gs.markRef2, isoX, isoY);
+        draw_selection_diamond(buf, isoX - gs.camX, isoY - gs.camY, 1, 1, col);
+        break;
+    }
+    case MARK_BUILDING: {
+        if (!blink || gs.markRef < 0 || gs.markRef >= MAX_BUILDINGS || !buildings[gs.markRef].alive) break;
+        const Building& b = buildings[gs.markRef];
+        int isoX, isoY;
+        worldToIso(b.x, b.y, isoX, isoY);
+        draw_selection_diamond(buf, isoX - gs.camX, isoY - gs.camY,
+                               BLDG_STATS[b.type].tileW, BLDG_STATS[b.type].tileH, col);
+        break;
+    }
+    case MARK_UNIT: {
+        if (!blink || gs.markRef < 0 || gs.markRef >= MAX_UNITS || !units[gs.markRef].alive) break;
+        int gx, gy;
+        unit_ground(units[gs.markRef], gs, gx, gy);
+        draw_ellipse_buf(buf, gx, gy + 1, 10, 5, col);
+        draw_ellipse_buf(buf, gx, gy + 1, 9, 4, col);
+        break;
+    }
     }
 }
 
