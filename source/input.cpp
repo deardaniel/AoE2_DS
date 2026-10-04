@@ -30,6 +30,10 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
                 gs.inputMode = 1;
                 gs.placeBldgType = bldgIdx;
                 gs.buildMenuOpen = false;
+                // The preview follows the last touch, which was this menu
+                // slot: start it in the middle of the view instead
+                gs.dragEndX = SCREEN_W / 2;
+                gs.dragEndY = BUILD_MENU_Y / 2;
             }
         }
         return;
@@ -276,6 +280,15 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     if (gs.selectionCount == 0 && gs.selectedBldg >= 0 &&
         buildings[gs.selectedBldg].alive && buildings[gs.selectedBldg].owner == 0 &&
         building_is_complete(gs.selectedBldg)) {
+        // A tap on the building's own ground (the Town Center's forecourt,
+        // say) is not a rally point: it clears the one that was set
+        const Building& sb = buildings[gs.selectedBldg];
+        int fx = tileX - sb.x / TILE_PX, fy = tileY - sb.y / TILE_PX;
+        if (fx >= 0 && fy >= 0 && fx < BLDG_STATS[sb.type].tileW && fy < BLDG_STATS[sb.type].tileH) {
+            buildings[gs.selectedBldg].rallyTX = -1;
+            buildings[gs.selectedBldg].rallyTY = -1;
+            return;
+        }
         buildings[gs.selectedBldg].rallyTX = tileX;
         buildings[gs.selectedBldg].rallyTY = tileY;
         // Show rally marker
@@ -539,6 +552,10 @@ void input_update(GameState& gs, TerrainMap& terrain) {
         } else if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
                    buildings[gs.selectedBldg].trainQueue[0] >= 0) {
             building_cancel_train(gs.selectedBldg, gs);
+        } else if (gs.selectedBldg >= 0) {
+            // Nothing queued to cancel: let go of the building, so the next
+            // tap on the map isn't taken as its rally point
+            gs.selectedBldg = -1;
         }
     }
 
