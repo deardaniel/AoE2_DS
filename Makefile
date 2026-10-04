@@ -156,6 +156,7 @@ assets-game:
 	@python3 scripts/extract_buildings.py
 	@python3 scripts/build_unit_sheets.py
 	@python3 scripts/build_resource_sheets.py
+	@python3 scripts/extract_icons.py
 
 #---------------------------------------------------------------------------------
 # Preprocess HD sprite PNGs into NDS-ready indexed binary data (data/*.bin)

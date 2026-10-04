@@ -8,9 +8,6 @@
 #include "tech.h"
 #include "sound.h"
 
-// Build menu layout on bottom screen (bottom strip)
-enum { BUILD_MENU_Y = 160, BUILD_MENU_H = 32, BUILD_MENU_ITEM_W = 32 };
-
 // Drag threshold in pixels — beyond this, touch becomes a drag-select
 enum { DRAG_THRESHOLD = 8 };
 
@@ -21,7 +18,12 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     // Build menu check (bottom strip)
     if (gs.buildMenuOpen && screenY >= BUILD_MENU_Y) {
         int slot = screenX / BUILD_MENU_ITEM_W;
-        int bldgIdx = slot + gs.buildMenuPage * 8;
+        if (slot >= BUILD_MENU_SLOTS) {
+            // Last slot turns the page
+            gs.buildMenuPage = (gs.buildMenuPage + 1) % BUILD_MENU_PAGES;
+            return;
+        }
+        int bldgIdx = slot + gs.buildMenuPage * BUILD_MENU_SLOTS;
         if (bldgIdx < BLDG_TYPE_COUNT) {
             if (gs.players[0].age >= BLDG_STATS[bldgIdx].ageReq) {
                 gs.inputMode = 1;
@@ -37,16 +39,16 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
         gs.selectedBldg >= 0 && !gs.buildMenuOpen) {
         const Building& b = buildings[gs.selectedBldg];
         if (b.alive && b.owner == 0 && building_is_complete(gs.selectedBldg)) {
+            // Same slot order as render_train_menu; a locked unit is shown
+            // but can't be picked
             int trainable[UNIT_TYPE_COUNT];
             int trainCount = 0;
             for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
-                if (UNIT_STATS[ut].bldgReq == b.type &&
-                    gs.players[0].age >= UNIT_STATS[ut].ageReq) {
+                if (UNIT_STATS[ut].bldgReq == b.type && UNIT_STATS[ut].trainTime != 0)
                     trainable[trainCount++] = ut;
-                }
             }
             int slot = screenX / BUILD_MENU_ITEM_W;
-            if (slot < trainCount) {
+            if (slot < trainCount && gs.players[0].age >= UNIT_STATS[trainable[slot]].ageReq) {
                 gs.trainUnitType = trainable[slot];
                 building_train(gs.selectedBldg, trainable[slot], gs);
             }
@@ -530,8 +532,7 @@ void input_update(GameState& gs, TerrainMap& terrain) {
     // X: toggle/cycle build menu pages
     if (keysPressed & KEY_X) {
         if (gs.buildMenuOpen) {
-            int totalPages = (BLDG_TYPE_COUNT + 7) / 8;
-            gs.buildMenuPage = (gs.buildMenuPage + 1) % totalPages;
+            gs.buildMenuPage = (gs.buildMenuPage + 1) % BUILD_MENU_PAGES;
             if (gs.buildMenuPage == 0) {
                 gs.buildMenuOpen = false;
             }

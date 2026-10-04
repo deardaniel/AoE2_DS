@@ -125,13 +125,20 @@ extern const u8 icon_market_bin[];
 extern const u8 icon_castle_bin[];
 extern const u8 icon_monastery_bin[];
 extern const u8 icon_university_bin[];
+extern const u8 icon_unit_villager_bin[];
+extern const u8 icon_unit_militia_bin[];
+extern const u8 icon_unit_archer_bin[];
+extern const u8 icon_unit_knight_bin[];
+extern const u8 icon_unit_spearman_bin[];
+extern const u8 icon_unit_scout_bin[];
+extern const u8 icon_unit_ram_bin[];
+extern const u8 icon_unit_mangonel_bin[];
+extern const u8 icon_unit_monk_bin[];
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-// Build menu layout (shared with input.cpp)
-enum { BUILD_MENU_Y = 160, BUILD_MENU_H = 32, BUILD_MENU_ITEM_W = 32 };
 
 // Build menu icon lookup (indexed by BLDG_* enum)
 static const u8* buildingIcon[BLDG_TYPE_COUNT] = {
@@ -149,6 +156,14 @@ static const u8* buildingIcon[BLDG_TYPE_COUNT] = {
     icon_castle_bin,        // BLDG_CASTLE
     icon_monastery_bin,     // BLDG_MONASTERY
     icon_university_bin,    // BLDG_UNIVERSITY
+};
+
+// Train menu icons (indexed by UnitTypeId; sheep are not trained)
+static const u8* unitIcon[UNIT_TYPE_COUNT] = {
+    icon_unit_villager_bin, icon_unit_militia_bin, icon_unit_archer_bin,
+    icon_unit_knight_bin, icon_unit_spearman_bin, icon_unit_scout_bin,
+    NULL,
+    icon_unit_ram_bin, icon_unit_mangonel_bin, icon_unit_monk_bin,
 };
 
 // ---------------------------------------------------------------------------
@@ -973,75 +988,73 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
     }
 }
 
-// Build menu pagination
-enum { BUILD_MENU_SLOTS = 8 };
-enum { BUILD_MENU_PAGES = (BLDG_TYPE_COUNT + BUILD_MENU_SLOTS - 1) / BUILD_MENU_SLOTS };
 
 // ---------------------------------------------------------------------------
 // Build menu bar (drawn into bitmap buffer, uses palette indices)
 // ---------------------------------------------------------------------------
-void render_build_menu(u8* vram, const GameState& gs) {
-    if (!gs.buildMenuOpen) return;
+// One 32x32 menu slot. An item you can't afford is darkened; one that needs
+// a later age is darker still, so the two read differently at a glance.
+enum MenuItemState { MENU_ITEM_OK, MENU_ITEM_TOO_DEAR, MENU_ITEM_LOCKED };
 
-    // Fill 32px-tall bar background
-    for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
-        for (int x = 0; x < SCREEN_W; x++) {
-            vram[y * 256 + x] = PAL_DARKBROWN;
-        }
-    }
-
-    // Draw icons for current page of building types
-    int startIdx = gs.buildMenuPage * BUILD_MENU_SLOTS;
-    for (int s = 0; s < BUILD_MENU_SLOTS; s++) {
-        int i = startIdx + s;
-        if (i >= BLDG_TYPE_COUNT) break;
-
-        int ix = s * BUILD_MENU_ITEM_W;
-        if (ix + BUILD_MENU_ITEM_W > SCREEN_W) break;
-
-        bool available = (gs.players[0].age >= BLDG_STATS[i].ageReq);
-        bool affordable = game_can_afford(gs, 0, BLDG_STATS[i].cost);
-
-        // Blit 32x32 icon from buildingIcon[]
-        const u8* icon = buildingIcon[i];
+static void draw_menu_icon(u8* vram, int slot, const u8* icon, MenuItemState state, bool selected) {
+    int ix = slot * BUILD_MENU_ITEM_W;
+    if (icon) {
         for (int py = 0; py < 32; py++) {
             int dy = BUILD_MENU_Y + py;
             if (dy >= SCREEN_H) break;
             for (int px = 0; px < 32; px++) {
-                int dx = ix + px;
-                if (dx >= SCREEN_W) break;
-                u8 pidx = icon[py * 32 + px];
-                if (pidx == 0) continue; // transparent
-                // Dim unavailable/unaffordable: skip every other pixel
-                if ((!available || !affordable) && ((px + py) & 1))
-                    continue;
-                vram[dy * 256 + dx] = pidx;
+                u8 c = icon[py * 32 + px];
+                if (c == 0) continue;
+                if (state != MENU_ITEM_OK) c = shadowLut[c];
+                if (state == MENU_ITEM_LOCKED) c = shadowLut[shadowLut[c]];
+                vram[dy * 256 + ix + px] = c;
             }
         }
-
-        // 1px black border on right edge of each slot
-        for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
-            int bx = ix + BUILD_MENU_ITEM_W - 1;
-            if (bx < SCREEN_W) vram[y * 256 + bx] = PAL_BLACK;
+    }
+    // Slot frame: yellow when selected, otherwise a black divider on the right
+    for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H && y < SCREEN_H; y++) {
+        vram[y * 256 + ix + BUILD_MENU_ITEM_W - 1] = selected ? PAL_YELLOW : PAL_BLACK;
+        if (selected) vram[y * 256 + ix] = PAL_YELLOW;
+    }
+    if (selected) {
+        for (int x = ix; x < ix + BUILD_MENU_ITEM_W; x++) {
+            vram[BUILD_MENU_Y * 256 + x] = PAL_YELLOW;
+            if (BUILD_MENU_Y + BUILD_MENU_H - 1 < SCREEN_H)
+                vram[(BUILD_MENU_Y + BUILD_MENU_H - 1) * 256 + x] = PAL_YELLOW;
         }
     }
+}
 
-    // Page indicator (right side)
+static void fill_menu_bar(u8* vram) {
+    for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H && y < SCREEN_H; y++)
+        memset(&vram[y * 256], PAL_DARKBROWN, SCREEN_W);
+}
+
+void render_build_menu(u8* vram, const GameState& gs) {
+    if (!gs.buildMenuOpen) return;
+    fill_menu_bar(vram);
+
+    for (int s = 0; s < BUILD_MENU_SLOTS; s++) {
+        int i = gs.buildMenuPage * BUILD_MENU_SLOTS + s;
+        if (i >= BLDG_TYPE_COUNT) break;
+        MenuItemState state =
+            (gs.players[0].age < BLDG_STATS[i].ageReq) ? MENU_ITEM_LOCKED :
+            !game_can_afford(gs, 0, BLDG_STATS[i].cost) ? MENU_ITEM_TOO_DEAR : MENU_ITEM_OK;
+        draw_menu_icon(vram, s, buildingIcon[i], state, false);
+    }
+
+    // Last slot: which page this is; tapping it (or X) turns the page
     if (BUILD_MENU_PAGES > 1) {
-        char pageStr[8];
-        pageStr[0] = '0' + gs.buildMenuPage + 1;
-        pageStr[1] = '/';
-        pageStr[2] = '0' + BUILD_MENU_PAGES;
-        pageStr[3] = '\0';
-        int pw = font_string_width(gameFont, pageStr);
-        int px = SCREEN_W - pw - 2;
+        char pageStr[4] = { (char)('1' + gs.buildMenuPage), '/', (char)('0' + BUILD_MENU_PAGES), 0 };
+        int slotX = BUILD_MENU_SLOTS * BUILD_MENU_ITEM_W;
+        int px = slotX + (BUILD_MENU_ITEM_W - font_string_width(gameFont, pageStr)) / 2;
         int py = BUILD_MENU_Y + (BUILD_MENU_H - gameFont.height) / 2;
         font_draw_str_8(vram, 256, SCREEN_H, px, py, pageStr, PAL_YELLOW, gameFont);
     }
 }
 
 // ---------------------------------------------------------------------------
-// Train menu bar — shows trainable unit types when a military building is selected
+// Train menu bar — the units a selected building trains
 // ---------------------------------------------------------------------------
 void render_train_menu(u8* vram, const GameState& gs) {
     if (gs.buildMenuOpen) return; // build menu takes priority
@@ -1050,70 +1063,17 @@ void render_train_menu(u8* vram, const GameState& gs) {
     const Building& b = buildings[gs.selectedBldg];
     if (!b.alive || b.owner != 0 || !building_is_complete(gs.selectedBldg)) return;
 
-    // Build list of trainable unit types for this building
-    int trainable[UNIT_TYPE_COUNT];
-    int trainCount = 0;
-    for (int ut = 0; ut < UNIT_TYPE_COUNT; ut++) {
-        if (UNIT_STATS[ut].bldgReq == b.type &&
-            gs.players[0].age >= UNIT_STATS[ut].ageReq) {
-            trainable[trainCount++] = ut;
-        }
-    }
-    if (trainCount == 0) return;
-
-    // Fill bar background
-    for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
-        for (int x = 0; x < SCREEN_W; x++) {
-            vram[y * 256 + x] = PAL_DARKBROWN;
-        }
-    }
-
-    // Draw each trainable unit as a 32x32 icon (first frame of standing sheet)
-    for (int s = 0; s < trainCount && s < BUILD_MENU_SLOTS; s++) {
-        int ut = trainable[s];
-        int ix = s * BUILD_MENU_ITEM_W;
-
-        bool affordable = game_can_afford(gs, 0, UNIT_STATS[ut].cost);
-        bool isSelected = (ut == gs.trainUnitType);
-
-        // First standing frame (facing the camera), centred in the slot
-        const UnitSheet& sheet = unitStandSheet[ut];
-        const SheetGeom& g = *sheet.g;
-        int ox = ix + (BUILD_MENU_ITEM_W - g.cw) / 2;
-        int oy = BUILD_MENU_Y + (BUILD_MENU_H - g.ch) / 2;
-        for (int py = 0; py < g.ch; py++) {
-            int dy = oy + py;
-            if (dy < BUILD_MENU_Y || dy >= SCREEN_H) continue;
-            for (int px = 0; px < g.cw; px++) {
-                int dx = ox + px;
-                if (dx < ix || dx >= ix + BUILD_MENU_ITEM_W || dx >= SCREEN_W) continue;
-                u8 c = sheet.data[py * (g.cols * g.cw) + px];
-                if (c != 0) {
-                    if (!affordable) c = PAL_DARKBROWN; // dim if can't afford
-                    vram[dy * 256 + dx] = c;
-                }
-            }
-        }
-
-        // Highlight border if this is the selected train type
-        if (isSelected) {
-            for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
-                vram[y * 256 + ix] = PAL_YELLOW;
-                int rx = ix + BUILD_MENU_ITEM_W - 1;
-                if (rx < SCREEN_W) vram[y * 256 + rx] = PAL_YELLOW;
-            }
-            for (int x = ix; x < ix + BUILD_MENU_ITEM_W && x < SCREEN_W; x++) {
-                vram[BUILD_MENU_Y * 256 + x] = PAL_YELLOW;
-                int by = BUILD_MENU_Y + BUILD_MENU_H - 1;
-                if (by < SCREEN_H) vram[by * 256 + x] = PAL_YELLOW;
-            }
-        }
-
-        // 1px black border on right edge
-        for (int y = BUILD_MENU_Y; y < BUILD_MENU_Y + BUILD_MENU_H; y++) {
-            int bx = ix + BUILD_MENU_ITEM_W - 1;
-            if (bx < SCREEN_W) vram[y * 256 + bx] = PAL_BLACK;
-        }
+    // Every unit this building trains, in type order (input.cpp uses the same
+    // order); ones that need a later age are shown locked
+    int slot = 0;
+    for (int ut = 0; ut < UNIT_TYPE_COUNT && slot < MENU_BAR_SLOTS; ut++) {
+        if (UNIT_STATS[ut].bldgReq != b.type || UNIT_STATS[ut].trainTime == 0) continue;
+        if (slot == 0) fill_menu_bar(vram);
+        MenuItemState state =
+            (gs.players[0].age < UNIT_STATS[ut].ageReq) ? MENU_ITEM_LOCKED :
+            !game_can_afford(gs, 0, UNIT_STATS[ut].cost) ? MENU_ITEM_TOO_DEAR : MENU_ITEM_OK;
+        draw_menu_icon(vram, slot, unitIcon[ut], state, ut == gs.trainUnitType);
+        slot++;
     }
 }
 

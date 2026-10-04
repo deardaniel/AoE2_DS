@@ -132,6 +132,16 @@ ICON_SPRITES = [
     ('icon_castle',        'icon_castle.png',        32, 32, 1, 1, 0.889),
     ('icon_monastery',     'icon_monastery.png',     32, 32, 1, 1, 0.889),
     ('icon_university',    'icon_university.png',    32, 32, 1, 1, 0.889),
+    # Unit icons for the train menu (extract_icons.py)
+    ('icon_unit_villager', 'icon_unit_villager.png', 32, 32, 1, 1, 0.889),
+    ('icon_unit_militia',  'icon_unit_militia.png',  32, 32, 1, 1, 0.889),
+    ('icon_unit_archer',   'icon_unit_archer.png',   32, 32, 1, 1, 0.889),
+    ('icon_unit_knight',   'icon_unit_knight.png',   32, 32, 1, 1, 0.889),
+    ('icon_unit_spearman', 'icon_unit_spearman.png', 32, 32, 1, 1, 0.889),
+    ('icon_unit_scout',    'icon_unit_scout.png',    32, 32, 1, 1, 0.889),
+    ('icon_unit_ram',      'icon_unit_ram.png',      32, 32, 1, 1, 0.889),
+    ('icon_unit_mangonel', 'icon_unit_mangonel.png', 32, 32, 1, 1, 0.889),
+    ('icon_unit_monk',     'icon_unit_monk.png',     32, 32, 1, 1, 0.889),
 ]
 
 # Single-frame overlay sprites: (output_name, filename)

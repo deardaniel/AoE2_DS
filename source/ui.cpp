@@ -20,16 +20,19 @@ static u16* minimapVram = NULL;  // points to topBuf (all drawing goes here)
 static u16* topVram = NULL;      // actual VRAM pointer (DMA target)
 static int minimapBg = -1;
 
-// Minimap dimensions: isometric diamond view
-enum { MINIMAP_SX = 2, MINIMAP_SY = 1 };
-enum { MINIMAP_W = (MAP_TILES * 2 - 1) * MINIMAP_SX + 2,  // ~126px
-       MINIMAP_H = (MAP_TILES * 2 - 1) * MINIMAP_SY + 2 }; // ~63px
+// Minimap: the map turned 45 degrees, two pixels per tile step each way. It
+// fills the width of the right-hand side; a 2:1 diamond like the main view
+// would be half as tall and leave most of that side empty.
+enum { MINIMAP_SX = 2, MINIMAP_SY = 2 };
+enum { MINIMAP_W = (MAP_TILES * 2 - 1) * MINIMAP_SX + 2,  // 128px
+       MINIMAP_H = (MAP_TILES * 2 - 1) * MINIMAP_SY + 2 }; // 128px
 enum { STATUS_BAR_H = 16 };
 
 // Layout: info panel on left, minimap on right
 enum { INFO_X = 3, INFO_Y = 19, INFO_W = 119, INFO_H = 169 };
 enum { DIVIDER_X = 125 };
-enum { MINIMAP_X = 131, MINIMAP_Y = 22 };
+enum { MINIMAP_X = 128, MINIMAP_Y = 18 };
+enum { CONTROLS_Y = MINIMAP_Y + MINIMAP_H + 4 };  // three text lines under the minimap
 
 // Textures (RGB15)
 extern const u8 tex_wood_16_bin[];       // 16x16 dark wood tile
@@ -177,6 +180,40 @@ static void ui_draw_panel_bg() {
     }
 }
 
+// Everything right of the info panel: wood, the panel's right bevel and the
+// divider. Drawn after the info panel's text, so a line that runs past the
+// panel is cut off at its edge instead of spilling over the minimap.
+static void ui_draw_right_bg() {
+    if (!minimapVram) return;
+    const u16* woodTile = (const u16*)tex_wood_16_bin;
+    int x0 = INFO_X + INFO_W;
+    for (int y = STATUS_BAR_H; y < 192; y++)
+        for (int x = x0; x < 256; x++)
+            minimapVram[y * 256 + x] = woodTile[((y - STATUS_BAR_H) % 16) * 16 + (x % 16)];
+    for (int y = INFO_Y; y < INFO_Y + INFO_H; y++)
+        minimapVram[y * 256 + x0 - 1] = BEVEL_DARK;
+    for (int y = STATUS_BAR_H; y < 192; y++) {
+        minimapVram[y * 256 + DIVIDER_X]     = DIVIDER_RED;
+        minimapVram[y * 256 + DIVIDER_X + 1] = DIVIDER_GOLD;
+        minimapVram[y * 256 + DIVIDER_X + 2] = DIVIDER_RED;
+    }
+}
+
+// A cost as "50F 25W": only the resources it needs. Returns the next x.
+static int ui_draw_cost(int x, int y, const int cost[RES_COUNT], u16 col) {
+    static const char* const LETTER[RES_COUNT] = { "F", "W", "G", "S" };
+    bool any = false;
+    for (int r = 0; r < RES_COUNT; r++) {
+        if (cost[r] <= 0) continue;
+        if (any) x += 4;
+        x = font_draw_num_16(minimapVram, 256, 192, x, y, cost[r], col, gameFont);
+        x = font_draw_str_16(minimapVram, 256, 192, x, y, LETTER[r], col, gameFont);
+        any = true;
+    }
+    if (!any) x = font_draw_str_16(minimapVram, 256, 192, x, y, "Free", col, gameFont);
+    return x;
+}
+
 // ---------------------------------------------------------------------------
 // Status bar (leather background + resource icons — unchanged)
 // ---------------------------------------------------------------------------
@@ -299,10 +336,10 @@ static void ui_draw_minimap(const GameState& gs, const TerrainMap& terrain) {
 
         int mx, my;
         tileToMinimap(tx, ty, mx, my);
-        for (int dy = 0; dy < 2; dy++) {
-            for (int dx = 0; dx < 2; dx++) {
-                int px = mx + dx + 1;
-                int py = my + dy + 1;
+        for (int dy = 0; dy < 3; dy++) {
+            for (int dx = 0; dx < 3; dx++) {
+                int px = mx + dx;
+                int py = my + dy;
                 if (px >= 0 && px < 256 && py >= 0 && py < 192)
                     minimapVram[py * 256 + px] = dotColor;
             }
@@ -595,9 +632,8 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         ty += 14;
 
         // HP bar
-        ui_draw_hp_bar(TX, ty, 80, 6, u.hp, st.hp);
-        x = font_draw_str_16(minimapVram, 256, 192, TX + 84, ty - 1, "", colText, gameFont);
-        x = font_draw_num_16(minimapVram, 256, 192, TX + 84, ty - 1, u.hp, colText, gameFont);
+        ui_draw_hp_bar(TX, ty, 46, 6, u.hp, st.hp);
+        x = font_draw_num_16(minimapVram, 256, 192, TX + 50, ty - 1, u.hp, colText, gameFont);
         x = font_draw_str_16(minimapVram, 256, 192, x, ty - 1, "/", colText, gameFont);
         font_draw_num_16(minimapVram, 256, 192, x, ty - 1, st.hp, colText, gameFont);
         ty += 10;
@@ -646,8 +682,8 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
         }
 
         // HP bar
-        ui_draw_hp_bar(TX, ty, 80, 6, b.hp, st.hp);
-        x = font_draw_num_16(minimapVram, 256, 192, TX + 84, ty - 1, b.hp, colText, gameFont);
+        ui_draw_hp_bar(TX, ty, 46, 6, b.hp, st.hp);
+        x = font_draw_num_16(minimapVram, 256, 192, TX + 50, ty - 1, b.hp, colText, gameFont);
         x = font_draw_str_16(minimapVram, 256, 192, x, ty - 1, "/", colText, gameFont);
         font_draw_num_16(minimapVram, 256, 192, x, ty - 1, st.hp, colText, gameFont);
         ty += 10;
@@ -698,7 +734,7 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
             gs.players[0].age < AGE_IMPERIAL && ty + 12 < INFO_Y + INFO_H) {
             int na = gs.players[0].age + 1;
             char buf[32];
-            snprintf(buf, sizeof(buf), "START:%s", AGE_NAMES[na]);
+            snprintf(buf, sizeof(buf), "START:%s", AGE_SHORT[na]);
             font_draw_str_16(minimapVram, 256, 192, TX, ty, buf, colGold, gameFont);
             ty += 12;
         }
@@ -713,16 +749,14 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
             }
         }
 
-        // Trainable units (highlight selected)
+        // Trainable units (highlight selected; its cost is under the minimap)
         for (int ut = 0; ut < UNIT_TYPE_COUNT && ty + 12 < INFO_Y + INFO_H; ut++) {
-            if (UNIT_STATS[ut].bldgReq == b.type && gs.players[0].age >= UNIT_STATS[ut].ageReq) {
+            if (UNIT_STATS[ut].bldgReq == b.type && UNIT_STATS[ut].trainTime != 0 &&
+                gs.players[0].age >= UNIT_STATS[ut].ageReq) {
                 bool isSelected = (ut == gs.trainUnitType);
-                char buf[32];
-                snprintf(buf, sizeof(buf), "%s%s F%d W%d G%d",
-                         isSelected ? ">" : " ", UNIT_NAMES[ut],
-                         UNIT_STATS[ut].cost[RES_FOOD], UNIT_STATS[ut].cost[RES_WOOD],
-                         UNIT_STATS[ut].cost[RES_GOLD]);
-                font_draw_str_16(minimapVram, 256, 192, TX, ty, buf,
+                x = font_draw_str_16(minimapVram, 256, 192, TX, ty, isSelected ? ">" : " ",
+                                     colGold, gameFont);
+                font_draw_str_16(minimapVram, 256, 192, x, ty, UNIT_NAMES[ut],
                                  isSelected ? colGold : colText, gameFont);
                 ty += 12;
             }
@@ -779,43 +813,51 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
 static void ui_draw_controls(const GameState& gs) {
     if (!minimapVram) return;
 
-    // Position below minimap diamond
-    int cy = MINIMAP_Y + MINIMAP_H + 8;
-    int cx = MINIMAP_X + 2;
+    int cy = CONTROLS_Y;
+    int cx = MINIMAP_X + 4;
     u16 colCtrl = RGB15(24, 22, 18) | BIT(15);  // light text on dark wood
 
-    if (gs.phase == PHASE_VICTORY) {
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "VICTORY!", COL_GOLD, gameFont);
-        cy += 12;
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "Touch:restart", colCtrl, gameFont);
-        return;
-    } else if (gs.phase == PHASE_DEFEAT) {
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "DEFEAT!", COL_RED, gameFont);
-        cy += 12;
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "Touch:restart", colCtrl, gameFont);
+    if (gs.phase == PHASE_VICTORY || gs.phase == PHASE_DEFEAT) {
+        bool won = (gs.phase == PHASE_VICTORY);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy, won ? "VICTORY!" : "DEFEAT!",
+                         won ? COL_GOLD : COL_RED, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "Touch:restart", colCtrl, gameFont);
         return;
     }
 
-    if (gs.buildMenuOpen) {
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "[Build Menu]", colCtrl, gameFont);
-    } else if (gs.inputMode == 1) {
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "Place:", colCtrl, gameFont);
-        int nx = font_draw_str_16(minimapVram, 256, 192, cx + 40, cy, BLDG_NAMES[gs.placeBldgType], colCtrl, gameFont);
-        (void)nx;
-        cy += 12;
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "B:Cancel", colCtrl, gameFont);
-    } else if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
-               buildings[gs.selectedBldg].type == BLDG_TOWN_CENTER &&
-               buildings[gs.selectedBldg].garrisonCount > 0) {
+    // What is about to be bought, and whether we can pay for it
+    const char* itemName = NULL;
+    const int* itemCost = NULL;
+    const char* hint = NULL;
+    const Building* sel = (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive)
+                        ? &buildings[gs.selectedBldg] : NULL;
+    if (gs.inputMode == 1) {
+        itemName = BLDG_NAMES[gs.placeBldgType];
+        itemCost = BLDG_STATS[gs.placeBldgType].cost;
+        hint = "B:Cancel";
+    } else if (sel && gs.selectionCount == 0 && gs.trainUnitType >= 0 &&
+               UNIT_STATS[gs.trainUnitType].bldgReq == sel->type) {
+        itemName = UNIT_NAMES[gs.trainUnitType];
+        itemCost = UNIT_STATS[gs.trainUnitType].cost;
+        hint = "START:Train";
+    }
+
+    if (itemName) {
+        bool ok = game_can_afford(gs, 0, itemCost);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy, itemName, COL_GOLD, gameFont);
+        ui_draw_cost(cx, cy + 12, itemCost, ok ? colCtrl : COL_RED);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 24, hint, colCtrl, gameFont);
+    } else if (gs.buildMenuOpen) {
+        font_draw_str_16(minimapVram, 256, 192, cx, cy, "Tap a building", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "X:Next page", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 24, "B:Cancel", colCtrl, gameFont);
+    } else if (sel && sel->type == BLDG_TOWN_CENTER && sel->garrisonCount > 0) {
         font_draw_str_16(minimapVram, 256, 192, cx, cy, "A:Ungarrison", colCtrl, gameFont);
-        cy += 12;
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "START:Train", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "START:Train", colCtrl, gameFont);
     } else {
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "X:Build", colCtrl, gameFont);
-        cy += 12;
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "L/R:Cycle Vil", colCtrl, gameFont);
-        cy += 12;
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "B:Cancel", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy, "L/R:Idle villager", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "Y:Town Center", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 24, "B:Cancel", colCtrl, gameFont);
     }
 }
 
@@ -827,8 +869,9 @@ void ui_update(const GameState& gs, const TerrainMap& terrain) {
     if ((gs.frameCount & 3) == 0) {
         ui_draw_status_bar(gs);
         ui_draw_panel_bg();
-        ui_draw_minimap(gs, terrain);
         ui_draw_info_panel(gs, terrain);
+        ui_draw_right_bg();   // also trims any text that ran past the panel
+        ui_draw_minimap(gs, terrain);
         ui_draw_controls(gs);
 
         // DMA copy buffer to VRAM (avoids flicker from mid-scanline writes)
