@@ -144,10 +144,13 @@ assets:
 		$(if $(FIT),--fit,)
 
 #---------------------------------------------------------------------------------
-# Extract game unit/building sprites from manifest
+# Rebuild every sprite PNG in sprites/ from the AoE2 HD game files.
+# The SLP tables live in the three scripts. Follow with `make sprites`.
 #---------------------------------------------------------------------------------
 assets-game:
-	@python3 scripts/build_assets_from_manifest.py assets/manifest_game.json
+	@python3 scripts/composite_tc.py
+	@python3 scripts/extract_buildings.py
+	@python3 scripts/build_unit_sheets.py
 
 #---------------------------------------------------------------------------------
 # Preprocess HD sprite PNGs into NDS-ready indexed binary data (data/*.bin)
