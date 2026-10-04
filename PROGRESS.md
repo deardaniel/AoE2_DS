@@ -24,7 +24,8 @@
 | 16 | Sheep as Units | DONE | Sheep spawn near TCs, gatherable food source, walk/die animations |
 | 17 | Berry/Work Animation Fixes | DONE | Real berry sprite, correct work SLPs, forager carry animation |
 | 18 | Idle Animations | DONE | Units cycle through standing frames when idle |
-| 19 | TC Composite Sprite | DONE | 7-layer SLP composite with correct layer ordering |
+| 19 | TC Composite Sprite | DONE | Rebuilt 2026-10-04 from the 9 Dark Age layers at exact 1/3 scale |
+| 20 | Sprite audit | DONE | All SLPs re-resolved by ID; buildings, units and layouts rebuilt |
 
 ## Bug Fixes Applied
 
@@ -45,7 +46,8 @@
 14. **Work animation SLPs corrected** — farmer_work was SLP 1506 (VMFAR_DN = dying!), fixed to SLP 1473 (VMBAS_AN). builder_work was SLP 1490 (VMBLD_DN = dying!), fixed to SLP 1496 (VMBLD_TN)
 15. **Forager carry animation** — Added VROLE_FORAGER role; berry gatherers carry basket (SLP 2592 VMFOR_CN) distinct from meat carriers
 16. **Idle animations** — Units cycle through 5 standing frames when idle at reduced speed
-17. **TC composite sprite** — Replaced single-SLP TC with 7-layer composite (SLPs 891, 3594-3596, 4639-4641), correct back-to-front layer order
+17. **TC composite sprite** — Dark Age layers 889, 891, 3594-3596, 4610-4612 placed by hotspot + delta (the earlier 4639-4641 were Imperial Age pieces)
+18. **Sprite audit (2026-10-04)** — .dat lookups were by array index instead of ID. Fixed: Archer used Longbowman graphics; tower, monastery, camps, archery range, university and wall came from other civ sets or ages; standing sheets held one direction while the renderer read five; units were each scaled differently
 
 ### Player Controls
 - **START** on selected TC: Age advancement (priority) or train villager
@@ -67,27 +69,10 @@
 - **Result**: All sprites now have correct AoE2 colors (blue player color, natural skin tones, proper armor/weapon colors)
 - **SLP IDs**: Verified against [openage aoc-slp-list](https://github.com/SFTtech/openage/blob/master/doc/media/aoc-slp-list.md)
 
-### Correct SLP ID Mapping (openage-verified)
-| Entity | Stand SLP | Fight/Fire SLP | Walk SLP | Death SLP |
-|--------|-----------|----------------|----------|-----------|
-| Villager (M) | 1479 | 1473 | 1484 | — |
-| Villager (F) | 1388 | 1382 | 1392 | — |
-| Militia | 993 | 987 | 997 | — |
-| Archer | 708 | 702 | 713 | — |
-| Knight | 669 | 663 | 673 | — |
-| Spearman | 873 | 867 | 877 | — |
-| Scout | 2085 | — | 2089 | — |
-| Sheep | 3629 | — | 3634 | 3626 |
-
-| Building | SLP | Notes |
-|----------|-----|-------|
-| Town Center | composite | 7-layer SLP composite (891, 3594-96, 4639-41) |
-| House | 2232 | North European, Feudal |
-| Barracks | 130 | North European, Feudal |
-| Archery Range | 21 | North European, Feudal |
-| Stable | 1006 | North European, Feudal |
-| Mining Camp | 3492 | North European |
-| Lumber Camp | 3504 | North European |
+### SLP IDs
+See `docs/building_graphics_reference.md` — every ID there was read from the
+.dat by ID. The tables that used to be here were wrong (Archer was the
+Longbowman, several buildings were from other civ sets).
 
 ### Unit Stats (wiki-verified)
 Updated config.h to match real AoE2 values:
@@ -135,7 +120,6 @@ Updated config.h to match real AoE2 values:
 - No Mill building — only TC accepts food
 - Path length capped at 64 steps (re-path needed for very long paths)
 - Tech HP bonus only applies to newly spawned units, not existing ones
-- `--fit` flag scales each sprite sheet independently, so relative unit sizes may be inconsistent
 
 ## File Manifest
 
@@ -161,22 +145,16 @@ source/res_icons.h    - Resource icon pixel data
 
 ### Asset Pipeline
 ```
-extract-slp.js                         - SLP→PNG frame extractor (Node.js, uses genie-slp)
-scripts/build_assets_from_manifest.py  - Manifest-driven batch sprite sheet builder
-scripts/build_sprite_sheet.py          - Per-SLP sheet builder (calls extract-slp.js + pack_frames.py)
-scripts/pack_frames.py                 - Frame packer with hotspot anchoring and uniform scaling
-scripts/preprocess_sprites.py          - PNG→NDS indexed binary converter (shared palette)
-scripts/preprocess_terrain.py          - HD terrain textures→NDS binary tiles
-assets/manifest_game.json              - Sprite manifest (SLP IDs, layout, grouping)
-```
-
-### Research/Reference Scripts (not part of build)
-```
-scripts/dump_tc_graphics.js            - Inspect TC graphic chain from .dat file
-scripts/dump_building_gfx.js           - Inspect building SLPs by architecture set
-scripts/dump_villager_graphics.js      - Inspect villager graphic IDs from .dat file
-scripts/composite_tc.py                - Composite TC from 7 SLP layers with delta Y offsets
-scripts/shared_constants.py            - Shared Python/C++ constants (palette, iso geometry)
+extract-slp.js                    - SLP→PNG frame extractor (Node.js, uses genie-slp)
+scripts/dat_by_id.js              - .dat loader that indexes graphics and units by ID
+scripts/dump_unit_graphics.js     - Print a unit's graphics/SLPs, deltas and annexes
+scripts/composite_tc.py           - Town Center from its nine SLP layers
+scripts/extract_buildings.py      - Building frames + hotspot sidecars
+scripts/build_unit_sheets.py      - Every unit sprite sheet (one layout, one scale)
+scripts/preprocess_sprites.py     - PNG→NDS indexed binary converter (shared palette)
+scripts/preprocess_terrain.py     - HD terrain textures→NDS binary tiles
+scripts/shared_constants.py       - Constants shared with the C++ (palette, iso geometry, anchors)
+scripts/build_sprite_sheet.py     - One-off single-SLP sheet (calls pack_frames.py)
 ```
 
 ### Binary Data (generated by `make sprites`)
@@ -193,7 +171,7 @@ data/font_aoe2.bin     - Bitmap font glyph data
 ```
 make                - Compile C++ and link .nds ROM
 make clean          - Remove build artifacts
-make assets-game    - Extract HD sprites from SLP files via manifest
+make assets-game    - Rebuild all sprite PNGs from the game's SLP files
 make assets         - Extract a single SLP (SLP=... OUT=... args)
 make sprites        - Preprocess sprites/*.png + terrain → data/*.bin
 ```

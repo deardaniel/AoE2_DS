@@ -77,18 +77,21 @@ Minimap display with resource/unit info HUD.
 
 Sprites are extracted from AoE2 HD (Steam) SLP files and preprocessed into NDS-ready indexed binary data.
 
-### Extract SLP frames
+### Rebuild the sprite PNGs from the game files
 ```bash
-node extract-slp.js <path-to-slp> <output-dir> [frame-index]
+make assets-game   # composite_tc.py, extract_buildings.py, build_unit_sheets.py
 ```
+Each script owns the table of SLP IDs for its sprites. The IDs come from the
+game's `.dat`, looked up **by ID** (`node scripts/dump_unit_graphics.js <unit>`);
+see `docs/building_graphics_reference.md` before adding or changing one.
 
-### Pack into sprite sheet
-```bash
-python3 scripts/pack_frames.py <frames-dir> <output.png> \
-  --cell 32x32 --cols 10 --dirs 5 --fpd 10 --fit
-```
+- Town Center: composited from its nine SLP layers, reduced by exactly 3
+- Buildings: raw SLP frame plus a hotspot sidecar; scaled so the hotspot sits
+  on the centre of the building's footprint
+- Units: every sheet at the same 1/3 scale, hotspot on the tile centre
 
-**Note:** The `--fit` flag computes a uniform scale factor from the largest frame to fit all frames within cells. This may affect relative sprite sizes across different sheets — consider using `--scale` with an explicit factor for consistent sizing.
+`node extract-slp.js <path-to-slp> <output-dir> [frame-index]` dumps the
+frames of a single SLP for inspection.
 
 ### Preprocess for NDS
 ```bash
@@ -101,11 +104,18 @@ This generates:
 - `data/spr_*.bin` — indexed pixel data for each sprite sheet
 - `data/terrain_*.bin` — terrain tile graphics and palette
 
-### Batch extract via manifest
+The scripts need numpy and Pillow (`python3 -m venv --system-site-packages .venv
+&& .venv/bin/pip install numpy`, then put `.venv/bin` first on `PATH`).
+
+The ARM9 image must fit the 2.6 MB `lma9` region; sprite data is most of it
+and there is little room left, so new sheets usually mean trimming others.
+
+### Checking sprites in the emulator
 ```bash
-# Edit assets/manifest_game.json, then:
-make assets-batch
+make SHOWCASE=1   # one of every building beside the player's Town Center
+make SHOWCASE=2   # one of every unit, turning every 2 seconds
 ```
+`touch source/main.cpp` when switching between these and a normal build.
 
 ## Architecture
 

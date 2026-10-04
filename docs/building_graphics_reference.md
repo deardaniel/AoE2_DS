@@ -1,181 +1,120 @@
-# AoE2 Building Graphic Reference
+# AoE2 Graphic Reference
 
-## How to parse the .dat file
+Everything here was read from `empires2_x2_p1.dat` (AoE2 HD) **by ID** with
+`scripts/dump_unit_graphics.js`. An earlier version of this file was built on
+array-index lookups and had the wrong SLPs for most entries.
 
-The `genie-dat` npm package (already installed) can parse AoE2 HD .dat files:
+## Reading the .dat
+
+`genie-dat` returns `dat.graphics` and each civ's `objects` as arrays with the
+empty slots removed, so **array position is not the ID**: `dat.graphics[3345]`
+is some other graphic. Use `scripts/dat_by_id.js`:
 
 ```js
-const genieDat = require('genie-dat');
-const datBuf = fs.readFileSync('empires2_x2_p1.dat');
-genieDat.load(datBuf, {version: 'african-kingdoms'}, function(err, dat) {
-    // dat.civilizations[civIdx].objects[unitId]  — unit data
-    // dat.graphics[graphicId]                     — graphic data
-    // Key fields:
-    //   unit.standingGraphic0  → graphic ID
-    //   graphic.slpId          → SLP file number
-    //   graphic.deltas[]       → sub-graphic layers
-    //     delta.graphicId      → sub-graphic ID
-    //     delta.offsetX/Y      → pixel offset for compositing
+const loadDat = require('./scripts/dat_by_id.js');
+loadDat((dat, db) => {
+    const tc = db.unit(109);                    // civ 1 (British) by default
+    const g  = db.graphic(tc.standingGraphic0); // g.slpId, g.deltas[]
 });
 ```
 
-**IMPORTANT**: The `{version: 'african-kingdoms'}` flag is required for AoE2 HD.
+```bash
+node scripts/dump_unit_graphics.js 109 87      # by unit ID
+node scripts/dump_unit_graphics.js --name ARCHR
+node scripts/dump_unit_graphics.js --civ 3 87  # same unit, Goths
+```
 
-DAT file location: `/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/dat/empires2_x2_p1.dat`
+Useful fields: `u.standingGraphic0`, `u.walkingGraphics0`, `u.dyingGraphic`,
+`u.annexes[].objectId / misplaced0 / misplaced1`, `u.headObjectId`,
+`g.slpId`, `g.frameCount`, `g.deltas[].graphicId / offsetX / offsetY`.
 
-## Architecture Set Suffixes
+A graphic's deltas are extra layers drawn at `delta offset − SLP hotspot`
+relative to the unit position. For buildings the unit position is the centre
+of the footprint diamond. AoE2 tiles are 96×48 px; ours are 32×16.
 
-SLP/Graphic names use a suffix letter for architecture variant:
-- **E** = East European (Slavs, Magyars, etc.)
-- **F** = Far East / Asian (Chinese, Japanese, etc.)
-- **M** = Middle Eastern (Saracens, Turks, etc.)
-- **W** = West European (Britons, Franks, etc.)
-- **G** = Generic (shared across all architectures, especially Dark Age)
-- **I** = Indian (added in expansions)
-- **X** = Preview/combined (used for building placement preview)
+## Architecture sets
 
-Civ 1 = Britons = West European architecture set.
+The game uses civ 1, British (West European). The same building in another
+set is a neighbouring SLP number, which makes them easy to mix up:
 
-## Town Center (RTWC) — Unit 99
+| Building | British / French | Goths / Teutons | Japanese / Chinese | Byzantine |
+|---|---|---|---|---|
+| Archery Range | 24 | 21 | 22 | 23 |
+| Watch Tower | 2655 | 2652 | 2653 | 2654 |
+| Monastery | 281 | 278 | 279 | 280 |
+| Stone Wall | 2101 | 2098 | 2099 | 2100 |
+| Stable | 1009 | 1006 | 1007 | 1008 |
+| Market | 2278 | 2275 | 2276 | 2277 |
+| Castle | 305 | 302 | 303 | 304 |
 
-The Dark Age TC is the most complex building. It's a multi-layer composite:
+Graphic name suffixes are not a reliable guide to the set; compare the unit's
+standing graphic across civs (`--civ N`) instead.
 
-### RTWC1X Preview Graphic (Graphic 3345, SLP=-1)
+## Buildings in the game (`scripts/extract_buildings.py`)
 
-This is the full composite with 9 delta layers:
+| Building | Unit | SLP | Graphic | Other layers in the .dat |
+|---|---|---|---|---|
+| House | 70 | 2223 | HOUS1NNG | — |
+| Barracks | 12 | 2683 | BRKS1NNG | — |
+| Archery Range | 87 | 24 | ARRG2NNW | — |
+| Stable | 101 | 1009 | STBL2NNW | — |
+| Mining Camp | 584 | 3495 | MINE1NNGW | 3491 (not shipped), shadow 3487 |
+| Lumber Camp | 562 | 3507 | SMIL1NNGW | 3503 (not shipped), shadow 3499 |
+| Palisade ("Wall") | 72 | 1828, frame 2 | WALL1N1G | 4534 is a 1×1 placeholder |
+| Watch Tower | 79 | 2655 | WCTW1NNGW | shadow 4351 |
+| Market | 84 | 2278 | MRKT2NNW | — |
+| Castle | 82 | 305 | CSTL3NNW | shadow 297 |
+| Monastery | 104 | 281 | CRCH3NNW | shadow 273 |
+| University | 209 | 3835 | UNIV3NNW | 1363 flag animation, shadow 1359 |
 
-| Delta | Graphic ID | SLP  | Name       | Offset (X,Y) | Layer | Role                     |
-|-------|-----------|------|------------|---------------|-------|--------------------------|
-| 0     | 434       | 890  | RTWC1N1G   | (0, 0)        | 10    | Foundation (FILE MISSING) |
-| 1     | 433       | 889  | RTWC1N0G   | (0, 0)        | 5     | Selection/damage outline (RED — skip) |
-| 2     | 435       | 891  | RTWC1NNG   | (0, -48)      | 20    | Center building          |
-| 3     | 3241      | 3596 | RTWC1N4G   | (0, 0)        | 20    | Wing pillars/posts       |
-| 4     | 5470      | 4641 | RTWC4N6E   | (0, 0)        | 20    | Wing columns             |
-| 5     | 3240      | 3595 | RTWC1N3G   | (0, 24)       | 20    | Right wing single pillar |
-| 6     | 5469      | 4640 | RTWC4N5W   | (0, 24)       | 20    | Right wing canopy        |
-| 7     | 3239      | 3594 | RTWC1N2G   | (0, 48)       | 20    | Left wing roof           |
-| 8     | 5468      | 4639 | RTWC4N5M   | (0, 48)       | 20    | Left wing canopy         |
+Only the main layer is used for these; the shadow layers are not composited
+yet (the renderer draws a soft ellipse instead).
 
-Note: Deltas 4/6/8 are architecture-specific (E/W/M mixed in the preview).
+## Town Center (`scripts/composite_tc.py`)
 
-### N5 Canopy Variants (wing pavilion roofs)
+Unit 109 "RTWC" is a main unit plus annex units 618, 619, 620 and head unit
+621 "RTWC1X". The head unit's graphic 3345 lists every piece with its screen
+offset. Dark Age, back to front:
 
-| SLP  | Suffix | Style                | Visual                           |
-|------|--------|----------------------|----------------------------------|
-| 4610 | G      | Generic Dark Age     | Light thatch canopy, wood pillar |
-| 4637 | E      | East European        | Terracotta tile roof, stone      |
-| 4638 | F      | Far East / Asian     | Bamboo/reed curved roof          |
-| 4639 | M      | Middle Eastern       | Flat sandstone pavilion, ornate  |
-| 4640 | W      | West European (Imp.) | Dark slate roof, small trees     |
+| SLP | Graphic | Delta | Piece |
+|---|---|---|---|
+| 890 | RTWC1N1G | (0, 0) | foundation — not shipped with HD |
+| 889 | RTWC1N0G | (0, 0) | ground shadow (SLP shadow commands only) |
+| 891 | RTWC1NNG | (0, −48) | centre building |
+| 3596 | RTWC1N4G | (0, 0) | left wing posts |
+| 4612 | RTWC1N7G | (0, 0) | right wing posts |
+| 3595 | RTWC1N3G | (0, 24) | left far post |
+| 4611 | RTWC1N6G | (0, 24) | right far post |
+| 3594 | RTWC1N2G | (0, 48) | left wing roof |
+| 4610 | RTWC1N5G | (0, 48) | right wing roof |
 
-### N6 Column Variants (wing support columns)
+SLPs 4639–4641 are Imperial Age right wings from other sets; an index-based
+lookup returns them in place of 4610–4612.
 
-| SLP  | Suffix | Style                |
-|------|--------|----------------------|
-| 4611 | G      | Generic Dark Age     |
-| 4641 | E      | East European        |
-| 4642 | F      | Far East / Asian     |
-| 4643 | M      | Middle Eastern       |
-| 4644 | W      | West European (Imp.) |
+The Dark Age TC is asymmetric (both lean-tos have their ridge running the same
+way) and only stands on the back half of its 4×4 footprint — the front is open
+ground. The composite is reduced by exactly 3 with the footprint centre on
+`TC_ANCHOR`.
 
-### Current composite_tc.py configuration
+## Units (`scripts/build_unit_sheets.py`)
 
-Uses 7 layers (SLP 889 excluded — contains player-color flags that render as wrong colors):
-- SLPs 891, 3594, 3595, 3596, 4639, 4640, 4641
-- SLP 4639 (M) for both wing canopies (user confirmed M looks correct)
-- SLP 4641 (E) for columns (small, barely visible at NDS resolution)
-- Compositing order: back-to-front by Y offset (y=-48 first as background, y=48 last as foreground)
-- SLP 889 (RTWC1N0G) excluded: contains player-color palette indices 16-23 which render as orange/red when not remapped per-player
-- SLP 890 (RTWC1N1G) excluded: file missing from AoE2 HD game data
-- Hotspot ratio: 0.536 (updated from original 0.733)
+| Unit | ID | Stand | Walk | Attack | Die |
+|---|---|---|---|---|---|
+| Villager (m) | 83 | 1479 | 1484 | 1473 | 1476 |
+| Militia | 74 | 993 | 997 | 987 | 990 |
+| Archer | 4 | 8 | 12 | 2 | 5 |
+| Knight | 38 | 669 | 673 | 663 | 666 |
+| Spearman | 93 | 873 | 877 | 867 | 870 |
+| Scout Cavalry | 448 | 2085 | 2089 | 2079 | 2082 |
+| Sheep | 594 | 3629 | 3634 | — | 3626 |
+| Battering Ram | 35 | 179 | 183 | 173 | 176 |
+| Mangonel | 280 | 722 | 726 | 716 | 719 |
+| Monk | 125 | 774 | 779 | 768 | 771 |
 
-### Annex Sub-Units
+SLPs 702 / 708 / 713 are the Longbowman (`LNGBW_*`), not the Archer.
 
-| Unit ID | Name   | StandingGraphic SLP | Role            |
-|---------|--------|---------------------|-----------------|
-| 487     | RTWC1A | 891 (RTWC1NNG)      | Center building |
-| 488     | RTWC1B | 3595 (RTWC1N3G)     | Right wing      |
-| 489     | RTWC1C | 3594 (RTWC1N2G)     | Left wing       |
-| 490     | RTWC1X | -1 (preview only)   | Combined view   |
-
-## Other Buildings — Correct SLP Mapping (Civ 1 / West European)
-
-From .dat file, civ 1 (Britons):
-
-| Building       | Unit ID | Graphic ID | SLP  | Graphic Name | Notes                    |
-|----------------|---------|-----------|------|--------------|--------------------------|
-| House          | 63      | 2216      | 2223 | HOUS1NNG     | Dark Age generic         |
-| Barracks       | 12      | 2664      | 2683 | BRKS1NNG     | Dark Age generic         |
-| Archery Range  | 80      | 17        | 24   | ARRG2NNW     | Feudal Age West European |
-| Stable         | 92      | 1003      | 1009 | STBL2NNW     | Feudal Age West European |
-| Mining Camp    | 453     | 3118      | 3495 | MINE1NNGW    | Dark Age West European   |
-| Lumber Camp    | 431     | 3122      | 3507 | SMIL1NNGW    | Dark Age West European   |
-| Mill           | 62      | 3114      | 3482 | MILL1N1G     | Dark Age generic         |
-| Farm           | 48      | 181       | 419  | FARM0NNG     | SLP file doesn't exist   |
-| Town Center    | 99      | 3241      | 3596 | RTWC1N4G     | Composite — see above    |
-
-### Previously WRONG SLPs (East European variants used in old manifest)
-
-| Building       | Wrong SLP | Wrong Name  | Correct SLP | Correct Name |
-|----------------|-----------|-------------|-------------|--------------|
-| House          | 2232      | HOUS2NNE    | 2223        | HOUS1NNG     |
-| Barracks       | 130       | BRKS2NNE    | 2683        | BRKS1NNG     |
-| Archery Range  | 21        | ARRG2NNE    | 24          | ARRG2NNW     |
-| Stable         | 1006      | STBL2NNE    | 1009        | STBL2NNW     |
-| Mining Camp    | 3492      | MINE1NNGE   | 3495        | MINE1NNGW    |
-| Lumber Camp    | 3504      | SMIL1NNGE   | 3507        | SMIL1NNGW    |
-
-## Graphic Name Convention
-
-Format: `TYPE + AGE + N + PART + SUFFIX`
-
-- **TYPE**: RTWC (TC), HOUS (House), BRKS (Barracks), ARRG (Arch. Range),
-  STBL (Stable), MINE (Mining Camp), SMIL (Lumber Camp = "Small Mill"),
-  MILL (Mill), FARM (Farm)
-- **AGE**: 0=all ages, 1=Dark, 2=Feudal, 3=Castle, 4=Imperial
-- **N**: separator
-- **PART**: NN=standing, N0=shadow, N1=foundation, N2-N6=detail layers
-- **SUFFIX**: G/E/F/M/W/I/X (architecture variant)
-
-## Unit Graphic Name Convention
-
-Format: `VM + ROLE + _ + ANIM + N`
-
-- **VM**: Villager Male prefix
-- **ROLE**: BAS (base), LUM (lumberjack), MIN (miner), BLD (builder), FAR (farmer), FOR (forager), SHE (shepherd)
-- **ANIM suffix**:
-  - `_AN` = action/attack (work animation)
-  - `_TN` = tool/task (alternative work animation)
-  - `_WN` = walking
-  - `_CN` = carry (carrying resource)
-  - `_FN` = face/standing
-  - `_DN` = dying (NOT a work animation!)
-  - `_BN` = basket/berry carry
-
-**IMPORTANT**: `_DN` is the DYING animation. Previous versions incorrectly used farmer_work=1506 (VMFAR_DN) and builder_work=1490 (VMBLD_DN). Correct work SLPs: farmer=1473 (VMBAS_AN), builder=1496 (VMBLD_TN).
-
-## Player Colors
-
-AoE2 player 1 (blue) colors from 50500.bina palette indices 16-23:
-
-| Index | R   | G   | B   | Description          |
-|-------|-----|-----|-----|----------------------|
-| 16    | 0   | 0   | 82  | Very dark blue       |
-| 17    | 0   | 21  | 130 | Dark blue            |
-| 18    | 19  | 49  | 161 | Medium blue          |
-| 19    | 48  | 93  | 182 | Medium-light blue    |
-| 20    | 74  | 121 | 208 | Light blue           |
-| 21    | 110 | 166 | 235 | Sky blue             |
-| 22    | 151 | 206 | 255 | Very light blue      |
-| 23    | 205 | 250 | 255 | Near white/cyan      |
-
-These are reserved at NDS palette indices 16-23 by `preprocess_sprites.py`.
-Red variants (for player 2) are at NDS palette indices 246-253.
-
-## Tools
-
-- `scripts/dump_tc_graphics.js` — Dumps TC graphic chain from .dat file
-- `scripts/composite_tc.py` — Composites TC from 7 SLP layers with delta Y offsets
-- `scripts/build_sprite_sheet.py` — General SLP→sprite sheet pipeline
-- `scripts/build_assets_from_manifest.py` — Builds all sprites from manifest_game.json
-- `extract-slp.js` — Extracts individual SLP frames to PNG with hotspot metadata
+Villager jobs (stand / walk / work / carry): lumberjack 1542 / 1548 / 1535 /
+1536 · miner 1558 / 1563 / 1560 / 1552 · builder 1493 / 1499 / 1496 / — ·
+farmer 1509 / 1515 / 1512 / 1519 (hunter's meat carry) · forager carry 2592.
+In graphic names `_FN` = standing, `_WN` = walking, `_AN` = attack, `_TN` =
+task, `_CN` = carry, `_DN` = dying.
