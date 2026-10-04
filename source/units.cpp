@@ -139,6 +139,18 @@ static AStarNode astarGrid[MAP_TILES][MAP_TILES];
 static bool passMap[MAP_TILES][MAP_TILES]; // combined terrain + building passability
 static s16 openList[MAP_TILES * MAP_TILES]; // encoded as y * MAP_TILES + x
 
+// Idle animation timing at 60 fps, from the standing graphics in the .dat:
+// frames x seconds-per-frame for one play-through, then the replay delay.
+// (Villager 15 x 1.0 s then 3 s; archer 11 x 0.2 s then 1 s; and so on.)
+static const u16 IDLE_CYCLE_FRAMES[UNIT_TYPE_COUNT] = {
+    900, 360, 132, 120, 108, 120, 150,  // villager, militia, archer, knight, spearman, scout, sheep
+    60, 60, 72                          // ram, mangonel (static), monk
+};
+static const u16 IDLE_REST_FRAMES[UNIT_TYPE_COUNT] = {
+    180, 60, 60, 60, 60, 180, 0,
+    0, 0, 60
+};
+
 // Forward declarations
 static bool sheep_has_food(int idx, int owner);
 static int find_nearest_sheep(const Unit& u);
@@ -1501,19 +1513,21 @@ void units_update(GameState& gs, TerrainMap& terrain) {
         // 10 anim frames per cycle, advancing every tick (60fps) for movement
         // and every 2 ticks (30fps) for combat/work actions
         u.animTick++;
-        int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING ||
-                         u.state == USTATE_SCOUTING) ? 1 :
-                        (u.state == USTATE_IDLE) ? 4 : 2;
-        if (u.animTick >= animSpeed) {
-            u.animTick = 0;
-            if (u.state == USTATE_MOVING || u.state == USTATE_ATTACKING ||
-                u.state == USTATE_GATHERING || u.state == USTATE_RETURNING ||
-                u.state == USTATE_BUILDING || u.state == USTATE_SCOUTING) {
+        if (u.state == USTATE_IDLE) {
+            // Standing: as in the game, the idle animation plays through once,
+            // rests for the graphic's replay delay, and every unit starts at
+            // its own point in that cycle — a row of villagers doesn't fidget
+            // in unison. Stateless: the phase comes from the unit's index.
+            u32 cycle = IDLE_CYCLE_FRAMES[u.type];
+            u32 period = cycle + IDLE_REST_FRAMES[u.type];
+            u32 t = ((u32)gs.frameCount + (u32)i * 2654435761u % period) % period;
+            u.animFrame = (t < cycle) ? t * 5 / cycle : 0;
+        } else {
+            int animSpeed = (u.state == USTATE_MOVING || u.state == USTATE_RETURNING ||
+                             u.state == USTATE_SCOUTING) ? 1 : 2;
+            if (u.animTick >= animSpeed) {
+                u.animTick = 0;
                 u.animFrame = (u.animFrame + 1) % 10;
-            } else if (u.state == USTATE_IDLE) {
-                u.animFrame = (u.animFrame + 1) % 5;
-            } else {
-                u.animFrame = 0;
             }
         }
 
