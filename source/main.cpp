@@ -82,7 +82,7 @@ static void game_start() {
     // Place Town Center at tile (2,2) — 4x4 building
     int tc0 = building_place(BLDG_TOWN_CENTER, 0, 2, 2, gameState, terrain);
     if (tc0 >= 0) {
-        buildings[tc0].buildProgress = BLDG_STATS[BLDG_TOWN_CENTER].buildTime; // start complete
+        building_complete_now(tc0);
     }
 
     // Spawn 3 villagers near TC (below and right of 4x4 TC)
@@ -127,7 +127,7 @@ static void game_start() {
             gameState.players[LAYOUT[i].owner].resources[RES_STONE] = 9999;
             int bi = building_place(LAYOUT[i].type, LAYOUT[i].owner, LAYOUT[i].tx, LAYOUT[i].ty,
                                     gameState, terrain);
-            if (bi >= 0) buildings[bi].buildProgress = BLDG_STATS[LAYOUT[i].type].buildTime;
+            building_complete_now(bi);
             gameState.players[LAYOUT[i].owner].age = savedAge;
         }
     }
@@ -143,7 +143,7 @@ static void game_start() {
     // --- Player 1 (AI) — bottom-right corner ---
     int tc1 = building_place(BLDG_TOWN_CENTER, 1, MAP_TILES - 6, MAP_TILES - 6, gameState, terrain);
     if (tc1 >= 0) {
-        buildings[tc1].buildProgress = BLDG_STATS[BLDG_TOWN_CENTER].buildTime;
+        building_complete_now(tc1);
     }
 
     unit_spawn(UNIT_VILLAGER, 1, (MAP_TILES - 2) * TILE_PX, (MAP_TILES - 2) * TILE_PX);

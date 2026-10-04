@@ -47,5 +47,6 @@ int  building_nearest(int owner, int type, s16 px, s16 py);
 int  building_nearest_dropoff(int owner, int resType, s16 px, s16 py);
 int  building_count(int owner, int type);
 bool building_is_complete(int idx);
+void building_complete_now(int idx);  // finish construction instantly at full HP
 bool building_garrison(int bldgIdx, int unitIdx);
 void building_ungarrison_all(int bldgIdx, TerrainMap& terrain);

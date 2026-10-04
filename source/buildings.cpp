@@ -66,7 +66,7 @@ int building_place(u8 type, u8 owner, int tileX, int tileY, GameState& gs, Terra
     b.type = type;
     b.x = tileX * TILE_PX;
     b.y = tileY * TILE_PX;
-    b.hp = st.hp;
+    b.hp = (st.hp / 10 > 0) ? st.hp / 10 : 1;  // rises with construction
     b.buildProgress = 0;
     b.trainProgress = 0;
     b.spriteGfx = NULL;
@@ -85,6 +85,12 @@ int building_place(u8 type, u8 owner, int tileX, int tileY, GameState& gs, Terra
     if (owner == 0) sound_play(SFX_BUILDING_PLACE);
 
     return slot;
+}
+
+void building_complete_now(int idx) {
+    if (idx < 0 || idx >= MAX_BUILDINGS || !buildings[idx].alive) return;
+    buildings[idx].buildProgress = BLDG_STATS[buildings[idx].type].buildTime;
+    buildings[idx].hp = BLDG_STATS[buildings[idx].type].hp;
 }
 
 void buildings_update(GameState& gs, TerrainMap& terrain) {
@@ -132,11 +138,14 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
                 int rangePx = bldgRange * TILE_PX;
                 int bestDist = rangePx * rangePx + 1;
                 int bestEnemy = -1;
+                int cx = b.x + st.tileW * TILE_PX / 2 - TILE_PX / 2;
+                int cy = b.y + st.tileH * TILE_PX / 2 - TILE_PX / 2;
                 for (int j = 0; j < MAX_UNITS; j++) {
                     if (!units[j].alive || units[j].state == USTATE_DEAD) continue;
-                    if (units[j].owner == b.owner) continue;
-                    int dx = units[j].x - b.x;
-                    int dy = units[j].y - b.y;
+                    if (units[j].state == USTATE_GARRISONED) continue;  // safe inside
+                    if (units[j].owner == b.owner || units[j].type == UNIT_SHEEP) continue;
+                    int dx = units[j].x - cx;
+                    int dy = units[j].y - cy;
                     int dist = dx*dx + dy*dy;
                     if (dist < bestDist) {
                         bestDist = dist;
@@ -181,6 +190,7 @@ void buildings_update(GameState& gs, TerrainMap& terrain) {
                                 int uid = unit_spawn(unitType, b.owner, tx * TILE_PX, ty * TILE_PX);
                                 if (uid >= 0) {
                                     spawned = true;
+                                    tile_mark_unit(tx, ty, uid);
                                     // Apply rally point
                                     if (b.rallyTX >= 0 && b.rallyTY >= 0) {
                                         u8 rtt = terrain.tileAt(b.rallyTX, b.rallyTY);
@@ -430,21 +440,29 @@ void building_ungarrison_all(int bldgIdx, TerrainMap& terrain) {
             continue;
         }
 
-        // Find adjacent tile to place unit (skip occupied tiles to avoid stacking)
+        // Find adjacent tile to place unit: free tiles first, then any passable
+        // one (stacking beats losing the unit), then the building's own corner.
         bool placed = false;
-        for (int dy = -1; dy <= bh && !placed; dy++) {
-            for (int dx = -1; dx <= bw && !placed; dx++) {
-                if (dx >= 0 && dx < bw && dy >= 0 && dy < bh) continue;
-                int tx = bx + dx;
-                int ty = by + dy;
-                if (terrain.passable(tx, ty) && !tile_has_unit(tx, ty)) {
-                    units[ui].x = tx * TILE_PX;
-                    units[ui].y = ty * TILE_PX;
-                    units[ui].state = USTATE_IDLE;
-                    placed = true;
+        for (int pass = 0; pass < 2 && !placed; pass++) {
+            for (int dy = -1; dy <= bh && !placed; dy++) {
+                for (int dx = -1; dx <= bw && !placed; dx++) {
+                    if (dx >= 0 && dx < bw && dy >= 0 && dy < bh) continue;
+                    int tx = bx + dx;
+                    int ty = by + dy;
+                    if (terrain.passable(tx, ty) && (pass == 1 || !tile_has_unit(tx, ty))) {
+                        units[ui].x = tx * TILE_PX;
+                        units[ui].y = ty * TILE_PX;
+                        tile_mark_unit(tx, ty, ui);
+                        placed = true;
+                    }
                 }
             }
         }
+        if (!placed) {
+            units[ui].x = b.x;
+            units[ui].y = b.y;
+        }
+        units[ui].state = USTATE_IDLE;
         b.garrison[g] = -1;
     }
     b.garrisonCount = 0;

@@ -35,6 +35,13 @@ static void rebuild_occupancy() {
     }
 }
 
+// Record a unit placed mid-frame (spawn, ungarrison) so the next one placed
+// in the same frame doesn't land on the same tile.
+void tile_mark_unit(int tx, int ty, int unitIdx) {
+    if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return;
+    tileOccupant[ty][tx] = unitIdx;
+}
+
 // Check whether a map tile is currently occupied by any unit.
 // Used externally by buildings.cpp for spawn/ungarrison placement.
 bool tile_has_unit(int tx, int ty) {
@@ -1104,8 +1111,13 @@ static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
     int rdy = bCenterY - u.y;
     u.direction = dir_from_delta(rdx, rdy);
 
-    // Advance build progress (1 point per frame per villager)
+    // Advance build progress (1 point per frame per villager). The foundation
+    // starts at a tenth of its hit points and gains the rest as it goes up.
+    int hpBase = bst.hp / 10;
+    int hpBefore = hpBase + (bst.hp - hpBase) * b.buildProgress / bst.buildTime;
     b.buildProgress++;
+    int hpAfter = hpBase + (bst.hp - hpBase) * b.buildProgress / bst.buildTime;
+    b.hp += hpAfter - hpBefore;
     if (b.buildProgress == bst.buildTime && u.owner == 0) {
         sound_play(SFX_BUILDING_COMPLETE);
     }
@@ -1224,16 +1236,27 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
         int bCenterY = bt.y + (bst.tileH * TILE_PX) / 2;
         int dx = bCenterX - u.x;
         int dy = bCenterY - u.y;
-        int dist2 = dx * dx + dy * dy;
-        int rangePx = playerUnitStats[u.owner][u.type].range * TILE_PX + TILE_PX; // extra reach for buildings
+        // Reach is measured in tiles from the edge of the footprint, not from
+        // its centre: a melee unit beside a 4x4 building is 3 tiles from the
+        // centre and could never hit it.
+        int utx = (u.x + TILE_PX / 2) / TILE_PX;
+        int uty = (u.y + TILE_PX / 2) / TILE_PX;
+        int bx0 = bt.x / TILE_PX, by0 = bt.y / TILE_PX;
+        int gapX = (utx < bx0) ? bx0 - utx : (utx >= bx0 + bst.tileW) ? utx - (bx0 + bst.tileW - 1) : 0;
+        int gapY = (uty < by0) ? by0 - uty : (uty >= by0 + bst.tileH) ? uty - (by0 + bst.tileH - 1) : 0;
+        int gap = (gapX > gapY) ? gapX : gapY;
 
-        if (dist2 > rangePx * rangePx) {
+        if (gap > playerUnitStats[u.owner][u.type].range) {
             // Move toward building (save target — unit_command_move clears it)
             s8 savedBldg = u.attackBldgTarget;
             int idx = &u - units;
+            u.state = USTATE_IDLE;
             unit_command_move(idx, bt.x, bt.y, terrain);
+            if (u.state != USTATE_MOVING) {  // can't get there: give up
+                u.attackBldgTarget = -1;
+                return;
+            }
             u.attackBldgTarget = savedBldg;
-            u.state = USTATE_MOVING;
             return;
         }
 
@@ -1307,9 +1330,13 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
         // Move toward target (save target — unit_command_move clears it)
         s8 savedTarget = u.attackTarget;
         int idx = &u - units;
+        u.state = USTATE_IDLE;
         unit_command_move(idx, target.x, target.y, terrain);
+        if (u.state != USTATE_MOVING) {  // can't get there: give up
+            u.attackTarget = -1;
+            return;
+        }
         u.attackTarget = savedTarget;
-        u.state = USTATE_MOVING;
         return;
     }
 
