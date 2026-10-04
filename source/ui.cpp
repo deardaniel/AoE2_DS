@@ -226,20 +226,43 @@ static void ui_draw_status_bar(const GameState& gs) {
         for (int x = 0; x < 256; x++)
             minimapVram[y * 256 + x] = bgTex[y * 256 + x];
 
-    int x = 4, y = (STATUS_BAR_H - RES_ICON_H) / 2;
+    int y = (STATUS_BAR_H - RES_ICON_H) / 2;
     int textY = y + 1;
 
-    ui_blit_icon(x, y, icon_food, ICON_FOOD_W, RES_ICON_H); x += ICON_FOOD_W + 1;
-    x = font_draw_num_16(minimapVram, 256, 192, x, textY, p.resources[RES_FOOD], COL_WHITE, gameFont); x += 6;
+    // Left: the four stockpiles. Right: population and age (I-IV), as on the
+    // game's own top bar. The gaps close up as the numbers grow, and the
+    // population icon is the first thing to go if it still doesn't fit.
+    static const u16* const ICON[RES_COUNT] = { icon_food, icon_wood, icon_gold, icon_stone };
+    static const char* const AGE_NUMERAL[AGE_COUNT] = { "I", "II", "III", "IV" };
+    char num[RES_COUNT][8], pop[12];
+    int used = 0;
+    for (int r = 0; r < RES_COUNT; r++) {
+        snprintf(num[r], sizeof(num[r]), "%d", p.resources[r]);
+        used += 16 + 1 + font_string_width(gameFont, num[r]);
+    }
+    snprintf(pop, sizeof(pop), "%d/%d", p.popCount, p.popCap);
+    const char* age = AGE_NUMERAL[p.age];
+    int popW = font_string_width(gameFont, pop), ageW = font_string_width(gameFont, age);
+    bool popIcon = true;
+    int spare = 256 - 3 - 3 - used - (ICON_POP_W + 1 + popW + 5 + ageW);
+    if (spare < 4 * 2) { popIcon = false; spare += ICON_POP_W + 1; }
+    int gap = spare / 4;
+    if (gap > 6) gap = 6;
+    if (gap < 1) gap = 1;
 
-    ui_blit_icon(x, y, icon_wood, ICON_WOOD_W, RES_ICON_H); x += ICON_WOOD_W + 1;
-    x = font_draw_num_16(minimapVram, 256, 192, x, textY, p.resources[RES_WOOD], COL_WHITE, gameFont); x += 6;
+    int x = 3;
+    for (int r = 0; r < RES_COUNT; r++) {
+        ui_blit_icon(x, y, ICON[r], 16, RES_ICON_H); x += 16 + 1;
+        x = font_draw_str_16(minimapVram, 256, 192, x, textY, num[r], COL_WHITE, gameFont) + gap;
+    }
 
-    ui_blit_icon(x, y, icon_gold, ICON_GOLD_W, RES_ICON_H); x += ICON_GOLD_W + 1;
-    x = font_draw_num_16(minimapVram, 256, 192, x, textY, p.resources[RES_GOLD], COL_WHITE, gameFont); x += 6;
-
-    ui_blit_icon(x, y, icon_stone, ICON_STONE_W, RES_ICON_H); x += ICON_STONE_W + 1;
-    x = font_draw_num_16(minimapVram, 256, 192, x, textY, p.resources[RES_STONE], COL_WHITE, gameFont);
+    x = 256 - 3 - ageW;
+    font_draw_str_16(minimapVram, 256, 192, x, textY, age, COL_GOLD, gameFont);
+    x -= 5 + popW;
+    // Housed (no room for another unit): the count turns yellow
+    font_draw_str_16(minimapVram, 256, 192, x, textY, pop,
+                     (p.popCount >= p.popCap) ? COL_YELLOW : COL_WHITE, gameFont);
+    if (popIcon) ui_blit_icon(x - 1 - ICON_POP_W, y, icon_pop, ICON_POP_W, RES_ICON_H);
 }
 
 // ---------------------------------------------------------------------------
@@ -450,20 +473,8 @@ static void ui_draw_info_panel(const GameState& gs, const TerrainMap& terrain) {
 
     // --- Always-shown info ---
 
-    // Population
+    // (Population and age are on the status bar)
     int x = TX;
-    x = font_draw_str_16(minimapVram, 256, 192, x, ty, "Pop:", colText, gameFont);
-    x = font_draw_num_16(minimapVram, 256, 192, x, ty, p0.popCount, colText, gameFont);
-    x = font_draw_str_16(minimapVram, 256, 192, x, ty, "/", colText, gameFont);
-    font_draw_num_16(minimapVram, 256, 192, x, ty, p0.popCap, colText, gameFont);
-    ty += 12;
-
-    // Age
-    static const char* AGE_SHORT[] = { "Dark", "Feudal", "Castle", "Imperial" };
-    x = font_draw_str_16(minimapVram, 256, 192, TX, ty, "Age:", colText, gameFont);
-    font_draw_str_16(minimapVram, 256, 192, x, ty, AGE_SHORT[p0.age], colGold, gameFont);
-    ty += 12;
-
     // Age-up progress
     if (p0.ageProgress >= 0) {
         int nextAge = p0.age + 1;
