@@ -528,6 +528,18 @@ void input_update(GameState& gs, TerrainMap& terrain) {
             buildings[gs.selectedBldg].type == BLDG_TOWN_CENTER &&
             buildings[gs.selectedBldg].garrisonCount > 0) {
             building_ungarrison_all(gs.selectedBldg, terrain);
+        } else if (gs.selectedBldg >= 0 && buildings[gs.selectedBldg].alive &&
+                   buildings[gs.selectedBldg].owner == 0 &&
+                   buildings[gs.selectedBldg].type == BLDG_TOWN_CENTER &&
+                   building_is_complete(gs.selectedBldg)) {
+            // Town bell: every villager runs for the Town Center, which
+            // shoots harder for each one inside. A again sends them back to
+            // what they were doing.
+            for (int i = 0; i < MAX_UNITS; i++) {
+                if (units[i].alive && units[i].owner == 0 && units[i].type == UNIT_VILLAGER &&
+                    units[i].state != USTATE_DEAD && units[i].state != USTATE_GARRISONED)
+                    unit_command_garrison(i, gs.selectedBldg, terrain, true);
+            }
         } else {
             for (int i = 0; i < MAX_UNITS; i++) {
                 if (units[i].alive && units[i].owner == 0 && unit_is_military(units[i].type) &&

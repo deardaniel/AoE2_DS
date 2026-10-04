@@ -915,8 +915,12 @@ static void ui_draw_controls(const GameState& gs) {
         font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "X:Next page", colCtrl, gameFont);
         font_draw_str_16(minimapVram, 256, 192, cx, cy + 24, "B:Cancel", colCtrl, gameFont);
     } else if (sel && sel->type == BLDG_TOWN_CENTER && sel->garrisonCount > 0) {
-        font_draw_str_16(minimapVram, 256, 192, cx, cy, "A:Ungarrison", colCtrl, gameFont);
-        font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "START:Train", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy, "A:Back to work", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "Tap icon:Buy", colCtrl, gameFont);
+    } else if (sel && sel->owner == 0 && sel->type == BLDG_TOWN_CENTER && gs.selectionCount == 0) {
+        font_draw_str_16(minimapVram, 256, 192, cx, cy, "A:Town bell", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "Tap icon:Buy", colCtrl, gameFont);
+        font_draw_str_16(minimapVram, 256, 192, cx, cy + 24, "B:Cancel", colCtrl, gameFont);
     } else {
         font_draw_str_16(minimapVram, 256, 192, cx, cy, "L/R:Idle villager", colCtrl, gameFont);
         font_draw_str_16(minimapVram, 256, 192, cx, cy + 12, "Y:Town Center", colCtrl, gameFont);

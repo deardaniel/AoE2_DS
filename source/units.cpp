@@ -815,7 +815,7 @@ void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
     if (path_to_building(u, idx, b, terrain)) u.state = USTATE_MOVING;
 }
 
-void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
+void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain, bool keepJob) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     if (bldgIdx < 0 || bldgIdx >= MAX_BUILDINGS || !buildings[bldgIdx].alive) return;
     units[idx].cmdQueueLen = 0;
@@ -832,8 +832,12 @@ void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
     u.attackTarget = -1;
     u.attackBldgTarget = -1;
     u.buildTarget = -1;
-    u.gatherTX = -1;
-    u.gatherTY = -1;
+    // The town bell keeps the gather target, so the villager can go back to
+    // it when let out (building_ungarrison_all)
+    if (!keepJob) {
+        u.gatherTX = -1;
+        u.gatherTY = -1;
+    }
 
     // Check if already adjacent to TC — garrison immediately
     const BuildingStats& bst = BLDG_STATS[b.type];

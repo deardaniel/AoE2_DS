@@ -77,7 +77,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain);
 void unit_command_attack(int idx, int targetIdx);
 void unit_command_attack_building(int idx, int bldgIdx);
 void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain);
-void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain);
+void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain, bool keepJob = false);
 void unit_command_patrol(int idx, s16 px, s16 py, TerrainMap& terrain);
 int  unit_at_pixel(s16 px, s16 py, int ignoreOwner = -1);
 int  unit_count(int owner);

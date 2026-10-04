@@ -488,6 +488,9 @@ void building_ungarrison_all(int bldgIdx, TerrainMap& terrain) {
         }
         units[ui].state = USTATE_IDLE;
         b.garrison[g] = -1;
+        // Back to work, if it was called in from a job by the town bell
+        if (units[ui].type == UNIT_VILLAGER && units[ui].gatherTX >= 0)
+            unit_command_gather(ui, units[ui].gatherTX, units[ui].gatherTY, terrain);
     }
     b.garrisonCount = 0;
 }
