@@ -36,4 +36,3 @@ extern u8 dirtVariantCache[DIRT_VARIANTS][ISO_TILE_W * ISO_TILE_H];
 void terrain_initPalette();
 
 // Get resource sprite data for a terrain type (NULL if none)
-const u8* terrain_get_resource_sprite(u8 ttype);

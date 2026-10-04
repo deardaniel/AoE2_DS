@@ -14,10 +14,6 @@ extern const u8 sprite_pal_bin[];
 extern const u32 sprite_pal_bin_size;
 
 // Resource object sprites (32x32 each, single frame)
-extern const u8 spr_tree_bin[];
-extern const u8 spr_gold_mine_bin[];
-extern const u8 spr_stone_mine_bin[];
-extern const u8 spr_berries_bin[];
 
 u8 tileGfxCache[TERRAIN_COUNT][ISO_TILE_W * ISO_TILE_H];
 u8 grassVariantCache[GRASS_VARIANTS][ISO_TILE_W * ISO_TILE_H];
@@ -208,17 +204,6 @@ void TerrainMap::initTileGfx() {
 
     // Initialize blend edge masks
     terrain_initBlend();
-}
-
-// Get resource sprite data for a terrain type (NULL if none)
-const u8* terrain_get_resource_sprite(u8 ttype) {
-    switch (ttype) {
-    case TERRAIN_FOREST: return spr_tree_bin;
-    case TERRAIN_GOLD:   return spr_gold_mine_bin;
-    case TERRAIN_STONE:  return spr_stone_mine_bin;
-    case TERRAIN_BERRIES: return spr_berries_bin;
-    default: return NULL;
-    }
 }
 
 // ---------------------------------------------------------------------------

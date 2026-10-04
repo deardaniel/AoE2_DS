@@ -40,6 +40,14 @@ static const SpriteGeom CONSTRUCTION_GEOM[] = {
     { 119,  65,  62,  36 },  // 4x4
 };
 
+// Resource sheets (data/spr_res_*.bin): `count` variants side by side,
+// each a cw x ch cell with (ax, ay) on the centre of its tile.
+struct ResGeom { u8 cw, ch, ax, ay, count; };
+static const ResGeom RES_GEOM_tree = { 48, 67, 24, 57, 14 };
+static const ResGeom RES_GEOM_gold = { 30, 19, 13, 8, 7 };
+static const ResGeom RES_GEOM_stone = { 29, 18, 15, 12, 7 };
+static const ResGeom RES_GEOM_berries = { 28, 20, 15, 15, 4 };
+
 // Unit sheets, named after their data/spr_*.bin
 static const SheetGeom GEOM_villager = { 7, 15, 4, 13, 5, 5, false };
 static const SheetGeom GEOM_villager_walk = { 8, 16, 5, 13, 10, 10, false };

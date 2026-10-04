@@ -1,4 +1,5 @@
 #include "input.h"
+#include "render.h"
 #include "game.h"
 #include "units.h"
 #include "buildings.h"
@@ -140,7 +141,7 @@ static void process_tap(GameState& gs, TerrainMap& terrain, int screenX, int scr
     }
 
     // Check if tapped on own building
-    int tappedBldg = building_at_tile(tileX, tileY);
+    int tappedBldg = render_pick_building(gs, screenX, screenY);
     if (tappedBldg >= 0 && buildings[tappedBldg].owner == 0) {
         // If villagers selected and building incomplete or damaged, send all to build/repair
         if (gs.selectionCount > 0 &&

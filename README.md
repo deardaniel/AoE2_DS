@@ -79,7 +79,8 @@ Sprites are extracted from AoE2 HD (Steam) SLP files and preprocessed into NDS-r
 
 ### Rebuild the sprite PNGs from the game files
 ```bash
-make assets-game   # composite_tc.py, extract_buildings.py, build_unit_sheets.py
+make assets-game   # composite_tc.py, extract_buildings.py, build_unit_sheets.py,
+                   # build_resource_sheets.py
 ```
 Each script owns the table of SLP IDs for its sprites. The IDs come from the
 game's `.dat`, looked up **by ID** (`node scripts/dump_unit_graphics.js <unit>`);

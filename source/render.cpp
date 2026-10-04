@@ -98,6 +98,10 @@ extern const u8 spr_market_bin[];
 extern const u8 spr_castle_bin[];
 extern const u8 spr_monastery_bin[];
 extern const u8 spr_university_bin[];
+extern const u8 spr_res_tree_bin[];
+extern const u8 spr_res_gold_bin[];
+extern const u8 spr_res_stone_bin[];
+extern const u8 spr_res_berries_bin[];
 extern const u8 spr_construction_1_bin[];
 extern const u8 spr_construction_2_bin[];
 extern const u8 spr_construction_3_bin[];
@@ -411,6 +415,44 @@ static void unit_ground(const Unit& u, const GameState& gs, int& gx, int& gy) {
     gy = isoY - gs.camY + ISO_TILE_H / 2;
 }
 
+// Which building is under a screen pixel? A finished building is hit only
+// where its sprite has a solid pixel within one pixel of the point — not its
+// shadow, and not the bare ground of its footprint (the Town Center's
+// forecourt). Construction sites and farms have no solid sprite to speak of,
+// so their footprint counts. The front-most hit wins.
+int render_pick_building(const GameState& gs, int screenX, int screenY) {
+    int tileX, tileY;
+    screenToTile(screenX, screenY, gs.camX, gs.camY, tileX, tileY);
+    int best = -1, bestDepth = -0x7FFFFFFF;
+    for (int i = 0; i < MAX_BUILDINGS; i++) {
+        const Building& b = buildings[i];
+        if (!b.alive) continue;
+        const BuildingStats& st = BLDG_STATS[b.type];
+        bool hit = false;
+        if (!bldg_complete(b) || buildingSheet[b.type] == NULL) {
+            int dx = tileX - b.x / TILE_PX, dy = tileY - b.y / TILE_PX;
+            hit = (dx >= 0 && dx < st.tileW && dy >= 0 && dy < st.tileH);
+        } else {
+            const SpriteGeom& g = BLDG_GEOM[b.type];
+            int sx, sy;
+            bldg_sprite_pos(b, gs, sx, sy);
+            for (int oy = -1; oy <= 1 && !hit; oy++) {
+                for (int ox = -1; ox <= 1 && !hit; ox++) {
+                    int px = screenX - sx + ox, py = screenY - sy + oy;
+                    if (px < 0 || py < 0 || px >= g.w || py >= g.h) continue;
+                    u8 v = buildingSheet[b.type][py * g.w + px];
+                    hit = (v != 0 && v != SPR_SHADOW);
+                }
+            }
+        }
+        if (!hit) continue;
+        int isoX, isoY;
+        worldToIso(b.x + st.tileW * TILE_PX, b.y + st.tileH * TILE_PX, isoX, isoY);
+        if (isoY > bestDepth) { bestDepth = isoY; best = i; }
+    }
+    return best;
+}
+
 // Generous on-screen test for a unit (its sheets' cells differ in size)
 static bool unit_on_screen(int gx, int gy) {
     return gx > -48 && gx < SCREEN_W + 48 && gy > -48 && gy < SCREEN_H + 48;
@@ -486,21 +528,36 @@ static void blit_cell(u8* buf, const u8* src, int stride, int w, int h,
     }
 }
 
-// Building blit: as blit_frame, but SPR_SHADOW pixels darken the pixel
-// underneath instead of replacing it.
-static void blit_building(u8* buf, const u8* frame, int fw, int fh, int sx, int sy) {
-    for (int py = 0; py < fh; py++) {
+// Blit with ground shadow: SPR_SHADOW pixels darken the pixel underneath
+// instead of replacing it. stride = width of the sheet the cell is cut from.
+static void blit_shadowed(u8* buf, const u8* src, int stride, int w, int h, int sx, int sy) {
+    for (int py = 0; py < h; py++) {
         int screenY = sy + py;
         if (screenY < 0 || screenY >= SCREEN_H) continue;
         u8* row = buf + screenY * 256;
-        const u8* src = frame + py * fw;
-        for (int px = 0; px < fw; px++) {
-            u8 val = src[px];
+        const u8* line = src + py * stride;
+        for (int px = 0; px < w; px++) {
+            u8 val = line[px];
             if (val == 0) continue;
             int screenX = sx + px;
             if (screenX < 0 || screenX >= SCREEN_W) continue;
             row[screenX] = (val == SPR_SHADOW) ? shadowLut[row[screenX]] : val;
         }
+    }
+}
+
+static void blit_building(u8* buf, const u8* frame, int fw, int fh, int sx, int sy) {
+    blit_shadowed(buf, frame, fw, fw, fh, sx, sy);
+}
+
+// Resource sheet for a terrain type (NULL if it has no sprite)
+static const u8* resource_sheet(u8 ttype, const ResGeom*& g) {
+    switch (ttype) {
+    case TERRAIN_FOREST:  g = &RES_GEOM_tree;    return spr_res_tree_bin;
+    case TERRAIN_GOLD:    g = &RES_GEOM_gold;    return spr_res_gold_bin;
+    case TERRAIN_STONE:   g = &RES_GEOM_stone;   return spr_res_stone_bin;
+    case TERRAIN_BERRIES: g = &RES_GEOM_berries; return spr_res_berries_bin;
+    default: return NULL;
     }
 }
 
@@ -685,34 +742,19 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
 // Draw a resource sprite (tree, gold mine, stone mine) into the bitmap buffer
 // ---------------------------------------------------------------------------
 static void render_resource_sw(u8* buf, const GameState& gs, int tx, int ty, const TerrainMap& terrain) {
-    u8 ttype = terrain.tileAt(tx, ty);
-    const u8* spr = terrain_get_resource_sprite(ttype);
-    if (!spr) return;
+    const ResGeom* g;
+    const u8* sheet = resource_sheet(terrain.tileAt(tx, ty), g);
+    if (!sheet) return;
 
     int isoX, isoY;
     tileToIso(tx, ty, isoX, isoY);
-    int sx = isoX - gs.camX;
-    int sy = isoY - gs.camY - (32 - ISO_TILE_H / 2);  // align sprite base with tile center
 
-    // Tree variety: hash-based h-flip and slight position jitter
-    bool hflip = false;
-    if (ttype == TERRAIN_FOREST) {
-        u32 h = (u32)(tx * 7 + ty * 13);
-        hflip = (h & 1);
-        sx += (int)((h >> 1) & 3) - 1;  // -1 to +2 px horizontal jitter
-        sy += (int)((h >> 3) & 1);      // 0 to 1 px vertical jitter
-    }
-
-    for (int py = 0; py < 32; py++) {
-        int screenY = sy + py;
-        if (screenY < 0 || screenY >= SCREEN_H) continue;
-        for (int px = 0; px < 32; px++) {
-            int screenX = sx + (hflip ? (31 - px) : px);
-            if (screenX < 0 || screenX >= SCREEN_W) continue;
-            u8 val = spr[py * 32 + px];
-            if (val != 0) buf[screenY * 256 + screenX] = val;
-        }
-    }
+    // Each tile shows one of the game's variants, fixed by its position
+    u32 hash = (u32)(tx * 73856093) ^ (u32)(ty * 19349663);
+    int variant = (hash >> 4) % g->count;
+    blit_shadowed(buf, sheet + variant * g->cw, g->count * g->cw, g->cw, g->ch,
+                  isoX - gs.camX + ISO_TILE_W / 2 - g->ax,
+                  isoY - gs.camY + ISO_TILE_H / 2 - g->ay);
 
     // Selection diamond when this tile is selected
     if (gs.selectedTileX == tx && gs.selectedTileY == ty) {
@@ -797,9 +839,10 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
 
                 int isoX, isoY;
                 tileToIso(tx, ty, isoX, isoY);
+                // Generous bounds: an oak is 67px tall and 48 wide
                 int sx = isoX - gs.camX;
-                int sy = isoY - gs.camY - (32 - ISO_TILE_H / 2);
-                if (sx + 32 <= 0 || sx >= SCREEN_W || sy + 32 <= 0 || sy >= SCREEN_H) continue;
+                int sy = isoY - gs.camY;
+                if (sx < -64 || sx >= SCREEN_W + 32 || sy < -16 || sy >= SCREEN_H + 72) continue;
 
                 // Sort by bottom of tile (tile center bottom in iso)
                 renderList[count].sortY = isoY + ISO_TILE_H;

@@ -155,6 +155,7 @@ assets-game:
 	@python3 scripts/composite_tc.py
 	@python3 scripts/extract_buildings.py
 	@python3 scripts/build_unit_sheets.py
+	@python3 scripts/build_resource_sheets.py
 
 #---------------------------------------------------------------------------------
 # Preprocess HD sprite PNGs into NDS-ready indexed binary data (data/*.bin)

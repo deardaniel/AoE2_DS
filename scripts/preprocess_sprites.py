@@ -129,15 +129,15 @@ ICON_SPRITES = [
     ('icon_university',    'icon_university.png',    32, 32, 1, 1, 0.889),
 ]
 
-# Resource object sprites: (output_name, filename)
-# Single-frame 32x32 sprites for resource tile overlays
+# Single-frame overlay sprites: (output_name, filename)
 RESOURCE_SPRITES = [
-    ('spr_tree',       'tree.png'),
-    ('spr_gold_mine',  'gold_mine.png'),
-    ('spr_stone_mine', 'stone_mine.png'),
     ('spr_fire',       'fire_small.png'),
-    ('spr_berries',    'berries.png'),
 ]
+
+# Resource sheets (build_resource_sheets.py): variants side by side, already
+# reduced, shadow as semi-transparent pixels. name -> sprites/res_<name>.png,
+# geometry in sprites/resources.json.
+RESOURCE_SHEETS = ['tree', 'gold', 'stone', 'berries']
 
 
 def load_hotspot(name):
@@ -340,7 +340,16 @@ def write_geom_header(building_geom, construction_geom):
               'static const SpriteGeom CONSTRUCTION_GEOM[] = {']
     for size, g in zip(CONSTRUCTION_SIZES, construction_geom):
         lines.append(f'    {{ {g[0]:3d}, {g[1]:3d}, {g[2]:3d}, {g[3]:3d} }},  // {size}x{size}')
-    lines += ['};', '', '// Unit sheets, named after their data/spr_*.bin']
+    with open(os.path.join(SPRITES_DIR, 'resources.json')) as f:
+        resources = json.load(f)
+    lines += ['};', '', '// Resource sheets (data/spr_res_*.bin): `count` variants side by side,',
+              '// each a cw x ch cell with (ax, ay) on the centre of its tile.',
+              'struct ResGeom { u8 cw, ch, ax, ay, count; };']
+    for name in RESOURCE_SHEETS:
+        g = resources[name]
+        lines.append(f'static const ResGeom RES_GEOM_{name} = {{ {g["cell"][0]}, {g["cell"][1]}, '
+                     f'{g["anchor"][0]}, {g["anchor"][1]}, {g["count"]} }};')
+    lines += ['', '// Unit sheets, named after their data/spr_*.bin']
     for filename, g in units.items():
         if filename not in png_to_bin:
             sys.exit(f"{filename} is in units.json but not in UNIT_SHEETS")
@@ -425,6 +434,15 @@ def main():
         icon_data[name] = (data, tw, th)
         all_images.append(data)
         print(f"  {filename}: {data.shape[1]}x{data.shape[0]} -> {tw}x{th}")
+
+    res_sheet_data = {}
+    for name in RESOURCE_SHEETS:
+        data = load_rgba(f'res_{name}.png')
+        if data is None:
+            sys.exit(f"res_{name}.png missing: run make assets-game")
+        res_sheet_data[name] = data
+        all_images.append(data)
+        print(f"  res_{name}.png: {data.shape[1]}x{data.shape[0]}")
 
     resource_data = {}
     for name, filename in RESOURCE_SPRITES:
@@ -543,6 +561,13 @@ def main():
         with open(out_path, 'wb') as f:
             f.write(indexed)
         print(f"  spr_construction_{size}: {w}x{h} = {len(indexed)} bytes")
+
+    for name, data in res_sheet_data.items():
+        indexed, w, h = index_rgba_image(data, palette_array, prealigned=True)
+        out_path = os.path.join(DATA_DIR, f'spr_res_{name}.bin')
+        with open(out_path, 'wb') as f:
+            f.write(indexed)
+        print(f"  spr_res_{name}: {w}x{h} = {len(indexed)} bytes")
 
     write_geom_header(building_geom, construction_geom)
 

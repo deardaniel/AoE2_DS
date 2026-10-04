@@ -115,8 +115,23 @@ lookup returns them in place of 4610–4612.
 
 The Dark Age TC is asymmetric (both lean-tos have their ridge running the same
 way) and only stands on the back half of its 4×4 footprint — the front is open
-ground. The composite is reduced by exactly 3 with the footprint centre on
+ground. `docs/reference_tc_dark_age.png` is the real game's (from the Age of
+Empires wiki) for comparison; later ages have symmetric wings, this one does
+not. Units can walk on the open tiles (`TC_SOLID` in buildings.cpp). The composite is reduced by exactly 3 with the footprint centre on
 `TC_ANCHOR`.
+
+## Resources (`scripts/build_resource_sheets.py`)
+
+Gaia units whose standing graphic holds several variants; each tile shows one.
+
+| Resource | Unit | SLP | Variants | Under graphic |
+|---|---|---|---|---|
+| Oak forest tree | 349 FOAK | 4652 | 14 | 2296 shadow |
+| Gold mine | 66 GOLDM | 2561 (nuggets only) | 7 | 4479 rock + shadow |
+| Stone mine | 102 STONM | 1034 | 7 | 4482 shadow |
+| Forage bush | 59 FORAG | 2560 | 4 | — |
+
+Other forest types: pine 350 (4654), palm 351 (4653), bamboo 348 (2293).
 
 ## Units (`scripts/build_unit_sheets.py`)
 

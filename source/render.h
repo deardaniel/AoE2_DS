@@ -7,6 +7,9 @@ struct TerrainMap;
 // Initialize HD sprite data — loads palette, sets up sprite sheet pointers
 void render_init();
 
+// Building under a screen pixel, by its sprite (-1 = none)
+int render_pick_building(const GameState& gs, int screenX, int screenY);
+
 // Software-render all visible units and buildings into bitmap buffer
 void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain);
 
