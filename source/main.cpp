@@ -105,10 +105,12 @@ static void game_start() {
 #ifdef SHOWCASE
     // Debug build (make SHOWCASE=1 or 2): lay out every building, or every
     // unit, next to the player's TC so sprites can be checked in one screenshot.
+#if SHOWCASE != 3
     for (int ty = 0; ty < 18; ty++)
         for (int tx = 0; tx < 18; tx++)
             if (tx < 2 || tx > 5 || ty < 2 || ty > 5)
                 terrain.setTile(tx, ty, TERRAIN_GRASS, 0);
+#endif
 #if SHOWCASE == 1
     {
         static const struct { u8 type, owner, tx, ty; } LAYOUT[] = {
@@ -129,7 +131,7 @@ static void game_start() {
             gameState.players[LAYOUT[i].owner].age = savedAge;
         }
     }
-#else
+#elif SHOWCASE == 2
     // One of each unit type in two rows; main loop turns them every 2 seconds
     for (int t = 0; t < UNIT_TYPE_COUNT; t++) {
         int k = t % 5, row = t / 5;
@@ -186,7 +188,7 @@ static void game_start() {
     gameState.camY = isoY - SCREEN_H / 2;
     if (gameState.camX < 0) gameState.camX = 0;
     if (gameState.camY < 0) gameState.camY = 0;
-#ifdef SHOWCASE
+#if defined(SHOWCASE) && SHOWCASE != 3
     gameState.camY = 24;
 #endif
 }
@@ -447,6 +449,19 @@ int main(void) {
 
         // AI
         ai_update(gameState, terrain);
+#if defined(SHOWCASE) && SHOWCASE == 3
+        // Scripted check: every villager goes for a sheep 2 seconds in
+        if (gameState.frameCount == 120) {
+            int sheep = -1;
+            for (int i = 0; i < MAX_UNITS; i++)
+                if (units[i].alive && units[i].owner == 0 && units[i].type == UNIT_SHEEP) { sheep = i; break; }
+            for (int i = 0; i < MAX_UNITS && sheep >= 0; i++)
+                if (units[i].alive && units[i].owner == 0 && units[i].type == UNIT_VILLAGER) {
+                    unit_command_attack(i, sheep);
+                    break;
+                }
+        }
+#endif
 #if defined(SHOWCASE) && SHOWCASE == 2
         if (gameState.frameCount % 120 == 0)
             for (int i = 0; i < MAX_UNITS; i++)

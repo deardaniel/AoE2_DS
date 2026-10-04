@@ -27,6 +27,7 @@ struct Unit {
     s8   attackBldgTarget;   // building index being attacked (-1 = none)
     s8   buildTarget;        // building index being constructed (-1 = none)
     s8   garrisonTarget;     // building index to garrison into (-1 = none)
+    s8   herdTarget;         // villager: sheep (or its carcass) being worked (-1 = none)
     u8   attackCooldown;
     u8   convertProgress;    // monk conversion progress (0-240, converts at 240)
     u8   waitCounter;        // frames waiting for blocked tile during movement

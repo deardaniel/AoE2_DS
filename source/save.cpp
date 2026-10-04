@@ -178,6 +178,7 @@ bool load_game(TerrainMap& terrain) {
         ok = ok && read_all(f, &u.stance, 1);
         ok = ok && read_all(f, &u.convertProgress, 1);
         ok = ok && read_all(f, &u.deadTimer, sizeof(u16));
+        u.herdTarget = -1;
         ok = ok && read_all(f, &u.patrolAX, sizeof(s16));
         ok = ok && read_all(f, &u.patrolAY, sizeof(s16));
         ok = ok && read_all(f, &u.patrolBX, sizeof(s16));

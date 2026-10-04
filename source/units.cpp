@@ -50,6 +50,7 @@ void units_init() {
         units[i].attackBldgTarget = -1;
         units[i].buildTarget = -1;
         units[i].garrisonTarget = -1;
+        units[i].herdTarget = -1;
         units[i].gatherTX = -1;
         units[i].gatherTY = -1;
         units[i].oamSlot = -1;
@@ -83,6 +84,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.attackBldgTarget = -1;
             u.buildTarget = -1;
             u.garrisonTarget = -1;
+            u.herdTarget = -1;
             u.attackCooldown = 0;
             u.waitCounter = 0;
             u.stance = STANCE_AGGRESSIVE;
@@ -326,8 +328,10 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
     return false;
 }
 
-// Forward declaration
+// Forward declarations
 static void unit_begin_path(Unit& u, int sx, int sy, int tx, int ty);
+static bool sheep_has_food(int idx, int owner);
+static int find_nearest_sheep(const Unit& u);
 
 // ---------------------------------------------------------------------------
 // Nudge: push an idle friendly unit out of the way
@@ -532,6 +536,7 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
         u.attackBldgTarget = -1;
         u.buildTarget = -1;
         u.garrisonTarget = -1;
+        u.herdTarget = -1;
         u.gatherTX = -1;
         u.gatherTY = -1;
         // Reset role to base when given explicit move command
@@ -557,6 +562,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     u.gatherTY = tileTY;
     u.attackTarget = -1;
     u.buildTarget = -1;
+    u.herdTarget = -1;
     u.carryType = RES_COUNT;
     u.carryAmount = 0;
 
@@ -632,6 +638,9 @@ void unit_command_attack(int idx, int targetIdx) {
     u.gatherTY = -1;
     u.convertProgress = 0;
     u.state = USTATE_ATTACKING;
+    // A villager sent at its own sheep keeps working it (see unit_update_shepherd)
+    const Unit& t = units[targetIdx];
+    u.herdTarget = (u.type == UNIT_VILLAGER && t.type == UNIT_SHEEP && t.owner == u.owner) ? targetIdx : -1;
 }
 
 void unit_command_attack_building(int idx, int bldgIdx) {
@@ -659,6 +668,7 @@ void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
     u.attackBldgTarget = -1;
     u.gatherTX = -1;
     u.gatherTY = -1;
+    u.herdTarget = -1;
     u.role = VROLE_BUILDER;
 
     Building& b = buildings[bldgIdx];
@@ -716,6 +726,7 @@ void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
     if (units[idx].type == UNIT_SHEEP) return;
 
     Unit& u = units[idx];
+    u.herdTarget = -1;
     u.garrisonTarget = bldgIdx;
     u.attackTarget = -1;
     u.attackBldgTarget = -1;
@@ -952,6 +963,16 @@ static void unit_update_returning(Unit& u, GameState& gs, TerrainMap& terrain) {
                     u.role = VROLE_BASE;
                 }
             }
+        } else if (u.herdTarget >= 0) {
+            // Back to the sheep we were working, or the next one
+            if (!sheep_has_food(u.herdTarget, u.owner)) u.herdTarget = find_nearest_sheep(u);
+            if (u.herdTarget >= 0) {
+                u.attackTarget = u.herdTarget;
+                u.state = USTATE_ATTACKING;
+            } else {
+                u.state = USTATE_IDLE;
+                u.role = VROLE_BASE;
+            }
         } else {
             u.state = USTATE_IDLE;
         }
@@ -1032,11 +1053,30 @@ static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
         }
         u.buildTarget = -1;
         u.state = USTATE_IDLE;
-        // If this was a farm, become farmer automatically
-        if (b.type == BLDG_FARM) {
-            int tx = b.x / TILE_PX;
-            int ty = b.y / TILE_PX;
-            unit_command_gather(&u - units, tx, ty, terrain);
+        int self = &u - units;
+        int btx = b.x / TILE_PX;
+        int bty = b.y / TILE_PX;
+        // Another unfinished building of ours close by? Help with that next.
+        int next = -1, nextDist = (8 * TILE_PX) * (8 * TILE_PX);
+        for (int i = 0; i < MAX_BUILDINGS; i++) {
+            if (!buildings[i].alive || buildings[i].owner != u.owner || building_is_complete(i)) continue;
+            int ddx = buildings[i].x - u.x, ddy = buildings[i].y - u.y;
+            int dist = ddx * ddx + ddy * ddy;
+            if (dist < nextDist) { nextDist = dist; next = i; }
+        }
+        int rtx, rty;
+        if (next >= 0) {
+            unit_command_build(self, next, terrain);
+        } else if (b.type == BLDG_FARM) {
+            // A farm's builder becomes its farmer
+            unit_command_gather(self, btx, bty, terrain);
+        } else if (b.type == BLDG_LUMBER_CAMP &&
+                   find_nearest_resource(btx, bty, RES_WOOD, terrain, rtx, rty)) {
+            unit_command_gather(self, rtx, rty, terrain);
+        } else if (b.type == BLDG_MINING_CAMP &&
+                   (find_nearest_resource(btx, bty, RES_GOLD, terrain, rtx, rty) ||
+                    find_nearest_resource(btx, bty, RES_STONE, terrain, rtx, rty))) {
+            unit_command_gather(self, rtx, rty, terrain);
         } else {
             u.role = VROLE_BASE;
         }
@@ -1068,6 +1108,98 @@ static void unit_update_building(Unit& u, GameState& gs, TerrainMap& terrain) {
     b.buildProgress++;
     if (b.buildProgress == bst.buildTime && u.owner == 0) {
         sound_play(SFX_BUILDING_COMPLETE);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Villager working a sheep
+//
+// The sheep is killed on contact and becomes a carcass holding
+// SHEEP_FOOD_AMOUNT food in its carryAmount. The villager carves it like any
+// other resource: fill up, walk to the drop-off, come back (herdTarget
+// remembers the carcass across the trip), and move on to the next sheep once
+// it is picked clean.
+// ---------------------------------------------------------------------------
+static bool sheep_has_food(int idx, int owner) {
+    if (idx < 0 || idx >= MAX_UNITS) return false;
+    const Unit& s = units[idx];
+    if (!s.alive || s.type != UNIT_SHEEP || s.owner != owner) return false;
+    return s.state != USTATE_DEAD || s.carryAmount > 0;
+}
+
+static int find_nearest_sheep(const Unit& u) {
+    int best = -1, bestDist = (12 * TILE_PX) * (12 * TILE_PX);
+    for (int i = 0; i < MAX_UNITS; i++) {
+        if (!sheep_has_food(i, u.owner)) continue;
+        int dx = units[i].x - u.x, dy = units[i].y - u.y;
+        int dist = dx * dx + dy * dy;
+        if (dist < bestDist) { bestDist = dist; best = i; }
+    }
+    return best;
+}
+
+static void unit_update_shepherd(Unit& u, TerrainMap& terrain) {
+    int self = &u - units;
+    if (!sheep_has_food(u.attackTarget, u.owner)) {
+        // Picked clean (or gone): drop off what we have, then the next sheep
+        u.attackTarget = -1;
+        u.herdTarget = find_nearest_sheep(u);
+        if (u.carryAmount > 0) {
+            u.state = USTATE_RETURNING;
+        } else if (u.herdTarget >= 0) {
+            u.attackTarget = u.herdTarget;
+        } else {
+            u.state = USTATE_IDLE;
+            u.role = VROLE_BASE;
+        }
+        return;
+    }
+
+    Unit& sheep = units[u.attackTarget];
+    int dtx = (sheep.x + TILE_PX / 2) / TILE_PX - (u.x + TILE_PX / 2) / TILE_PX;
+    int dty = (sheep.y + TILE_PX / 2) / TILE_PX - (u.y + TILE_PX / 2) / TILE_PX;
+    if (dtx < -1 || dtx > 1 || dty < -1 || dty > 1) {
+        // Walk over (unit_command_move clears the targets, so put them back)
+        s8 target = u.attackTarget;
+        u.state = USTATE_IDLE;
+        unit_command_move(self, sheep.x, sheep.y, terrain);
+        if (u.state != USTATE_MOVING) {  // unreachable
+            u.attackTarget = -1;
+            u.herdTarget = -1;
+            return;
+        }
+        u.attackTarget = target;
+        u.herdTarget = target;
+        return;
+    }
+
+    u.direction = dir_from_delta(sheep.x - u.x, sheep.y - u.y);
+    u.role = VROLE_FARMER;
+    if (u.carryType != RES_FOOD) {
+        u.carryType = RES_FOOD;
+        u.carryAmount = 0;
+    }
+
+    if (sheep.state != USTATE_DEAD) {
+        sheep.state = USTATE_DEAD;
+        sheep.deadTimer = 300;
+        sheep.animFrame = 0;
+        sheep.animTick = 0;
+        sheep.carryAmount = SHEEP_FOOD_AMOUNT;
+        return;
+    }
+
+    if (u.carryAmount >= playerCarryMax[u.owner]) {
+        u.attackTarget = -1;  // herdTarget brings us back after the drop-off
+        u.state = USTATE_RETURNING;
+        return;
+    }
+
+    u.gatherTick++;
+    if (u.gatherTick >= playerGatherRate[u.owner][RES_FOOD]) {
+        u.gatherTick = 0;
+        sheep.carryAmount--;
+        u.carryAmount++;
     }
 }
 
@@ -1138,6 +1270,10 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     }
 
     Unit& target = units[u.attackTarget];
+    if (u.type == UNIT_VILLAGER && u.herdTarget == u.attackTarget) {
+        unit_update_shepherd(u, terrain);
+        return;
+    }
     if (!target.alive || target.state == USTATE_DEAD) {
         u.attackTarget = -1;
         // Target already dead — retarget immediately
@@ -1155,8 +1291,13 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     int dy = target.y - u.y;
     int dist2 = dx * dx + dy * dy;
     int rangePx = playerUnitStats[u.owner][u.type].range * TILE_PX;
+    // Melee reaches every adjacent tile; a diagonal neighbour is 22px away,
+    // which a 16px circle misses, leaving the attacker shuffling forever.
+    bool inRange = (rangePx <= TILE_PX)
+        ? (dx >= -TILE_PX && dx <= TILE_PX && dy >= -TILE_PX && dy <= TILE_PX)
+        : (dist2 <= rangePx * rangePx);
 
-    if (dist2 > rangePx * rangePx) {
+    if (!inRange) {
         // Stand ground: don't chase, go idle
         if (u.stance == STANCE_STAND) {
             u.attackTarget = -1;
@@ -1184,17 +1325,6 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     // Deal damage using class-based system
     const s16* atkClass = playerUnitStats[u.owner][u.type].attack;
     const s16* defClass = playerUnitStats[target.owner][target.type].armor;
-
-    // Villager gathering from sheep: kill sheep and gain food
-    if (u.type == UNIT_VILLAGER && target.type == UNIT_SHEEP) {
-        unit_kill(u.attackTarget);
-        u.attackTarget = -1;
-        u.carryType = RES_FOOD;
-        u.carryAmount = SHEEP_FOOD_AMOUNT;
-        u.role = VROLE_FARMER;
-        u.state = USTATE_RETURNING;
-        return;
-    }
 
     // Monk conversion: gradually convert enemy unit to own side
     if (u.type == UNIT_MONK) {
@@ -1326,6 +1456,11 @@ void units_update(GameState& gs, TerrainMap& terrain) {
         if (u.state == USTATE_GARRISONED) continue;
 
         if (u.state == USTATE_DEAD) {
+            // A sheep carcass stays while it has meat, which slowly rots
+            if (u.type == UNIT_SHEEP && u.carryAmount > 0) {
+                if (u.deadTimer < 60) u.deadTimer = 60;
+                if (gs.frameCount % 120 == 0) u.carryAmount--;
+            }
             if (u.deadTimer > 0) {
                 u.deadTimer--;
                 // Advance death animation (hold last frame)
