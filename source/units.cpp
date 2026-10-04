@@ -22,14 +22,16 @@ Unit units[MAX_UNITS];
 // ---------------------------------------------------------------------------
 static s8 tileOccupant[MAP_TILES][MAP_TILES];
 
-// Rebuild the occupancy grid from scratch. Only alive, visible units are
-// tracked (dead and garrisoned units don't occupy map space).
+// Rebuild the occupancy grid from scratch. Only alive, visible, standing units
+// are tracked (dead, garrisoned and moving units don't hold a tile).
 static void rebuild_occupancy() {
     memset(tileOccupant, -1, sizeof(tileOccupant));
     for (int i = 0; i < MAX_UNITS; i++) {
         if (!units[i].alive || units[i].state == USTATE_DEAD || units[i].state == USTATE_GARRISONED) continue;
-        int tx = units[i].x / TILE_PX;
-        int ty = units[i].y / TILE_PX;
+        // Units on the move pass through each other; only standing ones hold a tile
+        if (units[i].state == USTATE_MOVING || units[i].state == USTATE_SCOUTING) continue;
+        int tx = (units[i].x + TILE_PX / 2) / TILE_PX;
+        int ty = (units[i].y + TILE_PX / 2) / TILE_PX;
         if (tx >= 0 && tx < MAP_TILES && ty >= 0 && ty < MAP_TILES)
             tileOccupant[ty][tx] = i;
     }
@@ -100,6 +102,7 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
             u.oamSlot = -1;
             u.pathLen = 0;
             u.pathIdx = 0;
+            u.subX = u.subY = 0;
             u.cmdQueueLen = 0;
             u.patrolAX = -1;
             return i;
@@ -136,32 +139,53 @@ static AStarNode astarGrid[MAP_TILES][MAP_TILES];
 static bool passMap[MAP_TILES][MAP_TILES]; // combined terrain + building passability
 static s16 openList[MAP_TILES * MAP_TILES]; // encoded as y * MAP_TILES + x
 
-// Direction offsets (8-directional)
+// Forward declarations
+static bool sheep_has_food(int idx, int owner);
+static int find_nearest_sheep(const Unit& u);
+
+// Direction offsets (8-directional), in Direction enum order N,NE,E,SE,S,SW,W,NW
 static const s8 DX8[8] = { 0, 1, 1, 1, 0,-1,-1,-1};
 static const s8 DY8[8] = {-1,-1, 0, 1, 1, 1, 0,-1};
 
-// 8-dir path indices map directly to Direction enum (both use N,NE,E,SE,S,SW,W,NW order)
-
-// Convert dx/dy delta to an 8-direction enum value
+// Nearest of the 8 directions to a vector in tile space. An axis counts once
+// it is more than half the other (tan 22.5 degrees is about 0.41).
 static Direction dir_from_delta(int dx, int dy) {
-    // Normalize to -1/0/+1
-    int sx = (dx > 0) ? 1 : (dx < 0) ? -1 : 0;
-    int sy = (dy > 0) ? 1 : (dy < 0) ? -1 : 0;
-    // Look up in DX8/DY8 table
+    int ax = (dx < 0) ? -dx : dx;
+    int ay = (dy < 0) ? -dy : dy;
+    int sx = (ax * 2 > ay) ? ((dx > 0) ? 1 : -1) : 0;
+    int sy = (ay * 2 > ax) ? ((dy > 0) ? 1 : -1) : 0;
     for (int d = 0; d < 8; d++) {
         if (DX8[d] == sx && DY8[d] == sy) return (Direction)d;
     }
-    return DIR_S; // fallback
+    return DIR_S; // zero vector
+}
+
+static int isqrt(int v) {
+    if (v <= 0) return 0;
+    int r = v, prev;
+    do { prev = r; r = (r + v / r) / 2; } while (r < prev);
+    return prev;
 }
 
 static int heuristic(int ax, int ay, int bx, int by) {
     int dx = ax - bx; if (dx < 0) dx = -dx;
     int dy = ay - by; if (dy < 0) dy = -dy;
-    return (dx > dy) ? dx : dy; // Chebyshev distance
+    // Octile distance, matching the 10/14 step costs
+    return (dx > dy) ? dx * 10 + dy * 4 : dy * 10 + dx * 4;
+}
+
+// Can a unit of this player stand on the tile? Terrain, buildings (own walls
+// act as gates) — not other units, which come and go.
+static bool tile_walkable(int tx, int ty, int owner, const TerrainMap& terrain) {
+    if (tx < 0 || tx >= MAP_TILES || ty < 0 || ty >= MAP_TILES) return false;
+    if (!terrain.passable(tx, ty)) return false;
+    int b = building_at_tile(tx, ty);
+    if (b < 0) return true;
+    return buildings[b].type == BLDG_WALL && buildings[b].owner == owner;
 }
 
 // Build combined passability map for A* pathfinding.
-// Layers: terrain → buildings → stationary units.
+// Layers: terrain -> buildings -> stationary units.
 // selfIdx excludes the pathfinding unit from the blocked set so it doesn't
 // block its own starting tile. Moving/scouting units are also excluded
 // since they'll likely clear their tile before the pathing unit arrives.
@@ -175,7 +199,6 @@ static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1, bool ski
     // Friendly walls act as gates — passable for the owning player
     for (int i = 0; i < MAX_BUILDINGS; i++) {
         if (!buildings[i].alive) continue;
-        // Friendly walls are passable (gate mechanic)
         if (buildings[i].type == BLDG_WALL && buildings[i].owner == friendlyPlayer)
             continue;
         int bx = buildings[i].x / TILE_PX;
@@ -203,127 +226,118 @@ static void build_pass_map(const TerrainMap& terrain, int selfIdx = -1, bool ski
     }
 }
 
-bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
-                    u8* outDirs, u8& outLen, int selfIdx, bool skipUnits) {
-    outLen = 0;
-    if (sx == tx && sy == ty) return true;
+// Is every tile under a unit standing at pixel (px, py) passable? A unit
+// covers one tile's worth of ground from its position.
+static bool box_clear(int px, int py) {
+    if (px < 0 || py < 0) return false;
+    int tx0 = px / TILE_PX, ty0 = py / TILE_PX;
+    int tx1 = (px + TILE_PX - 1) / TILE_PX, ty1 = (py + TILE_PX - 1) / TILE_PX;
+    if (tx1 >= MAP_TILES || ty1 >= MAP_TILES) return false;
+    return passMap[ty0][tx0] && passMap[ty0][tx1] && passMap[ty1][tx0] && passMap[ty1][tx1];
+}
 
+// Can a unit walk the straight line between two pixel positions? Sampled
+// every quarter tile against passMap.
+static bool line_clear(int x0, int y0, int x1, int y1) {
+    int dx = x1 - x0, dy = y1 - y0;
+    int adx = (dx < 0) ? -dx : dx, ady = (dy < 0) ? -dy : dy;
+    int n = ((adx > ady) ? adx : ady) / (TILE_PX / 4);
+    for (int i = 1; i <= n; i++) {
+        if (!box_clear(x0 + dx * i / n, y0 + dy * i / n)) return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Pathfinding
+//
+// A* over the tile grid, then the tile chain is pulled straight: a waypoint is
+// kept only where the unit can no longer walk a straight line from the last
+// one. Units then move between waypoints at any angle (unit_step_path), which
+// is how the original moves — not tile to tile in eight directions.
+//
+// If the target tile is blocked (a building, a resource, a standing unit) the
+// path ends on the nearest reachable tile beside it. With allowPartial the
+// same happens when the target cannot be reached at all: the unit walks to
+// the closest point it can get to instead of ignoring the order.
+//
+// On success the path is stored in the unit and pathDest is the tile it
+// really ends on. Returns false, leaving the unit's path untouched, if there
+// is nowhere better to go than where it stands and the target isn't adjacent.
+// ---------------------------------------------------------------------------
+bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
+                    Unit& u, int selfIdx, bool skipUnits, bool allowPartial) {
     // Clamp to map
     if (tx < 0) tx = 0;
     if (tx >= MAP_TILES) tx = MAP_TILES - 1;
     if (ty < 0) ty = 0;
     if (ty >= MAP_TILES) ty = MAP_TILES - 1;
 
-    // Infer friendly player from the pathfinding unit (for gate mechanic)
-    int friendlyPlayer = -1;
-    if (selfIdx >= 0 && selfIdx < MAX_UNITS && units[selfIdx].alive)
-        friendlyPlayer = units[selfIdx].owner;
-
-    // Build combined passability map (terrain + buildings + optionally units)
-    // friendlyPlayer's walls are passable (gate mechanic)
-    build_pass_map(terrain, selfIdx, skipUnits, friendlyPlayer);
+    // Build combined passability map (terrain + buildings + optionally units);
+    // the unit's own player's walls are passable (gate mechanic)
+    build_pass_map(terrain, selfIdx, skipUnits, u.owner);
 
     // Ensure start tile is passable (unit might be on a building tile)
     passMap[sy][sx] = true;
+    bool goalBlocked = !passMap[ty][tx];
 
-    // If target is impassable, find nearest passable neighbor
-    if (!passMap[ty][tx]) {
-        bool found = false;
-        for (int r = 1; r <= 5 && !found; r++) {
-            for (int d = 0; d < 8; d++) {
-                int nx = tx + DX8[d] * r;
-                int ny = ty + DY8[d] * r;
-                if (nx >= 0 && nx < MAP_TILES && ny >= 0 && ny < MAP_TILES && passMap[ny][nx]) {
-                    tx = nx; ty = ny;
-                    found = true;
-                    break;
-                }
-            }
-        }
-        if (!found) return false;
-    }
-
-    // Init grid
     memset(astarGrid, 0, sizeof(astarGrid));
     for (int y = 0; y < MAP_TILES; y++)
         for (int x = 0; x < MAP_TILES; x++)
             astarGrid[y][x].parentX = astarGrid[y][x].parentY = -1;
 
     int openCount = 0;
-
     astarGrid[sy][sx].g = 0;
-    astarGrid[sy][sx].f = heuristic(sx, sy, tx, ty) * 10;
+    astarGrid[sy][sx].f = heuristic(sx, sy, tx, ty);
     astarGrid[sy][sx].open = true;
     openList[openCount++] = sy * MAP_TILES + sx;
 
-    for (int iterations = 0; iterations < 1024; iterations++) {
-        if (openCount == 0) return false; // no path
+    int endX = -1, endY = -1;           // tile the path will end on
+    int bestX = sx, bestY = sy;         // closest tile to the target seen so far
+    int bestH = heuristic(sx, sy, tx, ty);
 
-        // Find open node with lowest f in the open list
-        int bestListIdx = 0;
-        int bestF = astarGrid[openList[0] / MAP_TILES][openList[0] % MAP_TILES].f;
+    while (openCount > 0) {
+        // Open node with the lowest f
+        int pick = 0;
+        int pickF = astarGrid[openList[0] / MAP_TILES][openList[0] % MAP_TILES].f;
         for (int i = 1; i < openCount; i++) {
-            int y = openList[i] / MAP_TILES;
-            int x = openList[i] % MAP_TILES;
-            if (astarGrid[y][x].f < bestF) {
-                bestF = astarGrid[y][x].f;
-                bestListIdx = i;
-            }
+            int f = astarGrid[openList[i] / MAP_TILES][openList[i] % MAP_TILES].f;
+            if (f < pickF) { pickF = f; pick = i; }
         }
+        int cx = openList[pick] % MAP_TILES;
+        int cy = openList[pick] / MAP_TILES;
+        openList[pick] = openList[--openCount];
+        astarGrid[cy][cx].open = false;
+        astarGrid[cy][cx].closed = true;
 
-        int bestPos = openList[bestListIdx];
-        int bestX = bestPos % MAP_TILES;
-        int bestY = bestPos / MAP_TILES;
+        int h = heuristic(cx, cy, tx, ty);
+        if (h < bestH) { bestH = h; bestX = cx; bestY = cy; }
 
-        // Swap-remove from open list
-        openList[bestListIdx] = openList[--openCount];
-
-        if (bestX == tx && bestY == ty) {
-            // Reconstruct path
-            u8 tempDirs[64];
-            int len = 0;
-            int cx = tx, cy = ty;
-            while (!(cx == sx && cy == sy) && len < 64) {
-                int px = astarGrid[cy][cx].parentX;
-                int py = astarGrid[cy][cx].parentY;
-                int dx = cx - px;
-                int dy = cy - py;
-                u8 dir = 0;
-                for (int d = 0; d < 8; d++) {
-                    if (DX8[d] == dx && DY8[d] == dy) { dir = d; break; }
-                }
-                tempDirs[len++] = dir;
-                cx = px; cy = py;
-            }
-            // Reverse into output
-            outLen = len;
-            for (int i = 0; i < len; i++) {
-                outDirs[i] = tempDirs[len - 1 - i];
-            }
-            return true;
+        int ddx = cx - tx; if (ddx < 0) ddx = -ddx;
+        int ddy = cy - ty; if (ddy < 0) ddy = -ddy;
+        if ((ddx == 0 && ddy == 0) || (goalBlocked && ddx <= 1 && ddy <= 1)) {
+            endX = cx; endY = cy;
+            break;
         }
-
-        astarGrid[bestY][bestX].open = false;
-        astarGrid[bestY][bestX].closed = true;
 
         for (int d = 0; d < 8; d++) {
-            int nx = bestX + DX8[d];
-            int ny = bestY + DY8[d];
+            int nx = cx + DX8[d];
+            int ny = cy + DY8[d];
             if (nx < 0 || nx >= MAP_TILES || ny < 0 || ny >= MAP_TILES) continue;
             if (astarGrid[ny][nx].closed) continue;
             if (!passMap[ny][nx]) continue;
 
-            // Diagonal: check corner-cutting (don't cut through obstacles)
+            // Diagonal: don't cut through the corner of an obstacle
             if (DX8[d] != 0 && DY8[d] != 0) {
-                if (!passMap[bestY][bestX + DX8[d]] || !passMap[bestY + DY8[d]][bestX]) continue;
+                if (!passMap[cy][cx + DX8[d]] || !passMap[cy + DY8[d]][cx]) continue;
             }
 
-            int ng = astarGrid[bestY][bestX].g + ((DX8[d] != 0 && DY8[d] != 0) ? 14 : 10);
+            int ng = astarGrid[cy][cx].g + ((DX8[d] != 0 && DY8[d] != 0) ? 14 : 10);
             if (!astarGrid[ny][nx].open || ng < astarGrid[ny][nx].g) {
                 astarGrid[ny][nx].g = ng;
-                astarGrid[ny][nx].f = ng + heuristic(nx, ny, tx, ty) * 10;
-                astarGrid[ny][nx].parentX = bestX;
-                astarGrid[ny][nx].parentY = bestY;
+                astarGrid[ny][nx].f = ng + heuristic(nx, ny, tx, ty);
+                astarGrid[ny][nx].parentX = cx;
+                astarGrid[ny][nx].parentY = cy;
                 if (!astarGrid[ny][nx].open) {
                     astarGrid[ny][nx].open = true;
                     openList[openCount++] = ny * MAP_TILES + nx;
@@ -332,13 +346,46 @@ bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
         }
     }
 
-    return false;
-}
+    if (endX < 0) {
+        // Target not reached: settle for the closest tile we could get to
+        if (!goalBlocked && !allowPartial) return false;
+        if (bestX == sx && bestY == sy) return false;
+        endX = bestX; endY = bestY;
+    }
 
-// Forward declarations
-static void unit_begin_path(Unit& u, int sx, int sy, int tx, int ty);
-static bool sheep_has_food(int idx, int owner);
-static int find_nearest_sheep(const Unit& u);
+    // Tile chain from the end back to the start (start tile excluded)
+    static s16 chain[MAP_TILES * MAP_TILES];
+    int chainLen = 0;
+    for (int cx = endX, cy = endY; !(cx == sx && cy == sy); ) {
+        chain[chainLen++] = cy * MAP_TILES + cx;
+        int px = astarGrid[cy][cx].parentX;
+        int py = astarGrid[cy][cx].parentY;
+        cx = px; cy = py;
+    }
+
+    // Pull it straight, walking the chain from the unit's actual position.
+    // If the path needs more waypoints than a unit holds, pathDest still
+    // names the real end and unit_step_path paths again from the last one.
+    u.pathLen = 0;
+    u.pathIdx = 0;
+    u.pathDestTX = endX;
+    u.pathDestTY = endY;
+    int ax = u.x, ay = u.y;
+    for (int i = chainLen - 1; i >= 0 && u.pathLen < Unit::PATH_WP_MAX; i--) {
+        bool last = (i == 0);
+        if (!last) {
+            // Keep going while the tile after this one is still in a straight line
+            int nxt = chain[i - 1];
+            if (line_clear(ax, ay, (nxt % MAP_TILES) * TILE_PX, (nxt / MAP_TILES) * TILE_PX)) continue;
+        }
+        u.wpX[u.pathLen] = chain[i] % MAP_TILES;
+        u.wpY[u.pathLen] = chain[i] / MAP_TILES;
+        u.pathLen++;
+        ax = (chain[i] % MAP_TILES) * TILE_PX;
+        ay = (chain[i] / MAP_TILES) * TILE_PX;
+    }
+    return true;
+}
 
 // ---------------------------------------------------------------------------
 // Nudge: push an idle friendly unit out of the way
@@ -347,123 +394,128 @@ static int find_nearest_sheep(const Unit& u);
 // the idle unit is given a 1-step path to the nearest empty adjacent tile.
 // This prevents permanent blockages where idle units clog chokepoints.
 // ---------------------------------------------------------------------------
-static void nudge_unit(int idx, int fromTX, int fromTY, const TerrainMap& terrain) {
+static void nudge_unit(int idx, const TerrainMap& terrain) {
     Unit& other = units[idx];
     int ox = other.x / TILE_PX;
     int oy = other.y / TILE_PX;
-    // Find nearest empty adjacent tile
     for (int d = 0; d < 8; d++) {
         int nx = ox + DX8[d];
         int ny = oy + DY8[d];
-        if (nx < 0 || nx >= MAP_TILES || ny < 0 || ny >= MAP_TILES) continue;
-        if (!terrain.passable(nx, ny)) continue;
+        if (!tile_walkable(nx, ny, other.owner, terrain)) continue;
         if (tileOccupant[ny][nx] >= 0) continue;
-        // Set a 1-step path
-        other.pathDirs[0] = d;
+        other.wpX[0] = nx;
+        other.wpY[0] = ny;
         other.pathLen = 1;
         other.pathIdx = 0;
         other.pathDestTX = nx;
         other.pathDestTY = ny;
-        other.stepTX = nx;
-        other.stepTY = ny;
         other.state = USTATE_MOVING;
         other.waitCounter = 0;
+        tileOccupant[ny][nx] = idx;  // claimed, so two units aren't nudged onto it
         return;
     }
 }
 
+// Path again to the same destination from where the unit stands now; goes
+// idle if there is no way.
+static void unit_repath(Unit& u, int selfIdx, const TerrainMap& terrain) {
+    int sx = (u.x + TILE_PX / 2) / TILE_PX;
+    int sy = (u.y + TILE_PX / 2) / TILE_PX;
+    if (!unit_find_path(sx, sy, u.pathDestTX, u.pathDestTY, terrain, u, selfIdx,
+                        u.state == USTATE_SCOUTING, true)) {
+        u.state = USTATE_IDLE;
+        u.pathLen = 0;
+    }
+}
+
 // ---------------------------------------------------------------------------
-// Movement along path with collision avoidance
+// Movement along the path
 //
-// Uses pre-computed step target (stepTX, stepTY) to avoid drift from
-// recalculating the target tile each frame based on current position.
+// The unit walks in a straight line toward its current waypoint at its own
+// speed (UnitStats.speed, sixteenths of a pixel per frame), keeping the
+// fraction in subX/subY so slow and diagonal movement stay exact.
 //
-// Collision rules (checked before snapping to next tile):
-//   1. Friendly idle occupant → nudge it away, then wait
-//   2. Friendly moving occupant → wait (it will clear on its own)
-//   3. After 8 frames of waiting → repath around the blocker
-//   4. Enemy occupant → step through (combat resolves overlap)
+// Entering a new tile is where it can be stopped:
+//   - the tile has become unwalkable (a building went up): path again
+//   - a friendly unit is standing there: an idle one is nudged aside, then we
+//     wait, and after 8 frames path around it
+//   - enemies never block (combat resolves the overlap), nor do moving units
 // ---------------------------------------------------------------------------
 static void unit_step_path(Unit& u, int selfIdx, const TerrainMap& terrain) {
     if (u.pathIdx >= u.pathLen) {
-        // Snap to final destination and stop
-        u.x = u.pathDestTX * TILE_PX;
-        u.y = u.pathDestTY * TILE_PX;
+        // Out of waypoints. Either the path was longer than a unit can hold,
+        // or we have arrived.
+        int ctx = (u.x + TILE_PX / 2) / TILE_PX;
+        int cty = (u.y + TILE_PX / 2) / TILE_PX;
+        if (u.pathLen > 0 && (ctx != u.pathDestTX || cty != u.pathDestTY)) {
+            unit_repath(u, selfIdx, terrain);
+            if (u.state != USTATE_IDLE && u.pathLen > 0) return;
+        }
         u.state = USTATE_IDLE;
         u.pathLen = 0;
+        u.subX = u.subY = 0;
         u.waitCounter = 0;
+        tile_mark_unit(ctx, cty, selfIdx);
         return;
     }
 
+    // Speed in sixteenths of a pixel, slowed by the terrain underfoot
     int speed = playerUnitStats[u.owner][u.type].speed;
-    // Apply terrain speed multiplier based on current tile
-    {
-        int utx = u.x / TILE_PX, uty = u.y / TILE_PX;
-        if (utx >= 0 && utx < MAP_TILES && uty >= 0 && uty < MAP_TILES) {
-            u8 tt = terrain.tileAt(utx, uty);
-            speed = speed * TERRAIN_SPEED_MULT[tt] / 8;
-            if (speed < 1) speed = 1;
-        }
+    int ctx = (u.x + TILE_PX / 2) / TILE_PX;
+    int cty = (u.y + TILE_PX / 2) / TILE_PX;
+    if (ctx >= 0 && ctx < MAP_TILES && cty >= 0 && cty < MAP_TILES) {
+        speed = speed * TERRAIN_SPEED_MULT[terrain.tileAt(ctx, cty)] / 8;
+        if (speed < 1) speed = 1;
     }
-    int targetPX = u.stepTX * TILE_PX;
-    int targetPY = u.stepTY * TILE_PX;
 
+    int targetPX = u.wpX[u.pathIdx] * TILE_PX;
+    int targetPY = u.wpY[u.pathIdx] * TILE_PX;
     int dx = targetPX - u.x;
     int dy = targetPY - u.y;
-    int adx = (dx < 0) ? -dx : dx;
-    int ady = (dy < 0) ? -dy : dy;
+    int dist = isqrt(dx * dx + dy * dy);
 
-    // Collision check before stepping into next tile
-    if (adx <= speed && ady <= speed) {
-        int nextTX = u.stepTX;
-        int nextTY = u.stepTY;
-        if (nextTX >= 0 && nextTX < MAP_TILES && nextTY >= 0 && nextTY < MAP_TILES) {
-            int occupant = tileOccupant[nextTY][nextTX];
-            if (occupant >= 0 && occupant != selfIdx) {
-                Unit& other = units[occupant];
-                if (other.owner == u.owner && u.state != USTATE_SCOUTING) {
-                    if (other.state == USTATE_IDLE) {
-                        // Nudge idle unit out of the way
-                        nudge_unit(occupant, nextTX, nextTY, terrain);
-                    }
-                    // Wait for tile to clear
-                    u.waitCounter++;
-                    if (u.waitCounter >= 8) {
-                        // Repath around blocker
-                        u.waitCounter = 0;
-                        int sx = u.x / TILE_PX;
-                        int sy = u.y / TILE_PX;
-                        if (unit_find_path(sx, sy, u.pathDestTX, u.pathDestTY, terrain,
-                                           u.pathDirs, u.pathLen, selfIdx)) {
-                            unit_begin_path(u, sx, sy, u.pathDestTX, u.pathDestTY);
-                        } else {
-                            u.state = USTATE_IDLE;
-                            u.pathLen = 0;
-                        }
-                    }
-                    return; // don't step this frame
-                }
-                // Enemy: step anyway (overlap acceptable in combat)
-            }
-        }
-        u.waitCounter = 0;
-
-        // Close enough — snap to tile origin and advance path
-        u.x = targetPX;
-        u.y = targetPY;
-        u.pathIdx++;
-        // Compute next step's target tile
-        if (u.pathIdx < u.pathLen) {
-            u.stepTX += DX8[u.pathDirs[u.pathIdx]];
-            u.stepTY += DY8[u.pathDirs[u.pathIdx]];
-        }
+    int nx, ny, nsubX = 0, nsubY = 0;
+    bool reached = (dist * 16 <= speed);
+    if (reached) {
+        nx = targetPX;
+        ny = targetPY;
     } else {
-        // Move toward target (each axis independently to prevent overshoot)
-        if (adx > speed) u.x += (dx > 0) ? speed : -speed;
-        else u.x = targetPX;
-        if (ady > speed) u.y += (dy > 0) ? speed : -speed;
-        else u.y = targetPY;
+        // Step along the line, in 1/256 px, carrying the fraction
+        int totX = u.subX + dx * speed * 16 / dist;
+        int totY = u.subY + dy * speed * 16 / dist;
+        nx = u.x + (totX >> 8);
+        ny = u.y + (totY >> 8);
+        nsubX = totX & 255;
+        nsubY = totY & 255;
     }
+
+    // Entering a new tile?
+    int ntx = (nx + TILE_PX / 2) / TILE_PX;
+    int nty = (ny + TILE_PX / 2) / TILE_PX;
+    if ((ntx != ctx || nty != cty) && ntx >= 0 && ntx < MAP_TILES && nty >= 0 && nty < MAP_TILES) {
+        if (!tile_walkable(ntx, nty, u.owner, terrain)) {
+            unit_repath(u, selfIdx, terrain);
+            return;
+        }
+        int occupant = tileOccupant[nty][ntx];
+        if (occupant >= 0 && occupant != selfIdx && units[occupant].owner == u.owner &&
+            u.state != USTATE_SCOUTING) {
+            if (units[occupant].state == USTATE_IDLE) nudge_unit(occupant, terrain);
+            u.waitCounter++;
+            if (u.waitCounter >= 8) {
+                u.waitCounter = 0;
+                unit_repath(u, selfIdx, terrain);
+            }
+            return; // don't step this frame
+        }
+    }
+    u.waitCounter = 0;
+
+    u.x = nx;
+    u.y = ny;
+    u.subX = nsubX;
+    u.subY = nsubY;
+    if (reached) u.pathIdx++;
 
     // Clamp to map
     if (u.x < 0) u.x = 0;
@@ -471,23 +523,8 @@ static void unit_step_path(Unit& u, int selfIdx, const TerrainMap& terrain) {
     if (u.x > MAP_PX - TILE_PX) u.x = MAP_PX - TILE_PX;
     if (u.y > MAP_PX - TILE_PX) u.y = MAP_PX - TILE_PX;
 
-    // Direction from current path step
-    u8 dirIdx = (u.pathIdx < u.pathLen) ? u.pathIdx : u.pathLen - 1;
-    u.direction = (Direction)u.pathDirs[dirIdx];
-}
-
-// ---------------------------------------------------------------------------
-// Helper: initialize path state after unit_find_path succeeds
-// ---------------------------------------------------------------------------
-static void unit_begin_path(Unit& u, int sx, int sy, int tx, int ty) {
-    u.pathIdx = 0;
-    u.pathDestTX = tx;
-    u.pathDestTY = ty;
-    // Compute first step target tile
-    if (u.pathLen > 0) {
-        u.stepTX = sx + DX8[u.pathDirs[0]];
-        u.stepTY = sy + DY8[u.pathDirs[0]];
-    }
+    // Face the way we are walking
+    if (dx != 0 || dy != 0) u.direction = dir_from_delta(dx, dy);
 }
 
 // ---------------------------------------------------------------------------
@@ -523,6 +560,20 @@ static bool find_nearest_resource(int cx, int cy, u8 carryType, const TerrainMap
 }
 
 // ---------------------------------------------------------------------------
+// Helper: path a unit up to a building. Aims at the building tile nearest the
+// unit; that tile is blocked, so the path ends on the closest free tile beside
+// it — one search, where trying each tile round the building took up to 40.
+// ---------------------------------------------------------------------------
+static bool path_to_building(Unit& u, int idx, const Building& b, const TerrainMap& terrain) {
+    const BuildingStats& bst = BLDG_STATS[b.type];
+    int sx = u.x / TILE_PX, sy = u.y / TILE_PX;
+    int bx = b.x / TILE_PX, by = b.y / TILE_PX;
+    int tx = (sx < bx) ? bx : (sx >= bx + bst.tileW) ? bx + bst.tileW - 1 : sx;
+    int ty = (sy < by) ? by : (sy >= by + bst.tileH) ? by + bst.tileH - 1 : sy;
+    return unit_find_path(sx, sy, tx, ty, terrain, u, idx);
+}
+
+// ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
 void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
@@ -536,8 +587,9 @@ void unit_command_move(int idx, s16 px, s16 py, TerrainMap& terrain) {
     int tx = px / TILE_PX;
     int ty = py / TILE_PX;
 
-    if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen, idx)) {
-        unit_begin_path(u, sx, sy, tx, ty);
+    // A move order always goes somewhere: to the closest reachable point if
+    // the spot itself can't be reached
+    if (unit_find_path(sx, sy, tx, ty, terrain, u, idx, false, true)) {
         u.state = USTATE_MOVING;
         u.attackTarget = -1;
         u.attackBldgTarget = -1;
@@ -616,8 +668,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
         int ax = tileTX + DX8[d];
         int ay = tileTY + DY8[d];
         if (terrain.passable(ax, ay)) {
-            if (unit_find_path(sx, sy, ax, ay, terrain, u.pathDirs, u.pathLen, idx)) {
-                unit_begin_path(u, sx, sy, ax, ay);
+            if (unit_find_path(sx, sy, ax, ay, terrain, u, idx)) {
                 u.state = USTATE_MOVING; // will switch to gathering on arrival
                 pathed = true;
                 break;
@@ -626,8 +677,7 @@ void unit_command_gather(int idx, int tileTX, int tileTY, TerrainMap& terrain) {
     }
     // If resource tile itself is passable (e.g., farm), go directly
     if (!pathed && terrain.passable(tileTX, tileTY)) {
-        if (unit_find_path(sx, sy, tileTX, tileTY, terrain, u.pathDirs, u.pathLen, idx)) {
-            unit_begin_path(u, sx, sy, tileTX, tileTY);
+        if (unit_find_path(sx, sy, tileTX, tileTY, terrain, u, idx)) {
             u.state = USTATE_MOVING;
         }
     }
@@ -679,46 +729,8 @@ void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
     u.role = VROLE_BUILDER;
 
     Building& b = buildings[bldgIdx];
-    const BuildingStats& bst = BLDG_STATS[b.type];
 
-    // Path to adjacent tile of building using two-pass approach:
-    // first try unoccupied tiles so multiple builders don't stack,
-    // then fall back to any passable tile if all are occupied.
-    int bx = b.x / TILE_PX;
-    int by = b.y / TILE_PX;
-    int sx = u.x / TILE_PX;
-    int sy = u.y / TILE_PX;
-
-    // First pass: prefer unoccupied passable tiles
-    for (int dy = -1; dy <= bst.tileH; dy++) {
-        for (int dx = -1; dx <= bst.tileW; dx++) {
-            if (dx >= 0 && dx < bst.tileW && dy >= 0 && dy < bst.tileH) continue;
-            int tx = bx + dx;
-            int ty = by + dy;
-            if (terrain.passable(tx, ty) && !tile_has_unit(tx, ty)) {
-                if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen, idx)) {
-                    unit_begin_path(u, sx, sy, tx, ty);
-                    u.state = USTATE_MOVING;
-                    return;
-                }
-            }
-        }
-    }
-    // Second pass: any passable tile
-    for (int dy = -1; dy <= bst.tileH; dy++) {
-        for (int dx = -1; dx <= bst.tileW; dx++) {
-            if (dx >= 0 && dx < bst.tileW && dy >= 0 && dy < bst.tileH) continue;
-            int tx = bx + dx;
-            int ty = by + dy;
-            if (terrain.passable(tx, ty)) {
-                if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen, idx)) {
-                    unit_begin_path(u, sx, sy, tx, ty);
-                    u.state = USTATE_MOVING;
-                    return;
-                }
-            }
-        }
-    }
+    if (path_to_building(u, idx, b, terrain)) u.state = USTATE_MOVING;
 }
 
 void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
@@ -755,23 +767,7 @@ void unit_command_garrison(int idx, int bldgIdx, TerrainMap& terrain) {
         return;
     }
 
-    // Path to adjacent tile of TC
-    int sx = u.x / TILE_PX;
-    int sy = u.y / TILE_PX;
-    for (int dy = -1; dy <= bst.tileH; dy++) {
-        for (int dx = -1; dx <= bst.tileW; dx++) {
-            if (dx >= 0 && dx < bst.tileW && dy >= 0 && dy < bst.tileH) continue;
-            int tx = bx + dx;
-            int ty = by + dy;
-            if (terrain.passable(tx, ty)) {
-                if (unit_find_path(sx, sy, tx, ty, terrain, u.pathDirs, u.pathLen, idx)) {
-                    unit_begin_path(u, sx, sy, tx, ty);
-                    u.state = USTATE_MOVING;
-                    return;
-                }
-            }
-        }
-    }
+    if (path_to_building(u, idx, b, terrain)) u.state = USTATE_MOVING;
 }
 
 void unit_command_patrol(int idx, s16 px, s16 py, TerrainMap& terrain) {
@@ -984,28 +980,9 @@ static void unit_update_returning(Unit& u, GameState& gs, TerrainMap& terrain) {
             u.state = USTATE_IDLE;
         }
     } else {
-        // Path to nearest adjacent passable tile of the building
-        int sx = u.x / TILE_PX;
-        int sy = u.y / TILE_PX;
-        int bestNx = -1, bestNy = -1, bestDist = 99999;
-        for (int dy = -1; dy <= bh; dy++) {
-            for (int dx = -1; dx <= bw; dx++) {
-                if (dx >= 0 && dx < bw && dy >= 0 && dy < bh) continue; // skip building tiles
-                int nx = bx + dx;
-                int ny = by + dy;
-                if (!terrain.passable(nx, ny)) continue;
-                int dist = (nx - sx) * (nx - sx) + (ny - sy) * (ny - sy);
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    bestNx = nx;
-                    bestNy = ny;
-                }
-            }
-        }
-        if (bestNx >= 0 && unit_find_path(sx, sy, bestNx, bestNy, terrain, u.pathDirs, u.pathLen, (int)(&u - units))) {
-            unit_begin_path(u, sx, sy, bestNx, bestNy);
+        // Walk up to the building; RETURNING resumes when the path completes
+        if (path_to_building(u, &u - units, b, terrain)) {
             u.state = USTATE_MOVING;
-            // Will re-enter RETURNING when path completes
             return;
         }
         u.state = USTATE_IDLE;
@@ -1702,8 +1679,7 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                                 int fty = fleeTY + dy;
                                 if (ftx >= 0 && ftx < MAP_TILES && fty >= 0 && fty < MAP_TILES &&
                                     terrain.passable(ftx, fty)) {
-                                    if (unit_find_path(utx, uty, ftx, fty, terrain, u.pathDirs, u.pathLen, i, true)) {
-                                        unit_begin_path(u, utx, uty, ftx, fty);
+                                    if (unit_find_path(utx, uty, ftx, fty, terrain, u, i, true)) {
                                         fled = true;
                                     }
                                 }
@@ -1760,7 +1736,7 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                     u.targetY = bestTY * TILE_PX + TILE_PX / 2;
                     int sx = u.x / TILE_PX;
                     int sy = u.y / TILE_PX;
-                    if (!unit_find_path(sx, sy, bestTX, bestTY, terrain, u.pathDirs, u.pathLen, i, true)) {
+                    if (!unit_find_path(sx, sy, bestTX, bestTY, terrain, u, i, true)) {
                         // Path failed — mark nearby tiles as explored to avoid retrying
                         for (int dy2 = -2; dy2 <= 2; dy2++)
                             for (int dx2 = -2; dx2 <= 2; dx2++) {
@@ -1768,8 +1744,6 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                                 if (ex >= 0 && ex < MAP_TILES && ey >= 0 && ey < MAP_TILES)
                                     fogMap.forceExplore(u.owner, ex, ey);
                             }
-                    } else {
-                        unit_begin_path(u, sx, sy, bestTX, bestTY);
                     }
                 } else {
                     u.state = USTATE_IDLE; // map fully explored

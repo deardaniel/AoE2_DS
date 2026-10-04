@@ -118,7 +118,7 @@ Updated config.h to match real AoE2 values:
 
 ### Known Limitations (by design)
 - No Mill building — only TC accepts food
-- Path length capped at 64 steps (re-path needed for very long paths)
+- Paths hold 16 straight-line waypoints; a longer one is continued from its last waypoint
 - Tech HP bonus only applies to newly spawned units, not existing ones
 
 ## File Manifest

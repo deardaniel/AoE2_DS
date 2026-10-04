@@ -85,7 +85,7 @@ void tech_apply_bonuses(int player) {
         playerUnitStats[player][UNIT_VILLAGER].armor[DMG_PIERCE] += 1;
     }
     if (researched & (1 << TECH_WHEELBARROW)) {
-        playerUnitStats[player][UNIT_VILLAGER].speed += 1;
+        playerUnitStats[player][UNIT_VILLAGER].speed += 2;  // about +10%, as in the original
         playerCarryMax[player] += 5;
     }
 
@@ -108,7 +108,7 @@ void tech_apply_bonuses(int player) {
 
     // Castle/Imperial techs
     if (researched & (1 << TECH_HAND_CART)) {
-        playerUnitStats[player][UNIT_VILLAGER].speed += 1;
+        playerUnitStats[player][UNIT_VILLAGER].speed += 2;  // about +10%, as in the original
         playerCarryMax[player] += 7;
     }
     if (researched & (1 << TECH_HORSE_COLLAR)) {

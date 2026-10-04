@@ -36,12 +36,13 @@ struct Unit {
     u16* spriteGfx;          // OAM gfx pointer (NULL if not allocated)
     s8   oamSlot;            // OAM slot index (-1 = not visible)
 
-    // A* path
-    u8   pathLen;
-    u8   pathIdx;
-    u8   pathDirs[64]; // direction sequence
-    s8   pathDestTX, pathDestTY; // final destination tile
-    s8   stepTX, stepTY;         // target tile for current path step
+    // Path: waypoints (tiles) walked in straight lines, see unit_find_path
+    enum { PATH_WP_MAX = 16 };
+    u8   pathLen;                // waypoints in the path (0 = none)
+    u8   pathIdx;                // waypoint being walked to
+    s8   wpX[PATH_WP_MAX], wpY[PATH_WP_MAX];
+    s8   pathDestTX, pathDestTY; // tile the full path ends on
+    u8   subX, subY;             // position fraction, 1/256 px
 
     // Patrol waypoints (pixel coords; patrolling = patrolAX >= 0)
     s16  patrolAX, patrolAY;     // first waypoint (-1 = not patrolling)
@@ -87,11 +88,12 @@ int  unit_find_nearest_enemy(int unitIdx);
 // Command queue: append a waypoint command (shift-click style)
 void unit_queue_command(int idx, Unit::CmdType type, s16 x, s16 y, s8 target = -1);
 
-// A* pathfinding on tile grid.
-// selfIdx: index of the pathfinding unit (excluded from the passability map
-// so it doesn't block its own start tile). Pass -1 for external callers.
+// Find a path for unit u from tile (sx, sy) to (tx, ty) and store it in the
+// unit as straight-line waypoints (see units.cpp). selfIdx is u's index, so it
+// doesn't block its own start tile. skipUnits: ignore standing units (scouts).
+// allowPartial: if the target can't be reached, go to the closest tile that can.
 bool unit_find_path(int sx, int sy, int tx, int ty, const TerrainMap& terrain,
-                    u8* outDirs, u8& outLen, int selfIdx = -1, bool skipUnits = false);
+                    Unit& u, int selfIdx, bool skipUnits = false, bool allowPartial = false);
 
 // Tile occupancy — check if a tile is occupied by any alive, visible unit.
 // Backed by tileOccupant grid rebuilt each frame in units_update().

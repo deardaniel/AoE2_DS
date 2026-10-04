@@ -227,7 +227,7 @@ struct UnitStats {
     s16 attack[DMG_CLASS_COUNT];  // damage per class
     s16 armor[DMG_CLASS_COUNT];   // armor per class
     s16 range;      // in tiles (1 = melee)
-    s16 speed;      // pixels per update tick
+    s16 speed;      // sixteenths of a pixel per frame (16 = 1 px = 1/16 tile)
     s16 los;        // line of sight in tiles
     s16 trainTime;  // in game frames (60fps)
     int cost[RES_COUNT]; // F, W, G, S
@@ -251,22 +251,25 @@ struct BuildingStats {
 // Data tables — unit stats
 // ---------------------------------------------------------------------------
 // Stats based on real AoE2 values (wiki-verified), adapted for DSi:
-// - Speed: 1 px/tick ≈ 0.8-1.0 game speed, 2 px/tick ≈ 1.35 (cavalry)
+// - Speed: the real ratios (villager 0.8 tiles/s, militia 0.9, archer 0.96,
+//   spearman 1.0, scout 1.2, knight 1.35, ram 0.5, mangonel 0.6, monk and
+//   sheep 0.7) at 20 per tile/s, i.e. about 4.7x the original's pace like the
+//   rest of the economy
 // - Range: tiles (1 = melee, 4 = archer)
 // - Train time: scaled to 60fps (real seconds × 60)
 // - Attack/Armor: per damage class {melee, pierce, bonus_cav, bonus_inf}
 //                                hp  atk{mel,prc,cav,inf} arm{mel,prc,cav,inf} rng spd los  train   F    W    G    S   age  bldg
 static const UnitStats UNIT_STATS[UNIT_TYPE_COUNT] = {
-    /* VILLAGER  */ {  25, {3,0,0,0}, {0,0,0,0},  1,  1,  4, 1500, { 50,  0,  0,  0}, AGE_DARK,   BLDG_TOWN_CENTER },
-    /* MILITIA   */ {  40, {4,0,0,0}, {0,1,0,0},  1,  1,  4, 1260, { 60,  0, 20,  0}, AGE_DARK,   BLDG_BARRACKS },
-    /* ARCHER    */ {  30, {0,4,0,0}, {0,0,0,0},  4,  1,  6, 2100, {  0, 25, 45,  0}, AGE_FEUDAL, BLDG_ARCHERY_RANGE },
-    /* KNIGHT    */ { 100, {10,0,0,0},{2,2,0,0},  1,  2,  4, 1800, { 60,  0, 75,  0}, AGE_CASTLE, BLDG_STABLE },
-    /* SPEARMAN  */ {  45, {3,0,15,0},{0,0,0,0},  1,  1,  4, 1320, { 35, 25,  0,  0}, AGE_FEUDAL, BLDG_BARRACKS },
-    /* SCOUT     */ {  45, {5,0,0,0}, {0,2,0,0},  1,  2,  6,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_STABLE },
-    /* SHEEP     */ {  25, {0,0,0,0}, {0,0,0,0},  0,  1,  2,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_TYPE_COUNT },
-    /* RAM       */ { 175, {2,0,0,0},{-3,180,0,0}, 1,  1,  3, 2400, {  0,  0,  0, 75}, AGE_CASTLE, BLDG_CASTLE },
-    /* MANGONEL  */ {  50, {0,40,0,0},{0,6,0,0},   7,  1,  7, 2700, {  0, 160, 0,  0}, AGE_CASTLE, BLDG_CASTLE },
-    /* MONK      */ {  30, {0,0,0,0},{0,0,0,0},   9,  1,  7, 3600, {  0,   0,100, 0}, AGE_CASTLE, BLDG_MONASTERY },
+    /* VILLAGER  */ {  25, {3,0,0,0}, {0,0,0,0},  1,  16,  4, 1500, { 50,  0,  0,  0}, AGE_DARK,   BLDG_TOWN_CENTER },
+    /* MILITIA   */ {  40, {4,0,0,0}, {0,1,0,0},  1,  18,  4, 1260, { 60,  0, 20,  0}, AGE_DARK,   BLDG_BARRACKS },
+    /* ARCHER    */ {  30, {0,4,0,0}, {0,0,0,0},  4,  19,  6, 2100, {  0, 25, 45,  0}, AGE_FEUDAL, BLDG_ARCHERY_RANGE },
+    /* KNIGHT    */ { 100, {10,0,0,0},{2,2,0,0},  1,  27,  4, 1800, { 60,  0, 75,  0}, AGE_CASTLE, BLDG_STABLE },
+    /* SPEARMAN  */ {  45, {3,0,15,0},{0,0,0,0},  1,  20,  4, 1320, { 35, 25,  0,  0}, AGE_FEUDAL, BLDG_BARRACKS },
+    /* SCOUT     */ {  45, {5,0,0,0}, {0,2,0,0},  1,  24,  6,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_STABLE },
+    /* SHEEP     */ {  25, {0,0,0,0}, {0,0,0,0},  0,  14,  2,    0, {  0,  0,  0,  0}, AGE_DARK,   BLDG_TYPE_COUNT },
+    /* RAM       */ { 175, {2,0,0,0},{-3,180,0,0}, 1,  10,  3, 2400, {  0,  0,  0, 75}, AGE_CASTLE, BLDG_CASTLE },
+    /* MANGONEL  */ {  50, {0,40,0,0},{0,6,0,0},   7,  12,  7, 2700, {  0, 160, 0,  0}, AGE_CASTLE, BLDG_CASTLE },
+    /* MONK      */ {  30, {0,0,0,0},{0,0,0,0},   9,  14,  7, 3600, {  0,   0,100, 0}, AGE_CASTLE, BLDG_MONASTERY },
 };
 
 // ---------------------------------------------------------------------------
