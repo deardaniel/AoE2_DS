@@ -25,7 +25,7 @@
 #ifdef SHOWCASE
 // Profiling for debug builds: how much of a 1/60 s frame each part of the
 // loop takes, in percent, shown under the minimap (ui.cpp).
-int profPct[5];  // units, buildings+projectiles+fog+ai, terrain+fog overlay, sprites, ui
+int profPct[8];  // units, ai, ground, sprites, ui, buildings+projectiles, fog
 static u32 profMark;
 #define PROF_BEGIN() do { cpuStartTiming(2); profMark = 0; } while (0)
 #define PROF_LAP(slot) do { u32 now = cpuGetTiming(); \
@@ -478,16 +478,34 @@ int main(void) {
 
         // Game logic
         PROF_BEGIN();
+#ifdef SHOWCASE
+        {
+            extern int profPathSearches; extern u32 profPathTicks;
+            profPathSearches = 0; profPathTicks = 0;
+        }
+#endif
         units_update(gameState, terrain);
         PROF_LAP(0);
+#ifdef SHOWCASE
+        {
+            // Hold the worst frame of the last second so a screenshot catches it
+            extern u32 profPathTicks;
+            static int worstPct;
+            int pct = (int)((u64)profPathTicks * 100 / 560190);
+            if (pct > worstPct) worstPct = pct;
+            if (gameState.frameCount % 60 == 0) { profPct[7] = worstPct; worstPct = 0; }
+        }
+#endif
         buildings_update(gameState, terrain);
         projectiles_update(gameState);
         game_update(gameState);
+        PROF_LAP(5);
 
         // Fog of war (every other frame for performance)
         if ((gameState.frameCount & 1) == 0) {
             fogMap.update();
         }
+        PROF_LAP(6);
 
 #if defined(SHOWCASE) && SHOWCASE == 5
         memset(fogMap.state[0], FOG_VISIBLE, sizeof(fogMap.state[0]));

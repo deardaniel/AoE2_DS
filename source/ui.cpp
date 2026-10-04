@@ -835,11 +835,13 @@ static void ui_draw_controls(const GameState& gs) {
     // Debug builds: percent of a frame spent in units / other logic /
     // terrain / sprites / this screen (the last is a frame behind)
     {
-        extern int profPct[5];
-        char dbg[40];
-        snprintf(dbg, sizeof(dbg), "u%d l%d t%d s%d i%d", profPct[0], profPct[1], profPct[2],
-                 profPct[3], profPct[4]);
-        font_draw_str_16(minimapVram, 256, 192, 130, 2, dbg, COL_YELLOW, gameFont);
+        extern int profPct[8];
+        char dbg[48];
+        snprintf(dbg, sizeof(dbg), "u%d b%d f%d a%d", profPct[0], profPct[5], profPct[6], profPct[1]);
+        font_draw_str_16(minimapVram, 256, 192, 2, 180, dbg, COL_YELLOW, gameFont);
+        extern int profPathSearches;
+        snprintf(dbg, sizeof(dbg), "g%d s%d i%d p%d/%d", profPct[2], profPct[3], profPct[4], profPathSearches, profPct[7]);
+        font_draw_str_16(minimapVram, 256, 192, 130, 180, dbg, COL_YELLOW, gameFont);
     }
 #endif
 
