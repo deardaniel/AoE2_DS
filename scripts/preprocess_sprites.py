@@ -18,7 +18,8 @@ import struct
 import sys
 import numpy as np
 from PIL import Image
-from shared_constants import ISO_TILE_H, footprint_height, rgb_to_bgr555
+from shared_constants import (ISO_TILE_H, footprint_height, rgb_to_bgr555,
+                              TC_CANVAS, PAL_SHADOW)
 
 SPRITES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sprites')
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
@@ -91,7 +92,8 @@ UNIT_SHEETS = [
 # Content is positioned so the hotspot aligns with (ph - footH) in the canvas,
 # making the building rise above the terrain footprint naturally.
 BUILDING_SPRITES = [
-    ('spr_town_center',   'town_center.png',  128,  96, 4, 4, 0.536), # 4x4: TC composite with shadows
+    # 4x4: composite_tc.py output, already at final size and anchor (hotspot_y_ratio None = use as-is)
+    ('spr_town_center',   'town_center.png',  TC_CANVAS[0], TC_CANVAS[1], 4, 4, None),
     ('spr_house',         'house.png',          32,  32, 1, 1, 0.613), # 1x1: SLP 2223, hotspot 73/119
     ('spr_barracks',      'barracks.png',       64,  64, 2, 2, 0.681), # 2x2: SLP 2683, hotspot 141/207
     ('spr_archery_range', 'archery_range.png',  64,  80, 2, 2, 0.708), # 2x2: SLP 21, hotspot 179/253
@@ -239,9 +241,16 @@ def index_rgba_image(img_data, palette_array, target_size=None, hotspot_align=No
     If hotspot_align=(tileW, tileH, hotspot_y_ratio): auto-crops transparent
     borders, scales to fit, and positions content so that the ground level
     (at hotspot_y_ratio from top of content) aligns with the top of the
-    isometric footprint area in the canvas.
+    isometric footprint area in the canvas. A hotspot_y_ratio of None means
+    the image is already the final canvas: it is indexed untouched, and its
+    semi-transparent pixels become the PAL_SHADOW marker.
     """
-    if target_size:
+    prealigned = hotspot_align is not None and hotspot_align[2] is None
+    if prealigned:
+        if (img_data.shape[1], img_data.shape[0]) != tuple(target_size):
+            sys.exit(f"prealigned sprite is {img_data.shape[1]}x{img_data.shape[0]}, "
+                     f"expected {target_size[0]}x{target_size[1]}")
+    elif target_size:
         tw, th = target_size
         img = Image.fromarray(img_data)
 
@@ -315,6 +324,9 @@ def index_rgba_image(img_data, palette_array, target_size=None, hotspot_align=No
 
             # +16 to reserve indices 0-15 (0=transparent, 1-15=UI colors)
             indexed[opaque_indices[start:end]] = nearest + 16
+
+    if prealigned:
+        indexed[(alpha > 0) & ~opaque_mask] = PAL_SHADOW
 
     return bytes(indexed), w, h
 

@@ -189,6 +189,20 @@ static const u8* buildingSheet[BLDG_TYPE_COUNT];
 // Building sprite sizes (side length in pixels)
 static int buildingSprW[BLDG_TYPE_COUNT];
 static int buildingSprH[BLDG_TYPE_COUNT];
+// Canvas pixel that sits on the centre of the building's footprint diamond
+static int buildingAnchorX[BLDG_TYPE_COUNT];
+static int buildingAnchorY[BLDG_TYPE_COUNT];
+
+// Town Center composite canvas — must match TC_CANVAS / TC_ANCHOR in
+// scripts/shared_constants.py (scripts/composite_tc.py builds the sprite)
+static const int TC_SPR_W = 136, TC_SPR_H = 80;
+static const int TC_ANCHOR_X = 68, TC_ANCHOR_Y = 62;
+
+// Building sprite pixels with this index are ground shadow: instead of being
+// drawn they darken whatever is already in the framebuffer (PAL_SHADOW in
+// scripts/shared_constants.py).
+static const u8 SPR_SHADOW = 1;
+static u8 shadowLut[256];
 
 // ---------------------------------------------------------------------------
 // Direction to sprite frame mapping
@@ -465,7 +479,7 @@ void render_init() {
 
     // Building sprite pixel sizes (must match preprocessing target sizes)
     // Isometric: footW = (tileW+tileH)*16, sprH = footH + 16 above-ground
-    buildingSprW[BLDG_TOWN_CENTER]   = 128; buildingSprH[BLDG_TOWN_CENTER]   = 96;
+    buildingSprW[BLDG_TOWN_CENTER]   = TC_SPR_W; buildingSprH[BLDG_TOWN_CENTER] = TC_SPR_H;
     buildingSprW[BLDG_HOUSE]         = 32;  buildingSprH[BLDG_HOUSE]         = 32;
     buildingSprW[BLDG_BARRACKS]      = 64;  buildingSprH[BLDG_BARRACKS]      = 64;
     buildingSprW[BLDG_ARCHERY_RANGE] = 64;  buildingSprH[BLDG_ARCHERY_RANGE] = 80;
@@ -479,18 +493,46 @@ void render_init() {
     buildingSprW[BLDG_CASTLE]        = 96;  buildingSprH[BLDG_CASTLE]        = 128;
     buildingSprW[BLDG_MONASTERY]     = 64;  buildingSprH[BLDG_MONASTERY]     = 80;
     buildingSprW[BLDG_UNIVERSITY]    = 64;  buildingSprH[BLDG_UNIVERSITY]    = 80;
+
+    // Anchors: preprocess_sprites.py centres each building horizontally and
+    // puts the footprint centre footH/2 above the bottom of the canvas.
+    for (int t = 0; t < BLDG_TYPE_COUNT; t++) {
+        int footH = (BLDG_STATS[t].tileW + BLDG_STATS[t].tileH) * (ISO_TILE_H / 2);
+        buildingAnchorX[t] = BLDG_STATS[t].tileH * (ISO_TILE_W / 2);
+        buildingAnchorY[t] = buildingSprH[t] - footH / 2;
+    }
+    buildingAnchorX[BLDG_TOWN_CENTER] = TC_ANCHOR_X;
+    buildingAnchorY[BLDG_TOWN_CENTER] = TC_ANCHOR_Y;
+
+    // Shadow table: for every palette entry, the closest entry to that colour
+    // at ~60% brightness. Built from the live palette so it can't go stale.
+    for (int i = 0; i < 256; i++) {
+        u16 c = BG_PALETTE_SUB[i];
+        int r = ( c        & 31) * 5 / 8;
+        int g = ((c >> 5)  & 31) * 5 / 8;
+        int b = ((c >> 10) & 31) * 5 / 8;
+        int best = i, bestDist = 0x7FFFFFFF;
+        for (int j = 1; j < 256; j++) {
+            u16 d = BG_PALETTE_SUB[j];
+            int dr = ( d        & 31) - r;
+            int dg = ((d >> 5)  & 31) - g;
+            int db = ((d >> 10) & 31) - b;
+            int dist = dr * dr * 2 + dg * dg * 4 + db * db;
+            if (dist < bestDist) { bestDist = dist; best = j; }
+        }
+        shadowLut[i] = best;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Compute building sprite screen offset from worldToIso origin
 // ---------------------------------------------------------------------------
-static void bldg_sprite_offset(int tileW, int tileH, int ph, int& offX, int& offY) {
-    // Leftmost pixel of the footprint diamond comes from tile (0, tileH-1)
-    // whose isoX is -(tileH-1) * half-tile-width from the origin tile
-    offX = -(tileH - 1) * (ISO_TILE_W / 2);
-    // Above-ground height: sprite extends this many pixels above the footprint
-    int footH = (tileW + tileH) * (ISO_TILE_H / 2);
-    offY = -(ph - footH);
+static void bldg_sprite_offset(int type, int& offX, int& offY) {
+    // worldToIso gives the top-left of the origin tile's 32x16 cell, so the
+    // footprint diamond's centre is half a tile right and footH/2 down.
+    int footH = (BLDG_STATS[type].tileW + BLDG_STATS[type].tileH) * (ISO_TILE_H / 2);
+    offX = ISO_TILE_W / 2 - buildingAnchorX[type];
+    offY = footH / 2 - buildingAnchorY[type];
 }
 
 // ---------------------------------------------------------------------------
@@ -594,13 +636,11 @@ void render_sprites(const GameState& gs, const TerrainMap& terrain) {
         const BuildingStats& st = BLDG_STATS[b.type];
         int pw = buildingSprW[b.type];
         int ph = buildingSprH[b.type];
-        int tileW = st.tileW;
-        int tileH = st.tileH;
 
         int bIsoX, bIsoY;
         worldToIso(b.x, b.y, bIsoX, bIsoY);
         int offX, offY;
-        bldg_sprite_offset(tileW, tileH, ph, offX, offY);
+        bldg_sprite_offset(b.type, offX, offY);
         int sx = bIsoX - gs.camX + offX;
         int sy = bIsoY - gs.camY + offY;
         if (sx < -pw || sx >= SCREEN_W || sy < -ph || sy >= SCREEN_H) continue;
@@ -716,6 +756,24 @@ static void blit_frame(u8* buf, const u8* frame, int fw, int fh,
     }
 }
 
+// Building blit: as blit_frame, but SPR_SHADOW pixels darken the pixel
+// underneath instead of replacing it.
+static void blit_building(u8* buf, const u8* frame, int fw, int fh, int sx, int sy) {
+    for (int py = 0; py < fh; py++) {
+        int screenY = sy + py;
+        if (screenY < 0 || screenY >= SCREEN_H) continue;
+        u8* row = buf + screenY * 256;
+        const u8* src = frame + py * fw;
+        for (int px = 0; px < fw; px++) {
+            u8 val = src[px];
+            if (val == 0) continue;
+            int screenX = sx + px;
+            if (screenX < 0 || screenX >= SCREEN_W) continue;
+            row[screenX] = (val == SPR_SHADOW) ? shadowLut[row[screenX]] : val;
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Render list entry for Y-sorted drawing (back-to-front depth ordering)
 // ---------------------------------------------------------------------------
@@ -776,8 +834,8 @@ static void draw_ellipse_buf(u8* buf, int cx, int cy, int rx, int ry, u8 color) 
     #undef EPLOT
 }
 
-// Dithered filled ellipse for ground shadows (every other pixel)
-static void draw_shadow_ellipse(u8* buf, int cx, int cy, int rx, int ry, u8 color) {
+// Filled ellipse ground shadow: darkens the terrain under it
+static void draw_shadow_ellipse(u8* buf, int cx, int cy, int rx, int ry) {
     for (int y = -ry; y <= ry; y++) {
         int sy = cy + y;
         if (sy < 0 || sy >= SCREEN_H) continue;
@@ -799,9 +857,7 @@ static void draw_shadow_ellipse(u8* buf, int cx, int cy, int rx, int ry, u8 colo
         for (int x = -xw; x <= xw; x++) {
             int sx = cx + x;
             if (sx < 0 || sx >= SCREEN_W) continue;
-            // Checkerboard dither for semi-transparent look
-            if ((sx + sy) & 1) continue;
-            buf[sy * 256 + sx] = color;
+            buf[sy * 256 + sx] = shadowLut[buf[sy * 256 + sx]];
         }
     }
 }
@@ -863,7 +919,7 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
 
     // Offset for diamond footprint: left extension + above-ground height
     int offX, offY;
-    bldg_sprite_offset(tileW, tileH, ph, offX, offY);
+    bldg_sprite_offset(b.type, offX, offY);
     int sx = bScreenX + offX;
     int sy = bScreenY + offY;
 
@@ -885,6 +941,7 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
             for (int px = 0; px < pw; px++) {
                 u8& c = frame[py * pw + px];
                 if (c == 0) continue; // skip transparent
+                if (c == SPR_SHADOW) { c = 0; continue; } // no shadow until built
                 // Use a hash to pseudo-randomly select which pixels to dim
                 int hash = (px * 7 + py * 13) & 0xFF;
                 int threshold = buildPct * 255 / 100;
@@ -894,11 +951,10 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
                 }
             }
         }
-        blit_frame(buf, frame, pw, ph, sx, sy, false);
+        blit_building(buf, frame, pw, ph, sx, sy);
     } else if (!complete || buildingSheet[b.type] == NULL) {
         // Draw under-construction scaffold as diamond shape matching iso footprint
-        int footH = (tileW + tileH) * (ISO_TILE_H / 2);
-        int scaffoldBaseY = ph - footH;
+        int scaffoldBaseY = -offY;
         for (int dty = 0; dty < tileH; dty++) {
             for (int dtx = 0; dtx < tileW; dtx++) {
                 int tIsoX = (dtx - dty) * (ISO_TILE_W / 2) - offX;
@@ -928,7 +984,7 @@ static void render_building_sw(u8* buf, const GameState& gs, int i) {
             apply_color_remap(frame, pw * ph);
             sprData = frame;
         }
-        blit_frame(buf, sprData, pw, ph, sx, sy, false);
+        blit_building(buf, sprData, pw, ph, sx, sy);
 
         // Fire overlay on damaged buildings
         int maxHp = BLDG_STATS[b.type].hp;
@@ -1117,7 +1173,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         int bIsoX, bIsoY;
         worldToIso(b.x, b.y, bIsoX, bIsoY);
         int offX, offY;
-        bldg_sprite_offset(tileW, tileH, ph, offX, offY);
+        bldg_sprite_offset(b.type, offX, offY);
         int sx = bIsoX - gs.camX + offX;
         int sy = bIsoY - gs.camY + offY;
         if (sx < -pw || sx >= SCREEN_W || sy < -ph || sy >= SCREEN_H) continue;
@@ -1133,6 +1189,11 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         int bCornerIsoX, bCornerIsoY;
         worldToIso(b.x + tileW * TILE_PX, b.y + tileH * TILE_PX, bCornerIsoX, bCornerIsoY);
         renderList[count].sortY = bCornerIsoY;
+        // The TC only stands on the back half of its footprint (the front is
+        // open ground under its shadow), so units beside the front edges must
+        // draw over it: sort it by the footprint centre instead.
+        if (b.type == BLDG_TOWN_CENTER)
+            renderList[count].sortY = (bIsoY + bCornerIsoY) / 2;
         renderList[count].kind = 0;
         renderList[count].idx = i;
         renderList[count].tx = 0;
@@ -1177,6 +1238,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         Building& b = buildings[i];
         if (!b.alive) continue;
         if (b.type == BLDG_WALL || b.type == BLDG_FARM) continue; // walls/farms too small
+        if (b.type == BLDG_TOWN_CENTER) continue; // shadow is part of its sprite
         int tileW = BLDG_STATS[b.type].tileW;
         int tileH = BLDG_STATS[b.type].tileH;
         // Shadow center at building footprint center in iso
@@ -1189,7 +1251,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         int ry = tileH * ISO_TILE_H / 2 - 1;
         if (rx < 8) rx = 8;
         if (ry < 4) ry = 4;
-        draw_shadow_ellipse(buf, cx, cy, rx, ry, PAL_DARKBROWN);
+        draw_shadow_ellipse(buf, cx, cy, rx, ry);
     }
 
     // --- Pre-render pass: draw selection indicators UNDER sprites ---
@@ -1263,7 +1325,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain) 
         int pw = buildingSprW[b.type];
         int ph = buildingSprH[b.type];
         int offX, offY;
-        bldg_sprite_offset(tileW, tileH, ph, offX, offY);
+        bldg_sprite_offset(b.type, offX, offY);
         int bsx = bScreenX + offX;
         int bsy = bScreenY + offY;
         if (bsx < -pw || bsx >= SCREEN_W || bsy < -ph || bsy >= SCREEN_H) continue;

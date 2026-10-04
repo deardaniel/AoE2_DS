@@ -1,27 +1,38 @@
 #!/usr/bin/env python3
-"""Composite Town Center from multiple AoE2 SLP layers.
+"""Composite the Dark Age Town Center from its AoE2 SLP layers.
 
-The Dark Age TC (RTWC, unit 99) is composed of 9 layers from the
-RTWC1X preview graphic (Graphic 3345). Each layer references a
-GraphicDelta with a sub-graphic ID and Y offset. The compositing
-uses hotspot alignment + delta Y offsets:
+The TC (unit 109 "RTWC") is not one sprite: the game builds it from a main
+unit plus three annex units, each with its own graphic. The head unit 621
+"RTWC1X" carries graphic 3345 (RTWC1CNG), whose deltas list every piece with
+its screen offset — that list is the layout used here (dumped from
+empires2_x2_p1.dat, see scripts/dump_tc_graphics.js):
 
-  drawX = -hotspotX + deltaOffsetX
-  drawY = -hotspotY + deltaOffsetY
+  SLP 890  (0,  0)  foundation        — file not shipped with HD, skipped
+  SLP 889  (0,  0)  ground shadow     — SLP shadow commands only
+  SLP 891  (0,-48)  centre building   (annex 618 at tile offset +1,-1)
+  SLP 3596 (0,  0)  left wing posts   (main unit)
+  SLP 4612 (0,  0)  right wing posts
+  SLP 3595 (0, 24)  left far post     (annex 619 at -0.5,+0.5)
+  SLP 4611 (0, 24)  right far post
+  SLP 3594 (0, 48)  left wing roof    (annex 620 at -1,+1)
+  SLP 4610 (0, 48)  right wing roof
 
-Layer order from .dat file (RTWC1X graphic 3345 deltas):
-  0: SLP 890  (foundation/pillars)    - MISSING, skip
-  1: SLP 889  (shadow/base)           offset Y=0   ← shadow layer (SLP command 0xB)
-  2: SLP 891  (center building)       offset Y=-48
-  3: SLP 3596 (right wing roof)       offset Y=0
-  4: SLP 4641 (right wing detail)     offset Y=0
-  5: SLP 3595 (right wing supports)   offset Y=+24
-  6: SLP 4640 (right wing roof top)   offset Y=+24
-  7: SLP 3594 (left wing)             offset Y=+48
-  8: SLP 4639 (left wing roof top)    offset Y=+48
+All nine are the generic Dark Age set (RTWC1N?G). genie-dat's graphics and
+objects arrays are NOT indexed by ID — look entries up by their .id field, or
+the right-wing deltas resolve to Imperial Age pieces from other civ sets.
+
+Every layer is placed at (delta - hotspot), so the origin of the composite is
+the unit position: the CENTRE of the 4x4 footprint diamond. AoE2 tiles are
+96x48 and ours are 32x16, so the composite is reduced by exactly 3 with the
+origin kept on a pixel boundary. No fitting, cropping or ratio guessing: the
+output canvas is final and render.cpp places it by TC_ANCHOR.
+
+Output pixels are either fully opaque (building), fully transparent, or
+black with SHADOW_ALPHA (ground shadow, which preprocess_sprites.py turns
+into the shadow marker index that the renderer darkens terrain with).
 
 Usage:
-    python3 scripts/composite_tc.py [--target WxH]
+    python3 scripts/composite_tc.py [--out sprites/town_center.png] [--debug DIR]
 """
 import argparse
 import json
@@ -31,157 +42,120 @@ import subprocess
 import sys
 import tempfile
 
+import numpy as np
 from PIL import Image
 
-SLP_DIR = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/graphics'
-PALETTE = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs/interface/50500.bina'
+from shared_constants import TC_CANVAS, TC_ANCHOR, SHADOW_ALPHA
 
-# Shadow layer — genie-slp renders shadow pixels as (255,0,0).
-# We convert them to semi-transparent black for a proper ground shadow.
-SHADOW_SLP = (889, 0, 0, 'shadow (ground shadow from SLP command 0xB)')
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AOE2 = '/mnt/c/Program Files (x86)/Steam/steamapps/common/Age2HD/resources/_common/drs'
+SLP_DIR = os.path.join(AOE2, 'graphics')
+PALETTE = os.path.join(AOE2, 'interface', '50500.bina')
 
-# Layer order: back to front, from RTWC1X graphic 3345 deltas
-# (slp_id, delta_offset_x, delta_offset_y, description)
+SCALE = 3  # AoE2 tile 96x48 -> NDS tile 32x16
+
+# (slp_id, delta_x, delta_y, description), back to front
 TC_LAYERS = [
-    # SLP 890 (layer 10) is foundation — file missing, skip
-    # Base layers are all Generic (G suffix) — shared across all architectures
-    (891,  0, -48, 'center building (G)'),
-    (3596, 0,   0, 'right wing pillars (G)'),
-    (4641, 0,   0, 'wing columns (E — small, barely visible)'),
-    (3595, 0,  24, 'right wing single pillar (G)'),
-    (4639, 0,  24, 'right wing canopy (M — matches left wing style)'),
-    (3594, 0,  48, 'left wing roof (G)'),
-    (4639, 0,  48, 'left wing canopy (M — user confirmed correct)'),
+    (889,  0,   0, 'ground shadow'),
+    (891,  0, -48, 'centre building'),
+    (3596, 0,   0, 'left wing posts'),
+    (4612, 0,   0, 'right wing posts'),
+    (3595, 0,  24, 'left far post'),
+    (4611, 0,  24, 'right far post'),
+    (3594, 0,  48, 'left wing roof'),
+    (4610, 0,  48, 'right wing roof'),
 ]
 
 
 def extract_slp(slp_id, out_dir):
+    """Return (RGBA image, (hotspot_x, hotspot_y)) for frame 0 of an SLP."""
     slp_path = os.path.join(SLP_DIR, f'{slp_id}.slp')
     if not os.path.exists(slp_path):
-        print(f'SLP not found: {slp_path}', file=sys.stderr)
-        return None, None
-    cmd = ['node', 'extract-slp.js', slp_path, out_dir, PALETTE]
-    subprocess.run(cmd, check=True, capture_output=True)
+        sys.exit(f'SLP not found: {slp_path}')
+    subprocess.run(['node', os.path.join(ROOT, 'extract-slp.js'), slp_path, out_dir, PALETTE],
+                   check=True, capture_output=True, cwd=ROOT)
     img = Image.open(os.path.join(out_dir, 'frame_0.png')).convert('RGBA')
-    meta_path = os.path.join(out_dir, 'frame_0.json')
-    if os.path.exists(meta_path):
-        with open(meta_path) as f:
-            meta = json.load(f)
-        return img, (meta['hotspotX'], meta['hotspotY'])
-    return img, (0, 0)
-
-
-def shadow_from_red(img, alpha=180):
-    """Convert red shadow pixels (255,0,0) to dark shadow color.
-
-    genie-slp renders SLP shadow commands (0xB) as bright red (255,0,0,255).
-    AoE2 renders these as semi-transparent black overlaid on the terrain.
-    On NDS with indexed palette, we use a dark desaturated green/brown that
-    looks like a shadow on grass terrain. Alpha must be >128 to pass
-    preprocess_sprites.py opaque threshold.
-    """
-    pixels = img.load()
-    w, h = img.size
-    result = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    rpx = result.load()
-    # Dark olive-brown: reads as "darkened grass" after palette quantization
-    shadow_color = (30, 40, 20, alpha)
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = pixels[x, y]
-            if a > 0 and r > 200 and g < 50 and b < 50:
-                rpx[x, y] = shadow_color
-    return result
+    with open(os.path.join(out_dir, 'frame_0.json')) as f:
+        meta = json.load(f)
+    return img, (meta['hotspotX'], meta['hotspotY'])
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--target', default='128x96', help='Target WxH (default: 128x96)')
-    ap.add_argument('--out', default='sprites/town_center.png', help='Output path')
+    ap.add_argument('--out', default=os.path.join(ROOT, 'sprites', 'town_center.png'))
+    ap.add_argument('--debug', help='directory for a full-resolution composite')
     args = ap.parse_args()
 
-    tw, th = [int(x) for x in args.target.split('x')]
+    cw, ch = TC_CANVAS
+    ax, ay = TC_ANCHOR
+    # Full-resolution working canvas: the output canvas times SCALE, so the
+    # hotspot sits at (ax, ay) * SCALE and every 3x3 block maps to one pixel.
+    fw, fh = cw * SCALE, ch * SCALE
+    ox, oy = ax * SCALE, ay * SCALE
 
-    layers = []
-    shadow_layer = None
+    color = np.zeros((fh, fw, 3), dtype=np.float64)   # building RGB
+    solid = np.zeros((fh, fw), dtype=np.float64)      # building coverage
+    shadow = np.zeros((fh, fw), dtype=np.float64)     # shadow coverage
+
     tmp_dirs = []
     try:
-        # Extract shadow layer first
-        slp_id, dx, dy, name = SHADOW_SLP
-        tmp = tempfile.mkdtemp(prefix=f'tc_{slp_id}_')
-        tmp_dirs.append(tmp)
-        img, hotspot = extract_slp(slp_id, tmp)
-        if img is not None:
-            shadow_img = shadow_from_red(img, alpha=100)
-            print(f'  SLP {slp_id} ({name}): {img.size}, hotspot {hotspot}, delta ({dx},{dy})')
-            shadow_layer = (shadow_img, hotspot, dx, dy)
-        else:
-            print(f'  Skipping shadow SLP {slp_id}')
-
-        # Extract building layers
         for slp_id, dx, dy, name in TC_LAYERS:
             tmp = tempfile.mkdtemp(prefix=f'tc_{slp_id}_')
             tmp_dirs.append(tmp)
-            img, hotspot = extract_slp(slp_id, tmp)
-            if img is None:
-                print(f'  Skipping SLP {slp_id} ({name})')
-                continue
-            print(f'  SLP {slp_id} ({name}): {img.size}, hotspot {hotspot}, delta ({dx},{dy})')
-            layers.append((img, hotspot, dx, dy))
+            img, (hx, hy) = extract_slp(slp_id, tmp)
+            x0, y0 = ox + dx - hx, oy + dy - hy
+            x1, y1 = x0 + img.width, y0 + img.height
+            print(f'  SLP {slp_id} ({name}): {img.width}x{img.height} '
+                  f'hotspot ({hx},{hy}) -> ({x0 - ox},{y0 - oy})')
+            if x0 < 0 or y0 < 0 or x1 > fw or y1 > fh:
+                sys.exit(f'SLP {slp_id} falls outside TC_CANVAS {TC_CANVAS} '
+                         f'with TC_ANCHOR {TC_ANCHOR}; enlarge it in shared_constants.py '
+                         f'and render.cpp')
+
+            px = np.asarray(img, dtype=np.float64)
+            opaque = px[:, :, 3] > 0
+            # genie-slp renders SLP shadow commands as pure red
+            is_shadow = opaque & (px[:, :, 0] == 255) & (px[:, :, 1] == 0) & (px[:, :, 2] == 0)
+            is_solid = opaque & ~is_shadow
+
+            region = (slice(y0, y1), slice(x0, x1))
+            shadow[region][is_shadow] = 1.0
+            color[region][is_solid] = px[:, :, :3][is_solid]
+            solid[region][is_solid] = 1.0
     finally:
         for d in tmp_dirs:
             shutil.rmtree(d, ignore_errors=True)
 
-    if not layers:
-        print('No layers extracted!', file=sys.stderr)
-        return 1
+    if args.debug:
+        os.makedirs(args.debug, exist_ok=True)
+        dbg = np.zeros((fh, fw, 4), dtype=np.uint8)
+        dbg[shadow > 0] = (0, 0, 0, SHADOW_ALPHA)
+        dbg[solid > 0, :3] = color[solid > 0]
+        dbg[solid > 0, 3] = 255
+        Image.fromarray(dbg).save(os.path.join(args.debug, 'town_center_full.png'))
 
-    # Build draw list: shadow first, then building layers
-    all_layers = []
-    if shadow_layer:
-        all_layers.append(shadow_layer)
-    all_layers.extend(layers)
+    # Box-reduce by SCALE with coverage-weighted colour so edge pixels keep the
+    # building's colour instead of blending toward the transparent background.
+    def reduce(a):
+        return a.reshape(ch, SCALE, cw, SCALE, *a.shape[2:]).sum(axis=(1, 3))
 
-    # Calculate draw position for each layer:
-    # drawX = deltaOffsetX - hotspotX
-    # drawY = deltaOffsetY - hotspotY
-    draw_positions = []
-    for img, (hx, hy), dx, dy in all_layers:
-        draw_x = dx - hx
-        draw_y = dy - hy
-        draw_positions.append((draw_x, draw_y, img))
-        print(f'    draw at ({draw_x}, {draw_y}), size {img.size}')
+    cover = reduce(solid)
+    rgb = reduce(color * solid[:, :, None]) / np.maximum(cover, 1)[:, :, None]
+    shade = reduce(shadow * (1 - solid))
 
-    # Calculate bounding box of all layers
-    min_x = min(x for x, y, img in draw_positions)
-    max_x = max(x + img.width for x, y, img in draw_positions)
-    min_y = min(y for x, y, img in draw_positions)
-    max_y = max(y + img.height for x, y, img in draw_positions)
-    cw, ch = max_x - min_x, max_y - min_y
-    print(f'  Canvas: {cw}x{ch} (min {min_x},{min_y} max {max_x},{max_y})')
+    n = SCALE * SCALE
+    is_solid = cover * 2 >= n
+    is_shadow = ~is_solid & ((shade + cover) * 2 >= n) & (shade > 0)
 
-    # Composite all layers
-    canvas = Image.new('RGBA', (cw, ch), (0, 0, 0, 0))
-    for draw_x, draw_y, img in draw_positions:
-        paste_x = draw_x - min_x
-        paste_y = draw_y - min_y
-        canvas.alpha_composite(img, (paste_x, paste_y))
+    out = np.zeros((ch, cw, 4), dtype=np.uint8)
+    out[is_solid, :3] = np.clip(np.rint(rgb[is_solid]), 0, 255)
+    out[is_solid, 3] = 255
+    out[is_shadow] = (0, 0, 0, SHADOW_ALPHA)
 
-    # Crop to content
-    bbox = canvas.getbbox()
-    if bbox:
-        canvas = canvas.crop(bbox)
-    print(f'  Cropped: {canvas.size}')
-
-    # Scale to target, bottom-anchored
-    scale = min(tw / canvas.width, th / canvas.height)
-    nw, nh = int(canvas.width * scale), int(canvas.height * scale)
-    resized = canvas.resize((nw, nh), Image.LANCZOS)
-
-    final = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
-    final.paste(resized, ((tw - nw) // 2, th - nh), resized)
-    final.save(args.out)
-    print(f'Saved {args.out}: {tw}x{th} (content {nw}x{nh})')
+    Image.fromarray(out).save(args.out)
+    ys, xs = np.nonzero(out[:, :, 3])
+    print(f'Saved {args.out}: {cw}x{ch}, anchor {TC_ANCHOR}, '
+          f'content x {xs.min()}..{xs.max()} y {ys.min()}..{ys.max()}')
     return 0
 
 

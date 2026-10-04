@@ -71,6 +71,19 @@ UI_PALETTE_RGB = {
 }
 
 # ---------------------------------------------------------------------------
+# Town Center composite (scripts/composite_tc.py)
+# Must match TC_SPR_W/H and TC_ANCHOR_X/Y in source/render.cpp
+# ---------------------------------------------------------------------------
+TC_CANVAS = (136, 80)  # sprite canvas W x H
+TC_ANCHOR = (68, 62)   # canvas pixel of the footprint diamond's centre
+
+# Ground shadow: sprite PNGs store it as black at this alpha, the indexed
+# data as PAL_SHADOW (SPR_SHADOW in source/render.cpp), which is drawn by
+# darkening the terrain underneath.
+SHADOW_ALPHA = 96
+PAL_SHADOW   = 1
+
+# ---------------------------------------------------------------------------
 # Isometric helpers
 # ---------------------------------------------------------------------------
 
