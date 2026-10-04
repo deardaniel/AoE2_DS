@@ -13,6 +13,7 @@ Palette layout (NDS BGR555, 256 entries x 2 bytes = 512 bytes):
 Also generates a 256-byte remap table for player 2 color swapping at runtime.
 """
 
+import json
 import os
 import struct
 import sys
@@ -85,27 +86,31 @@ UNIT_SHEETS = [
     ('spr_monk_die',         'monk_death.png'),
 ]
 
-# Building sprites: (output_name, filename, target_w, target_h, tileW, tileH, hotspot_y_ratio)
-# Isometric building sizes based on tile footprint:
-#   footprint_w = (tileW + tileH) * 16, footprint_h = (tileW + tileH) * 8
-#   hotspot_y_ratio = fraction from top of content where ground level is (from SLP data)
-# Content is positioned so the hotspot aligns with (ph - footH) in the canvas,
-# making the building rise above the terrain footprint naturally.
+# Building sprites: (output_name, filename, target_w, target_h, tileW, tileH)
+# The canvas is target_w x target_h with the footprint diamond's centre at
+# (target_w / 2, target_h - footH / 2), footH = (tileW + tileH) * 8 — the
+# default anchor in render.cpp. Each PNG has a sidecar .json with its SLP
+# hotspot (written by extract_buildings.py); the building is scaled as large
+# as fits with that hotspot on the anchor.
 BUILDING_SPRITES = [
-    # 4x4: composite_tc.py output, already at final size and anchor (hotspot_y_ratio None = use as-is)
-    ('spr_town_center',   'town_center.png',  TC_CANVAS[0], TC_CANVAS[1], 4, 4, None),
-    ('spr_house',         'house.png',          32,  32, 1, 1, 0.613), # 1x1: SLP 2223, hotspot 73/119
-    ('spr_barracks',      'barracks.png',       64,  64, 2, 2, 0.681), # 2x2: SLP 2683, hotspot 141/207
-    ('spr_archery_range', 'archery_range.png',  64,  80, 2, 2, 0.708), # 2x2: SLP 21, hotspot 179/253
-    ('spr_stable',        'stable.png',         64,  64, 2, 2, 0.663), # 2x2: SLP 1009, hotspot 134/202
-    ('spr_mining_camp',   'mining_camp.png',    32,  32, 1, 1, 0.655), # 1x1: SLP 3492, hotspot 72/110
-    ('spr_lumber_camp',   'lumber_camp.png',    32,  48, 1, 1, 0.715), # 1x1: SLP 3504, hotspot 98/137
-    ('spr_wall',          'wall.png',           32,  32, 1, 1, 0.807), # 1x1: SLP 2099, hotspot 71/88
-    ('spr_tower',         'tower.png',          32,  64, 1, 1, 0.894), # 1x1: SLP 2652, hotspot 202/226
-    ('spr_market',        'market.png',         64,  80, 2, 2, 0.714), # 2x2: SLP 2278, hotspot 220/308
-    ('spr_castle',        'castle.png',         96, 128, 3, 3, 0.798), # 3x3: SLP 305, hotspot 280/351
-    ('spr_monastery',     'monastery.png',      64,  80, 2, 2, 0.801), # 2x2: SLP 278, hotspot 266/332
-    ('spr_university',    'university.png',     64,  80, 2, 2, 0.663), # 2x2: SLP 3836, hotspot 185/279
+    ('spr_house',         'house.png',          32,  32, 1, 1),
+    ('spr_barracks',      'barracks.png',       64,  64, 2, 2),
+    ('spr_archery_range', 'archery_range.png',  64,  80, 2, 2),
+    ('spr_stable',        'stable.png',         64,  64, 2, 2),
+    ('spr_mining_camp',   'mining_camp.png',    32,  32, 1, 1),
+    ('spr_lumber_camp',   'lumber_camp.png',    32,  48, 1, 1),
+    ('spr_wall',          'wall.png',           32,  32, 1, 1),
+    ('spr_tower',         'tower.png',          32,  64, 1, 1),
+    ('spr_market',        'market.png',         64,  80, 2, 2),
+    ('spr_castle',        'castle.png',         96, 128, 3, 3),
+    ('spr_monastery',     'monastery.png',      64,  80, 2, 2),
+    ('spr_university',    'university.png',     64,  80, 2, 2),
+]
+
+# Sprites that are already a finished canvas (composite_tc.py output): indexed
+# as-is, semi-transparent pixels become the PAL_SHADOW marker.
+PREALIGNED_SPRITES = [
+    ('spr_town_center',   'town_center.png',  TC_CANVAS[0], TC_CANVAS[1]),
 ]
 
 # Icon sprites for build menu: (output_name, filename, target_w, target_h, cols, rows, scale)
@@ -136,6 +141,16 @@ RESOURCE_SPRITES = [
     ('spr_fire',       'fire_small.png'),
     ('spr_berries',    'berries.png'),
 ]
+
+
+def load_hotspot(filename):
+    """Return the SLP hotspot (x, y) from a sprite's sidecar .json."""
+    path = os.path.join(SPRITES_DIR, os.path.splitext(filename)[0] + '.json')
+    if not os.path.exists(path):
+        sys.exit(f"{path} missing: run scripts/extract_buildings.py")
+    with open(path) as f:
+        meta = json.load(f)
+    return meta['hotspotX'], meta['hotspotY']
 
 
 def load_rgba(filename):
@@ -232,71 +247,54 @@ def build_shared_palette(all_rgba_images, max_colors=248):
     return palette
 
 
-def index_rgba_image(img_data, palette_array, target_size=None, hotspot_align=None):
+def index_rgba_image(img_data, palette_array, target_size=None, hotspot_align=None,
+                     prealigned=False):
     """Convert RGBA image to indexed format using the shared palette.
 
     Returns (indexed_bytes, width, height).
     Index 0 = transparent, 16-N = palette color (1-15 reserved for UI).
 
-    If hotspot_align=(tileW, tileH, hotspot_y_ratio): auto-crops transparent
-    borders, scales to fit, and positions content so that the ground level
-    (at hotspot_y_ratio from top of content) aligns with the top of the
-    isometric footprint area in the canvas. A hotspot_y_ratio of None means
-    the image is already the final canvas: it is indexed untouched, and its
-    semi-transparent pixels become the PAL_SHADOW marker.
+    hotspot_align=(tileW, tileH, (hotspot_x, hotspot_y)): scale the image as
+    large as fits in target_size with its hotspot on the canvas anchor (the
+    centre of the tileW x tileH footprint diamond).
+
+    prealigned: the image is already the final canvas; it is indexed untouched
+    and its semi-transparent pixels become the PAL_SHADOW marker.
+
+    Otherwise, with target_size: scale to fit and centre.
     """
-    prealigned = hotspot_align is not None and hotspot_align[2] is None
     if prealigned:
         if (img_data.shape[1], img_data.shape[0]) != tuple(target_size):
             sys.exit(f"prealigned sprite is {img_data.shape[1]}x{img_data.shape[0]}, "
                      f"expected {target_size[0]}x{target_size[1]}")
     elif target_size:
         tw, th = target_size
-        img = Image.fromarray(img_data)
+        # Premultiplied alpha so edge pixels don't blend toward black
+        img = Image.fromarray(img_data).convert('RGBa')
 
         if hotspot_align:
-            tileW, tileH, hotspot_ratio = hotspot_align
-            footH = footprint_height(tileW, tileH)
-            # SLP hotspot marks the CENTER of the footprint diamond, so align
-            # with the center of the footprint zone in the canvas
-            ground_row = th - footH // 2  # canvas row = footprint center
-
-            # Auto-crop transparent borders to get just the building content
-            bbox = img.split()[3].getbbox()
-            if bbox:
-                img = img.crop(bbox)
-
-            # Scale proportionally to fit within target
-            scale = min(tw / img.width, th / img.height)
-            new_w = int(img.width * scale)
-            new_h = int(img.height * scale)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-
-            if hotspot_ratio > 0:
-                # Position so hotspot (ground level) aligns with ground_row
-                hotspot_y = int(hotspot_ratio * new_h)
-                ox = (tw - new_w) // 2
-                oy = ground_row - hotspot_y  # content top, may be negative (clipped)
-            else:
-                # No hotspot: center horizontally, place at top of canvas
-                ox = (tw - new_w) // 2
-                oy = 0
-
-            result = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
-            result.paste(img, (ox, oy))
-            img_data = np.array(result)
+            tileW, tileH, (hx, hy) = hotspot_align
+            ax = tw // 2
+            ay = th - footprint_height(tileW, tileH) // 2
+            # Largest scale that keeps every edge inside the canvas
+            scale = min(ax / hx, (tw - ax) / (img.width - hx),
+                        ay / hy, (th - ay) / (img.height - hy))
+            new_w = max(1, int(img.width * scale))
+            new_h = max(1, int(img.height * scale))
+            img = img.resize((new_w, new_h), Image.LANCZOS).convert('RGBA')
+            ox = ax - int(round(hx * new_w / img_data.shape[1]))
+            oy = ay - int(round(hy * new_h / img_data.shape[0]))
         else:
-            # Default: scale and center
             scale = min(tw / img.width, th / img.height)
             new_w = int(img.width * scale)
             new_h = int(img.height * scale)
-            img = img.resize((new_w, new_h), Image.LANCZOS)
-
-            result = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
+            img = img.resize((new_w, new_h), Image.LANCZOS).convert('RGBA')
             ox = (tw - new_w) // 2
             oy = (th - new_h) // 2
-            result.paste(img, (ox, oy))
-            img_data = np.array(result)
+
+        result = Image.new('RGBA', (tw, th), (0, 0, 0, 0))
+        result.paste(img, (ox, oy))
+        img_data = np.array(result)
 
     h, w = img_data.shape[:2]
     alpha = img_data[:, :, 3].reshape(-1)
@@ -360,18 +358,22 @@ def main():
         all_images.append(data)
         print(f"  {filename}: {data.shape[1]}x{data.shape[0]}")
 
-    for name, filename, tw, th, tileW, tileH, hotspot_ratio in BUILDING_SPRITES:
+    for name, filename, tw, th, tileW, tileH in BUILDING_SPRITES:
         data = load_rgba(filename)
         if data is None:
             continue
-        # Crop to first frame if multi-frame sprite sheet (height > width)
-        # e.g., house.png is 64x192 (3 stacked frames), take first 64x64
-        if data.shape[0] > data.shape[1]:
-            frame_h = data.shape[1]  # assume square frames
-            data = data[:frame_h, :frame_h]
-        building_data[name] = (data, tw, th, tileW, tileH, hotspot_ratio)
+        building_data[name] = (data, load_hotspot(filename))
         all_images.append(data)
         print(f"  {filename}: {data.shape[1]}x{data.shape[0]} -> {tw}x{th}")
+
+    prealigned_data = {}
+    for name, filename, tw, th in PREALIGNED_SPRITES:
+        data = load_rgba(filename)
+        if data is None:
+            continue
+        prealigned_data[name] = data
+        all_images.append(data)
+        print(f"  {filename}: {data.shape[1]}x{data.shape[0]} (prealigned)")
 
     icon_data = {}
     for name, filename, tw, th, cols, rows, scale in ICON_SPRITES:
@@ -486,12 +488,22 @@ def main():
 
     # --- Process building sprites ---
     print("\nProcessing building sprites...")
-    for name, filename, tw, th, tileW, tileH, hotspot_ratio in BUILDING_SPRITES:
+    for name, filename, tw, th, tileW, tileH in BUILDING_SPRITES:
         if name not in building_data:
             continue
-        data, tw2, th2, tw3, th3, hr = building_data[name]
+        data, hotspot = building_data[name]
         indexed, w, h = index_rgba_image(data, palette_array, (tw, th),
-                                          hotspot_align=(tileW, tileH, hotspot_ratio))
+                                          hotspot_align=(tileW, tileH, hotspot))
+        out_path = os.path.join(DATA_DIR, f'{name}.bin')
+        with open(out_path, 'wb') as f:
+            f.write(indexed)
+        print(f"  {name}: {w}x{h} = {len(indexed)} bytes")
+
+    for name, filename, tw, th in PREALIGNED_SPRITES:
+        if name not in prealigned_data:
+            continue
+        indexed, w, h = index_rgba_image(prealigned_data[name], palette_array, (tw, th),
+                                          prealigned=True)
         out_path = os.path.join(DATA_DIR, f'{name}.bin')
         with open(out_path, 'wb') as f:
             f.write(indexed)
