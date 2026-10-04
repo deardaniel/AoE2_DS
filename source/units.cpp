@@ -7,6 +7,7 @@
 #include "sound.h"
 #include "projectiles.h"
 #include <string.h>
+#include <stdio.h>
 
 Unit units[MAX_UNITS];
 
@@ -116,6 +117,21 @@ int unit_spawn(u8 type, u8 owner, s16 px, s16 py) {
     }
     return -1;
 }
+
+#ifdef SHOWCASE
+// Debug builds: the last three kills, as "<owner><type> > <owner><type> @tile"
+// (killer type P = a projectile), shown on the top screen
+char dbgKills[3][20];
+void dbg_log_kill(int killerOwner, int killerType, int victim) {
+    memmove(dbgKills[1], dbgKills[0], sizeof(dbgKills[0]) * 2);
+    const Unit& v = units[victim];
+    char kt[4];
+    if (killerType < 0) { kt[0] = 'P'; kt[1] = 0; }
+    else snprintf(kt, sizeof(kt), "%d", killerType);
+    snprintf(dbgKills[0], sizeof(dbgKills[0]), "%d:%s>%d:%d@%d,%d", killerOwner, kt,
+             v.owner, v.type, v.x / TILE_PX, v.y / TILE_PX);
+}
+#endif
 
 void unit_kill(int idx) {
     if (idx < 0 || idx >= MAX_UNITS) return;
@@ -748,6 +764,7 @@ void unit_command_attack(int idx, int targetIdx) {
     if (idx < 0 || idx >= MAX_UNITS || !units[idx].alive) return;
     if (targetIdx < 0 || targetIdx >= MAX_UNITS || !units[targetIdx].alive) return;
     Unit& u = units[idx];
+    if (u.type == UNIT_SHEEP) return;  // livestock never attacks
     u.cmdQueueLen = 0;
     u.patrolAX = -1;
     u.attackTarget = targetIdx;
@@ -772,6 +789,10 @@ void unit_command_attack_building(int idx, int bldgIdx) {
     u.buildTarget = -1;
     u.gatherTX = -1;
     u.gatherTY = -1;
+    u.herdTarget = -1;
+    // Without this the order was recorded and never acted on: neither the
+    // AI's army nor the player's ever marched on a building
+    u.state = USTATE_ATTACKING;
 }
 
 void unit_command_build(int idx, int bldgIdx, TerrainMap& terrain) {
@@ -1443,6 +1464,9 @@ static void unit_update_attacking(Unit& u, GameState& gs, TerrainMap& terrain) {
     if (u.owner == 0) sound_play(SFX_SWORD_HIT);
 
     if (target.hp <= 0) {
+#ifdef SHOWCASE
+        dbg_log_kill(u.owner, u.type, u.attackTarget);
+#endif
         unit_kill(u.attackTarget);
         u.attackTarget = -1;
         // Immediately search for next enemy instead of going idle for a frame
@@ -1598,7 +1622,7 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                     break;
             }
             // Military units: auto-attack nearby enemies (stance-dependent)
-            if (u.type != UNIT_VILLAGER && u.stance != STANCE_NO_ATTACK) {
+            if (unit_is_military(u.type) && u.stance != STANCE_NO_ATTACK) {
                 if (u.stance != STANCE_STAND) {
                     // Aggressive/Defensive: search for enemies in LOS
                     int enemy = unit_find_nearest_enemy(i);
@@ -1630,7 +1654,7 @@ void units_update(GameState& gs, TerrainMap& terrain) {
                 for (int e = 0; e < MAX_UNITS; e++) {
                     if (!units[e].alive || units[e].owner == u.owner) continue;
                     if (units[e].state == USTATE_DEAD || units[e].state == USTATE_GARRISONED) continue;
-                    if (units[e].type == UNIT_VILLAGER) continue; // don't flee from other villagers
+                    if (!unit_is_military(units[e].type)) continue; // not from villagers or sheep
                     int edx = units[e].x - u.x;
                     int edy = units[e].y - u.y;
                     if (edx * edx + edy * edy < fleeDist * fleeDist) {
@@ -1648,7 +1672,7 @@ void units_update(GameState& gs, TerrainMap& terrain) {
         case USTATE_MOVING:
             unit_step_path(u, i, terrain);
             // Military units auto-engage enemies while moving (aggressive or patrol)
-            if (u.state == USTATE_MOVING && u.type != UNIT_VILLAGER &&
+            if (u.state == USTATE_MOVING && unit_is_military(u.type) &&
                 (u.stance == STANCE_AGGRESSIVE || u.patrolAX >= 0) &&
                 u.attackTarget < 0 && u.attackBldgTarget < 0) {
                 int enemy = unit_find_nearest_enemy(i);

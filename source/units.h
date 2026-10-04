@@ -82,6 +82,8 @@ void unit_command_patrol(int idx, s16 px, s16 py, TerrainMap& terrain);
 int  unit_at_pixel(s16 px, s16 py, int ignoreOwner = -1);
 int  unit_count(int owner);
 int  unit_count_type(int owner, int type);
+// Units that fight on their own initiative (livestock and villagers don't)
+static inline bool unit_is_military(int type) { return type != UNIT_VILLAGER && type != UNIT_SHEEP; }
 int  unit_find_idle_villager(int owner, int startFrom = 0);
 // Nearest tile of a wanted terrain type (terrMask: bit n = TERRAIN_n) that can
 // be walked to from tile (sx, sy), optionally only within homeRange tiles of home

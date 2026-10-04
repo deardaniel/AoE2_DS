@@ -505,7 +505,7 @@ void input_update(GameState& gs, TerrainMap& terrain) {
             building_ungarrison_all(gs.selectedBldg, terrain);
         } else {
             for (int i = 0; i < MAX_UNITS; i++) {
-                if (units[i].alive && units[i].owner == 0 && units[i].type != UNIT_VILLAGER &&
+                if (units[i].alive && units[i].owner == 0 && unit_is_military(units[i].type) &&
                     units[i].state != USTATE_DEAD && units[i].state != USTATE_GARRISONED) {
                     game_select_unit(gs, i);
                     break;
