@@ -24,6 +24,9 @@ struct TerrainMap {
     void setTile(int tx, int ty, u8 type, int resAmt = 0);
 };
 
+// Palette entry -> its tint in sunlit shallow water (shore, water glints)
+extern u8 terrainShallowLut[256];
+
 // Initialize the palette for procedural terrain/sprite colors
 void terrain_initPalette();
 
