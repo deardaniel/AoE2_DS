@@ -957,6 +957,42 @@ static void build_static_layer(const u8* ground, const GameState& gs, const Terr
 // `ground` is the terrain/fog layer and groundVersion changes whenever it was
 // redrawn.
 // ---------------------------------------------------------------------------
+// Player colour used for the outline of a hidden unit (first player's ramp;
+// the second player's goes through the remap table)
+enum { OUTLINE_COLOUR = 19 };
+
+// Water is part of the cached ground, so it can't be redrawn every frame.
+// Instead a few short glints per water tile come and go on top of it: each
+// tile has two, at fixed spots, lit for a third of a 1.6 s cycle that starts
+// at a different moment for every tile. Only bare, visible water is touched
+// (where the static layer still shows the ground).
+static void draw_water_glints(u8* buf, const u8* ground, const GameState& gs, const TerrainMap& terrain) {
+    u32 tick = (u32)gs.frameCount / 8;
+    for (int ty = 0; ty < MAP_TILES; ty++) {
+        for (int tx = 0; tx < MAP_TILES; tx++) {
+            if (terrain.tiles[ty][tx] != TERRAIN_WATER || !fogMap.isVisible(0, tx, ty)) continue;
+            int isoX, isoY;
+            tileToIso(tx, ty, isoX, isoY);
+            int sx = isoX - gs.camX, sy = isoY - gs.camY;
+            if (sx + ISO_TILE_W <= 0 || sx >= SCREEN_W || sy + ISO_TILE_H <= 0 || sy >= SCREEN_H) continue;
+            u32 h = (u32)tx * 73856093u ^ (u32)ty * 19349663u;
+            for (int k = 0; k < 2; k++, h = h * 1664525u + 1013904223u) {
+                u32 phase = (tick + (h >> 20)) % 12;
+                if (phase >= 4) continue;
+                // Inside the middle rows of the diamond, where it is 16+ px wide
+                int gx = sx + 9 + (int)((h >> 8) % 12), gy = sy + 4 + (int)((h >> 14) % 8);
+                int len = (phase == 0 || phase == 3) ? 2 : 3;
+                if (gy < 0 || gy >= SCREEN_H) continue;
+                for (int x = gx; x < gx + len; x++) {
+                    if (x < 0 || x >= SCREEN_W) continue;
+                    int idx = gy * 256 + x;
+                    if (staticBuf[idx] == ground[idx]) buf[idx] = terrainShallowLut[ground[idx]];
+                }
+            }
+        }
+    }
+}
+
 void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain,
                        const u8* ground, u32 groundVersion) {
     static u32 haveGround = 0xFFFFFFFF, haveSig = 0;
@@ -967,6 +1003,7 @@ void render_sprites_sw(u8* buf, const GameState& gs, const TerrainMap& terrain,
         build_static_layer(ground, gs, terrain);
     }
     memcpy(buf, staticBuf, sizeof(staticBuf));
+    draw_water_glints(buf, ground, gs, terrain);
 
     // Visible units, back to front by where their feet are
     static u8 order[MAX_UNITS];
